@@ -1321,7 +1321,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="h-10 flex items-center">
                   <img
                     src="/logo.jpeg?v=2"
-                    alt="The Babe Studio"
+                    alt="Pure Peps"
                     className="h-10 w-auto object-contain"
                   />
                 </div>

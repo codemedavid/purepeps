@@ -430,7 +430,7 @@ const Checkout: React.FC<CheckoutProps> = ({
             });
 
             const orderDetails = `
-✨ THE BABE STUDIO - NEW ORDER
+✨ PURE PEPS - NEW ORDER
 
 📅 ORDER DATE & TIME
 ${dateTimeStamp}

@@ -139,11 +139,11 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
               <div className="flex items-center gap-3">
                 <img
                   src="/logo.jpeg?v=2"
-                  alt="The Babe Studio"
+                  alt="Pure Peps"
                   className="h-8 w-auto object-contain rounded-md"
                 />
                 <span className="text-lg font-heading font-bold text-brand-600">
-                  The Babe Studio
+                  Pure Peps
                 </span>
               </div>
               <button

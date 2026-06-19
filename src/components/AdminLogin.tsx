@@ -32,7 +32,7 @@ function AdminLogin({ onSignIn, error }: AdminLoginProps) {
           <div className="mx-auto mb-4">
             <img
               src="/logo.jpeg?v=2"
-              alt="The Babe Studio"
+              alt="Pure Peps"
               className="h-14 w-auto mx-auto object-contain"
             />
           </div>
