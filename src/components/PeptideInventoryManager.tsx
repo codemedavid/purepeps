@@ -3,6 +3,7 @@ import { ArrowLeft, Package, TrendingUp, AlertTriangle, Search, Edit, Trash2, Pl
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
+import { useAdminAuth } from '../hooks/useAdminAuth';
 import { supabase } from '../lib/supabase';
 
 interface PeptideInventoryManagerProps {
@@ -10,6 +11,7 @@ interface PeptideInventoryManagerProps {
 }
 
 const PeptideInventoryManager: React.FC<PeptideInventoryManagerProps> = ({ onBack }) => {
+  const { signOut } = useAdminAuth();
   const { products, loading, refreshProducts, deleteProduct, deleteVariation } = useMenu();
   const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState('');
@@ -248,10 +250,7 @@ const PeptideInventoryManager: React.FC<PeptideInventoryManagerProps> = ({ onBac
               </h1>
             </div>
             <button
-              onClick={() => {
-                localStorage.removeItem('peptide_admin_auth');
-                window.location.reload();
-              }}
+              onClick={() => { void signOut(); }}
               className="bg-gradient-to-r from-red-400 to-red-500 hover:from-red-500 hover:to-red-600 text-white px-2 md:px-3 py-1 rounded-md font-medium text-xs shadow-sm hover:shadow transition-all"
             >
               Logout

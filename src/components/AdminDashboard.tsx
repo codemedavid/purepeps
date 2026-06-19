@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import AccessRequestsManager from './AccessRequestsManager';
+import AdminLogin from './AdminLogin';
+import BlossomLogo from './BlossomLogo';
+import { useAdminAuth } from '../hooks/useAdminAuth';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
 import { useProtocols } from '../hooks/useProtocols';
+import { useAccessRequests } from '../hooks/useAccessRequests';
 import { generateProtocolFromTemplate } from '../lib/protocolTemplates';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
@@ -18,23 +23,27 @@ import SiteSettingsManager from './SiteSettingsManager';
 import PromoCodeManager from './PromoCodeManager';
 import CourierManager from './CourierManager';
 import ProtocolManager from './ProtocolManager';
+import GroupBuyManager from './GroupBuyManager';
 // GuideManager removed (Peptalk functionality disabled)
 
 const AdminDashboard: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('peptide_admin_auth') === 'true';
-  });
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'protocols'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'protocols' | 'access-requests' | 'group-buy'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { addProtocol, protocols } = useProtocols();
+  const { requests: accessRequests, fetchAll: fetchAccessRequests } = useAccessRequests();
+  const pendingAccessCount = accessRequests.filter((r) => r.status === 'pending').length;
+
+  // Surface the pending access-request count on the dashboard card.
+  useEffect(() => {
+    if (isAdmin) fetchAccessRequests();
+  }, [isAdmin, fetchAccessRequests]);
 
   const variationManagerProduct = managingVariationsProductId
     ? products.find((product) => product.id === managingVariationsProductId) || null
@@ -416,21 +425,8 @@ const AdminDashboard: React.FC = () => {
     count: products.filter(p => p.category === cat.id).length
   }));
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === 'thebabestudio@Admin!123') {
-      setIsAuthenticated(true);
-      localStorage.setItem('peptide_admin_auth', 'true');
-      setLoginError('');
-    } else {
-      setLoginError('Invalid password');
-    }
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('peptide_admin_auth');
-    setPassword('');
+  const handleLogout = async () => {
+    await signOut();
     setCurrentView('dashboard');
   };
 
@@ -440,50 +436,21 @@ const AdminDashboard: React.FC = () => {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Login Screen
-  if (!isAuthenticated) {
+  // Resolving the session / admin check on first paint.
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 w-full max-w-md border border-gray-200">
-          <div className="text-center mb-6">
-            <div className="mx-auto mb-4">
-              <img
-                src="/logo.jpeg?v=2"
-                alt="The Babe Studio"
-                className="h-14 w-auto mx-auto object-contain"
-              />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Admin Access</h1>
-            <p className="text-sm text-gray-400">
-              Enter password to continue
-            </p>
-          </div>
-
-          <form onSubmit={handleLogin}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-navy-900 focus:border-transparent transition-colors placeholder-gray-400"
-                placeholder="Enter admin password"
-                required
-              />
-              {loginError && (
-                <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
-                  ❌ {loginError}
-                </p>
-              )}
-            </div>
-
-            <button type="submit" className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg font-semibold transition-all shadow-md hover:shadow-lg">
-              Access Dashboard
-            </button>
-          </form>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-gray-900 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-sm text-gray-400 font-medium">Checking access…</p>
         </div>
       </div>
     );
+  }
+
+  // Login Screen — real Supabase Auth, gated by admin membership (is_admin()).
+  if (!isAdmin) {
+    return <AdminLogin onSignIn={signIn} error={authError} />;
   }
 
   if (loading) {
@@ -1215,6 +1182,32 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  // Group Buy View
+  if (currentView === 'group-buy') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <GroupBuyManager onBack={() => setCurrentView('dashboard')} />
+      </div>
+    );
+  }
+
+  // Access Requests View
+  if (currentView === 'access-requests') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="mb-6 text-sm font-medium text-charcoal-600 hover:text-sakura-primary"
+          >
+            ‹ Back to dashboard
+          </button>
+          <AccessRequestsManager onChange={fetchAccessRequests} />
+        </div>
+      </div>
+    );
+  }
+
   // Shipping View
   if (currentView === 'shipping') {
     return (
@@ -1484,6 +1477,35 @@ const AdminDashboard: React.FC = () => {
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors">Orders</span>
                     <span className="text-xs text-gray-500">View transactions</span>
                   </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('group-buy')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Boxes className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">Group Buy</span>
+                    <span className="text-xs text-gray-500">Batches & caps</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('access-requests')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-sakura-blush flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <BlossomLogo size={20} />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-sakura-primary transition-colors">Access Requests</span>
+                    <span className="text-xs text-gray-500">Approve members</span>
+                  </div>
+                  {pendingAccessCount > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-sakura-primary text-white text-[11px] font-bold">
+                      {pendingAccessCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setCurrentView('inventory')}

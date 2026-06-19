@@ -1,11 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowRight, Sparkles, Shield, FlaskConical, Award } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, Lock } from 'lucide-react';
+import BlossomLogo from './BlossomLogo';
 
 interface HeroProps {
   onShopAll: () => void;
+  onGetAccess: () => void;
 }
 
-const Hero: React.FC<HeroProps> = ({ onShopAll }) => {
+const TRUST = ['≥99% HPLC', '3rd-party CoA', 'Cold-chain shipped', 'Research use only'];
+
+function Hero({ onShopAll, onGetAccess }: HeroProps) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -13,96 +17,76 @@ const Hero: React.FC<HeroProps> = ({ onShopAll }) => {
   }, []);
 
   return (
-    <div className="relative min-h-[90vh] overflow-hidden bg-white flex items-center justify-center pt-20 pb-16">
+    <div className="bg-sakura-canvas font-display">
+      {/* HERO */}
+      <div className="relative flex flex-col items-center text-center px-6 pt-24 pb-24 overflow-hidden">
+        {/* faint blossom watermark */}
+        <BlossomLogo
+          monochrome="#F4DCE4"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] h-[640px] opacity-50 pointer-events-none"
+        />
 
-      {/* Background Subtle Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white via-white to-charcoal-50 opacity-50" />
+        <div
+          className={`relative w-full max-w-3xl flex flex-col items-center transition-all duration-1000 ease-out ${
+            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+          }`}
+        >
+          <div className="font-mono inline-flex items-center gap-2.5 text-xs font-semibold tracking-[0.08em] uppercase text-sakura-deep mb-6">
+            <span className="relative inline-flex">
+              <span className="w-[7px] h-[7px] rounded-full bg-sakura-primary" />
+              <span className="absolute inset-0 rounded-full bg-sakura-primary animate-pp-pulse" />
+            </span>
+            Group Buy №042 · open now
+          </div>
 
-      {/* Main Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-2 gap-12 items-center">
-
-        {/* Left Column: Content */}
-        <div className={`
-          flex flex-col text-left max-w-2xl
-          transition-all duration-1000 ease-out transform
-          ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
-        `}>
-
-
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-heading font-semibold text-charcoal-900 mb-4 leading-tight tracking-tight">
-            The Babe Studio
+          <h1 className="m-0 text-5xl md:text-7xl font-extrabold tracking-[-0.045em] text-sakura-ink leading-[0.97]">
+            Research peptides,
+            <br />
+            <span className="text-sakura-primary">priced by the crowd.</span>
           </h1>
-          <h2 className="text-xl md:text-2xl font-light text-brand-600 mb-6 tracking-wide uppercase">
-            Premium Peptide & Beauty Science
-          </h2>
 
-          <p className="text-lg text-charcoal-600 mb-10 leading-relaxed font-light">
-            Advanced peptide formulations designed for research, innovation, and beauty science.
+          <p className="mt-7 text-lg md:text-xl leading-relaxed text-sakura-muted max-w-xl">
+            Third-party tested vials, ≥99% HPLC verified. Pool your order with the group and every
+            vial gets cheaper as members commit.
           </p>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+          <div className="flex flex-col sm:flex-row gap-3.5 mt-9 justify-center">
             <button
               onClick={onShopAll}
-              className="w-full sm:w-auto px-8 py-4 bg-brand-400 hover:bg-brand-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-brand-200 transition-all duration-300 flex items-center justify-center gap-2 group"
+              className="inline-flex items-center justify-center gap-2 bg-sakura-primary hover:bg-sakura-deep text-white rounded-full px-8 py-4 text-[17px] font-semibold tracking-[-0.01em] transition-colors group"
             >
-              Shop Peptides
+              Browse the catalog
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-            <a
-              href="/assessment"
-              className="w-full sm:w-auto px-8 py-4 bg-transparent border border-charcoal-300 text-charcoal-800 hover:border-charcoal-800 hover:bg-charcoal-50 font-semibold rounded-xl transition-all duration-300 flex items-center justify-center"
+            <button
+              onClick={onGetAccess}
+              className="inline-flex items-center justify-center gap-2 text-sakura-ink border border-sakura-ink/20 hover:bg-sakura-ink/[0.04] rounded-full px-7 py-4 text-[17px] font-semibold tracking-[-0.01em] transition-colors"
             >
-              Take Assessment
-            </a>
+              <Lock className="w-4 h-4" /> Get access
+            </button>
           </div>
 
-          <p className="mt-4 text-sm text-charcoal-500 italic">
-            Not sure which peptide is right for you? Click <span className="font-semibold text-brand-600">Take Assessment</span> to get a personalized recommendation.
-          </p>
-
-          {/* Trust Indicators */}
-          <div className="mt-12 flex flex-wrap gap-6 border-t border-charcoal-100 pt-8">
-            {[
-              { icon: Shield, label: '99% Purity Guaranteed' },
-              { icon: FlaskConical, label: 'Lab Tested' },
-              { icon: Award, label: 'Premium Grade' },
-            ].map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-sm font-medium text-charcoal-600">
-                <item.icon className="w-4 h-4 text-brand-400" />
-                {item.label}
-              </div>
-            ))}
+          <div className="flex flex-wrap justify-center items-center gap-3.5 mt-9 font-mono text-xs tracking-[0.05em] uppercase text-sakura-faint">
+            <span className="text-sakura-deep font-semibold">№042</span>
+            <span className="w-1 h-1 rounded-full bg-sakura-primary" />
+            <span>38/50 claimed</span>
+            <span className="w-1 h-1 rounded-full bg-sakura-primary" />
+            <span>closes 2d 14h</span>
           </div>
         </div>
+      </div>
 
-        {/* Right Column: Visual / Layout element */}
-        <div className={`
-          relative hidden md:flex justify-center items-center h-full min-h-[500px]
-          transition-all duration-1000 delay-300 ease-out
-          ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
-        `}>
-          {/* A modern, abstract DNA/Biotech representation using CSS and Lucide icons */}
-          <div className="absolute inset-0 bg-brand-50 rounded-full blur-3xl opacity-30 animate-pulse" style={{ animationDuration: '6s' }} />
-
-          <div className="relative z-10 p-12 bg-white/40 border border-white/60 backdrop-blur-md rounded-3xl shadow-2xl flex flex-col items-center justify-center animate-float">
-            <div className="relative">
-              <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-300">
-                <path d="M2 15c6.667-6 13.333 0 20-6" />
-                <path d="M9 22c1.798-1.559 2.43-2.826 2.508-4.3M5.111 20.378c.849-1.928 2.308-3.085 4.38-3.472M18.889 3.622c-.849 1.928-2.308 3.085-4.38 3.472M15 2c-1.798 1.559-2.43 2.826-2.508 4.3M17 14.5l-2-2.5M10.5 7l-2-2.5M14 11s-2-2-4 0" />
-                <path d="M2 9c6.667 6 13.333 0 20 6" />
-              </svg>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                <Sparkles className="w-8 h-8 text-brand-500 animate-pulse" />
-              </div>
-            </div>
-            <p className="mt-8 text-sm font-semibold tracking-widest text-charcoal-400 uppercase">Peptide Science</p>
-          </div>
-        </div>
-
+      {/* TRUST STRIP */}
+      <div className="flex justify-center flex-wrap gap-x-9 gap-y-2 px-6 py-[18px] bg-sakura-ink font-mono text-xs font-medium tracking-[0.05em] uppercase text-[#C9B6BD]">
+        {TRUST.map((item, i) => (
+          <span key={item} className="flex items-center gap-9">
+            {item}
+            {i < TRUST.length - 1 && <span className="text-[#4A3B41]">/</span>}
+          </span>
+        ))}
       </div>
     </div>
   );
-};
+}
 
 export default Hero;

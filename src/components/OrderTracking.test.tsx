@@ -9,9 +9,9 @@ vi.mock('../lib/posthog', () => ({
   default: { capture: (...args: unknown[]) => mockCapture(...args) },
 }));
 
-// Mock supabase RPC
-const mockSingle = vi.fn();
-const mockRpc = vi.fn().mockReturnValue({ single: mockSingle });
+// Mock supabase RPC. OrderTracking now fetches the order bundle (root + claim
+// add-ons) via the get_order_bundle RPC, which resolves to an array of rows.
+const mockRpc = vi.fn();
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -19,10 +19,16 @@ vi.mock('../lib/supabase', () => ({
   },
 }));
 
-const mockOrder = {
+// The leftover-claim panel is exercised in its own test file; stub it here so
+// OrderTracking tests stay focused on the bundle/timeline behavior.
+vi.mock('./groupbuy/LeftoverClaimPanel', () => ({
+  default: () => <div data-testid="leftover-claim-panel">Leftover panel</div>,
+}));
+
+const mockRoot = {
   id: 'order-uuid-123',
   order_number: 'TBS-1234',
-  order_status: 'shipped',
+  order_status: 'out_for_delivery',
   payment_status: 'paid',
   tracking_number: 'LBC123456',
   shipping_provider: 'lbc',
@@ -36,13 +42,22 @@ const mockOrder = {
   created_at: '2025-01-15T10:00:00Z',
   promo_code: 'SAVE10',
   discount_applied: 500,
+  fulfillment_stage: null,
+  is_claim: false,
+  parent_order_id: null,
+  group_buy_batch_id: 'batch-uuid-1',
+  batch_status: 'open',
 };
+
+/** Resolve the get_order_bundle RPC with the given rows for the next call. */
+function mockBundleOnce(rows: unknown[], error: unknown = null) {
+  mockRpc.mockResolvedValueOnce({ data: rows, error });
+}
 
 describe('OrderTracking', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRpc.mockReturnValue({ single: mockSingle });
-    mockSingle.mockResolvedValue({ data: mockOrder, error: null });
+    mockRpc.mockResolvedValue({ data: [mockRoot], error: null });
   });
 
   // --- Rendering ---
@@ -80,14 +95,14 @@ describe('OrderTracking', () => {
   // --- Order Search ---
 
   describe('order search', () => {
-    it('calls RPC with trimmed order ID', async () => {
+    it('calls the bundle RPC with trimmed order ID', async () => {
       render(<OrderTracking />);
 
       await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), '  TBS-1234  ');
       await userEvent.click(screen.getByText('Track Order'));
 
       await waitFor(() => {
-        expect(mockRpc).toHaveBeenCalledWith('get_order_details', { order_id_input: 'TBS-1234' });
+        expect(mockRpc).toHaveBeenCalledWith('get_order_bundle', { order_id_input: 'TBS-1234' });
       });
     });
 
@@ -102,20 +117,46 @@ describe('OrderTracking', () => {
       });
     });
 
-    it('displays order status', async () => {
+    it('displays the human-readable current stage', async () => {
       render(<OrderTracking />);
 
       await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
       await userEvent.click(screen.getByText('Track Order'));
 
       await waitFor(() => {
-        expect(screen.getByText('shipped')).toBeInTheDocument();
+        // Appears in both the header and the timeline step.
+        expect(screen.getAllByText('Out for delivery').length).toBeGreaterThanOrEqual(1);
       });
     });
 
+    it('picks the non-claim row as the root for the timeline', async () => {
+      const claim = {
+        ...mockRoot,
+        id: 'claim-uuid-1',
+        order_number: 'TBS-9999',
+        is_claim: true,
+        parent_order_id: 'order-uuid-123',
+        order_status: 'new',
+      };
+      // Claim row first to prove root selection ignores array order.
+      mockBundleOnce([claim, mockRoot]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        // Root order number shown in the status header.
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+      // Root status (out_for_delivery), not the claim's "new".
+      expect(screen.getAllByText('Out for delivery').length).toBeGreaterThanOrEqual(1);
+    });
+
     it('shows loading state while searching', async () => {
-      let resolveSingle!: (value: any) => void;
-      mockSingle.mockReturnValueOnce(new Promise(r => { resolveSingle = r; }));
+      let resolveRpc!: (value: unknown) => void;
+      mockRpc.mockReturnValueOnce(new Promise((r) => { resolveRpc = r; }));
 
       render(<OrderTracking />);
 
@@ -124,7 +165,7 @@ describe('OrderTracking', () => {
 
       expect(screen.getByText('Searching...')).toBeInTheDocument();
 
-      resolveSingle({ data: mockOrder, error: null });
+      resolveRpc({ data: [mockRoot], error: null });
       await waitFor(() => {
         expect(screen.queryByText('Searching...')).not.toBeInTheDocument();
       });
@@ -139,7 +180,7 @@ describe('OrderTracking', () => {
       await waitFor(() => {
         expect(mockCapture).toHaveBeenCalledWith('tbs_order_tracked', {
           order_number: 'TBS-1234',
-          order_status: 'shipped',
+          order_status: 'out_for_delivery',
         });
       });
     });
@@ -185,10 +226,7 @@ describe('OrderTracking', () => {
     });
 
     it('does not show discount section when no discount', async () => {
-      mockSingle.mockResolvedValueOnce({
-        data: { ...mockOrder, discount_applied: null, promo_code: null },
-        error: null,
-      });
+      mockBundleOnce([{ ...mockRoot, discount_applied: null, promo_code: null }]);
 
       render(<OrderTracking />);
 
@@ -202,10 +240,83 @@ describe('OrderTracking', () => {
     });
   });
 
+  // --- Claim Add-ons ---
+
+  describe('claim add-ons', () => {
+    it('renders the add-ons section listing claim rows', async () => {
+      const claim = {
+        ...mockRoot,
+        id: 'claim-uuid-1',
+        order_number: 'TBS-9999',
+        is_claim: true,
+        parent_order_id: 'order-uuid-123',
+        order_status: 'confirmed',
+        total_price: 1200,
+        shipping_fee: 0,
+        order_items: [{ product_name: 'Retatrutide 10mg', quantity: 1 }],
+      };
+      mockBundleOnce([mockRoot, claim]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Add-ons in this group buy')).toBeInTheDocument();
+      });
+      expect(screen.getByText('TBS-9999')).toBeInTheDocument();
+      expect(screen.getByText(/1x Retatrutide 10mg/)).toBeInTheDocument();
+      // Add-on total = total_price(1200) + shipping(0)
+      expect(screen.getByText('₱1,200')).toBeInTheDocument();
+    });
+
+    it('does not render the add-ons section when there are no claim rows', async () => {
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Add-ons in this group buy')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Leftover Claim Panel ---
+
+  describe('leftover claim panel', () => {
+    it('mounts the claim panel when the batch is finalizing', async () => {
+      mockBundleOnce([{ ...mockRoot, batch_status: 'finalizing' }]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('leftover-claim-panel')).toBeInTheDocument();
+      });
+    });
+
+    it('does not mount the claim panel when the batch is not finalizing', async () => {
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('leftover-claim-panel')).not.toBeInTheDocument();
+    });
+  });
+
   // --- Status Progress Steps ---
 
   describe('status progress', () => {
-    it('shows all 5 progress steps for non-cancelled order', async () => {
+    it('shows the full nine-stage timeline for a non-cancelled order', async () => {
       render(<OrderTracking />);
 
       await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
@@ -214,17 +325,39 @@ describe('OrderTracking', () => {
       await waitFor(() => {
         expect(screen.getByText('Placed')).toBeInTheDocument();
       });
-      expect(screen.getByText('Confirmed')).toBeInTheDocument();
-      expect(screen.getByText('Processing')).toBeInTheDocument();
-      expect(screen.getByText('Shipped')).toBeInTheDocument();
-      expect(screen.getByText('Delivered')).toBeInTheDocument();
+      const labels = [
+        'Placed',
+        'Confirmed',
+        'Supplier preparing',
+        'In logistics',
+        'On the way to PH',
+        'Arrived in PH',
+        'Packing',
+        'Out for delivery',
+        'Delivered',
+      ];
+      for (const label of labels) {
+        expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1);
+      }
+    });
+
+    it('advances the timeline using the batch fulfillment stage', async () => {
+      // Order itself is only confirmed, but its batch is en route to PH — the
+      // shared batch leg must drive the displayed stage.
+      mockBundleOnce([{ ...mockRoot, order_status: 'confirmed', fulfillment_stage: 'enroute_ph' }]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getAllByText('On the way to PH').length).toBeGreaterThanOrEqual(1);
+      });
     });
 
     it('shows cancelled message for cancelled orders', async () => {
-      mockSingle.mockResolvedValueOnce({
-        data: { ...mockOrder, order_status: 'cancelled' },
-        error: null,
-      });
+      mockBundleOnce([{ ...mockRoot, order_status: 'cancelled' }]);
 
       render(<OrderTracking />);
 
@@ -256,10 +389,7 @@ describe('OrderTracking', () => {
     });
 
     it('shows "no tracking" message when tracking number absent', async () => {
-      mockSingle.mockResolvedValueOnce({
-        data: { ...mockOrder, tracking_number: null, shipping_provider: null },
-        error: null,
-      });
+      mockBundleOnce([{ ...mockRoot, tracking_number: null, shipping_provider: null }]);
 
       render(<OrderTracking />);
 
@@ -294,10 +424,7 @@ describe('OrderTracking', () => {
     ];
 
     it.each(providerTests)('shows "$buttonText" for provider "$provider"', async ({ provider, buttonText }) => {
-      mockSingle.mockResolvedValueOnce({
-        data: { ...mockOrder, shipping_provider: provider },
-        error: null,
-      });
+      mockBundleOnce([{ ...mockRoot, shipping_provider: provider }]);
 
       render(<OrderTracking />);
 
@@ -312,10 +439,7 @@ describe('OrderTracking', () => {
     });
 
     it('shows J&T Express link for default provider', async () => {
-      mockSingle.mockResolvedValueOnce({
-        data: { ...mockOrder, shipping_provider: 'jt' },
-        error: null,
-      });
+      mockBundleOnce([{ ...mockRoot, shipping_provider: 'jt' }]);
 
       render(<OrderTracking />);
 
@@ -333,8 +457,8 @@ describe('OrderTracking', () => {
   // --- Error States ---
 
   describe('error states', () => {
-    it('shows "order not found" for PGRST116 error', async () => {
-      mockSingle.mockResolvedValueOnce({ data: null, error: { code: 'PGRST116' } });
+    it('shows "order not found" for an empty bundle', async () => {
+      mockBundleOnce([]);
 
       render(<OrderTracking />);
 
@@ -346,8 +470,8 @@ describe('OrderTracking', () => {
       });
     });
 
-    it('shows "order not found" when data is null with no error', async () => {
-      mockSingle.mockResolvedValueOnce({ data: null, error: null });
+    it('shows "order not found" when data is null', async () => {
+      mockBundleOnce(null as unknown as unknown[]);
 
       render(<OrderTracking />);
 
@@ -360,7 +484,7 @@ describe('OrderTracking', () => {
     });
 
     it('shows generic error on unexpected exception', async () => {
-      mockSingle.mockRejectedValueOnce(new Error('Network failure'));
+      mockRpc.mockRejectedValueOnce(new Error('Network failure'));
 
       render(<OrderTracking />);
 
@@ -372,8 +496,8 @@ describe('OrderTracking', () => {
       });
     });
 
-    it('shows generic error for non-PGRST116 DB errors', async () => {
-      mockSingle.mockResolvedValueOnce({ data: null, error: { code: 'UNEXPECTED', message: 'DB crash' } });
+    it('shows generic error when the RPC returns an error', async () => {
+      mockBundleOnce([], { code: 'UNEXPECTED', message: 'DB crash' });
 
       render(<OrderTracking />);
 

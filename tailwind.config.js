@@ -11,19 +11,19 @@ export default {
         'theme-bg': '#FFFFFF',           // Pure White
         'theme-text': '#1E1E1E',         // Luxury Dark text
 
-        // Primary Palette - Rose Gold
+        // Primary Palette - Sakura cerise (brown accent removed)
         'brand': {
-          DEFAULT: '#CFA07A', // Rose Gold
-          50: '#FDF9F7',
-          100: '#F9F1EB',
-          200: '#E7C6B1',     // Soft Rose Gold
-          300: '#DFB49A',
-          400: '#CFA07A',     // Primary Rose Gold
-          500: '#BB855B',
-          600: '#A66B41',
-          700: '#8C5A44',     // Deep Copper
-          800: '#734A38',
-          900: '#5C3C2E',
+          DEFAULT: '#D6446F', // Cerise rose
+          50: '#FBF1F5',
+          100: '#FBE4EC',
+          200: '#F4DCE4',
+          300: '#E87BA0',
+          400: '#D6446F',     // Primary cerise
+          500: '#B0335A',
+          600: '#B0335A',
+          700: '#8E2A49',
+          800: '#6E2038',
+          900: '#1E0E16',
         },
 
         // Secondary & Neutral
@@ -45,11 +45,33 @@ export default {
         'cream': '#FFFFFF',
         'blush-light': '#F4E3DA', // Light Rose Accent
         'warm-white': '#FDFDFD',
+
+        // Pure Peps — Sakura group-buy theme
+        'sakura': {
+          canvas: '#FBF8F6',     // warm near-white page background
+          ink: '#17100D',        // near-black ink
+          primary: '#D6446F',    // confident cerise-rose accent
+          deep: '#B0335A',       // deep cerise (hover / labels)
+          dark: '#1E0E16',       // dark dramatic panels
+          light: '#E87BA0',      // soft pink
+          blush: '#FBE4EC',      // blush tint
+          'blush-soft': '#FBF1F5',
+          mist: '#F4DCE4',       // faint blossom watermark
+          edge: '#F1CEDB',       // blush border
+          sage: '#1E7A5C',       // verified / savings semantic
+          'sage-soft': '#E7F4EC',
+          muted: '#5C5350',      // body gray
+          faint: '#9A908C',      // tertiary gray
+          soft: '#B79BA4',       // mono label gray
+        },
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
         heading: ['Playfair Display', 'serif'],
         serif: ['Playfair Display', 'serif'],
+        // Pure Peps display + technical/mono stacks
+        display: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'Manrope', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       boxShadow: {
         'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
@@ -74,8 +96,14 @@ export default {
         'fadeIn': 'fadeIn 0.6s ease-out',
         'slideUp': 'slideUp 0.5s ease-out',
         'float': 'float 6s ease-in-out infinite',
+        'pp-pulse': 'ppPulse 2.4s ease-out infinite',
       },
       keyframes: {
+        ppPulse: {
+          '0%': { transform: 'scale(1)', opacity: '0.85' },
+          '70%': { transform: 'scale(2.8)', opacity: '0' },
+          '100%': { transform: 'scale(2.8)', opacity: '0' },
+        },
         fadeIn: {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },

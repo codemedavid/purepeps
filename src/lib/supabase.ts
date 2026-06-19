@@ -7,7 +7,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Real admin sessions (Supabase Auth) replace the old localStorage boolean.
+    // The session is a scoped, auto-refreshing JWT — admin gating is enforced
+    // server-side by RLS via is_admin(), so the client token cannot grant
+    // privileges it was not issued.
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'pp-admin-auth',
+  },
+});
 
 export type Database = {
   public: {

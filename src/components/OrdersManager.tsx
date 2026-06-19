@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useMenu } from '../hooks/useMenu';
 import { useCouriers } from '../hooks/useCouriers';
 import posthog from '../lib/posthog';
+import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../utils/orderTracking';
 
 interface OrderItem {
   product_id: string;
@@ -46,6 +47,7 @@ interface Order {
   promo_code: string | null;
   discount_applied: number | null;
   order_number: string | null;
+  group_buy_batch_id?: string | null;
 }
 
 interface OrdersManagerProps {
@@ -91,94 +93,102 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   };
 
   const handleConfirmOrder = async (order: Order) => {
-    if (!confirm(`Confirm order #${order.order_number || order.id.slice(0, 8)}? This will deduct stock from inventory.`)) {
+    const isBatchOrder = !!order.group_buy_batch_id;
+    const confirmMessage = isBatchOrder
+      ? `Confirm order #${order.order_number || order.id.slice(0, 8)}? This is a group-buy pre-order. No stock will be deducted.`
+      : `Confirm order #${order.order_number || order.id.slice(0, 8)}? This will deduct stock from inventory.`;
+    if (!confirm(confirmMessage)) {
       return;
     }
 
     try {
       setIsProcessing(true);
 
-      // First, check if all items are still in stock
-      for (const item of order.order_items) {
-        if (item.variation_id) {
-          // Check variation stock
-          const { data: variation, error: varError } = await supabase
-            .from('product_variations')
-            .select('stock_quantity')
-            .eq('id', item.variation_id)
-            .single();
+      // Group-buy pre-orders are reserved against a batch cap, not inventory stock.
+      // Skip the stock check + deduction for batch orders.
+      if (!order.group_buy_batch_id) {
+        // First, check if all items are still in stock
+        for (const item of order.order_items) {
+          if (item.variation_id) {
+            // Check variation stock
+            const { data: variation, error: varError } = await supabase
+              .from('product_variations')
+              .select('stock_quantity')
+              .eq('id', item.variation_id)
+              .single();
 
-          if (varError) {
-            if (varError.code === 'PGRST116') {
-              throw new Error(`Variation "${item.variation_name}" not found. It may have been deleted.`);
+            if (varError) {
+              if (varError.code === 'PGRST116') {
+                throw new Error(`Variation "${item.variation_name}" not found. It may have been deleted.`);
+              }
+              throw varError;
             }
-            throw varError;
-          }
 
-          if (!variation || variation.stock_quantity < item.quantity) {
-            alert(`Insufficient stock for ${item.product_name} ${item.variation_name || ''}. Available: ${variation?.stock_quantity || 0}, Required: ${item.quantity}`);
-            return;
-          }
-        } else {
-          // Check product stock
-          const { data: product, error: prodError } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
-
-          if (prodError) {
-            if (prodError.code === 'PGRST116') {
-              throw new Error(`Product "${item.product_name}" not found. It may have been deleted.`);
+            if (!variation || variation.stock_quantity < item.quantity) {
+              alert(`Insufficient stock for ${item.product_name} ${item.variation_name || ''}. Available: ${variation?.stock_quantity || 0}, Required: ${item.quantity}`);
+              return;
             }
-            throw prodError;
-          }
-          if (!product || product.stock_quantity < item.quantity) {
-            alert(`Insufficient stock for ${item.product_name}. Available: ${product?.stock_quantity || 0}, Required: ${item.quantity}`);
-            return;
+          } else {
+            // Check product stock
+            const { data: product, error: prodError } = await supabase
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single();
+
+            if (prodError) {
+              if (prodError.code === 'PGRST116') {
+                throw new Error(`Product "${item.product_name}" not found. It may have been deleted.`);
+              }
+              throw prodError;
+            }
+            if (!product || product.stock_quantity < item.quantity) {
+              alert(`Insufficient stock for ${item.product_name}. Available: ${product?.stock_quantity || 0}, Required: ${item.quantity}`);
+              return;
+            }
           }
         }
-      }
 
-      // Deduct stock for each item
-      for (const item of order.order_items) {
-        if (item.variation_id) {
-          // Deduct from variation - get current stock and update
-          const { data: variation, error: varError } = await supabase
-            .from('product_variations')
-            .select('stock_quantity')
-            .eq('id', item.variation_id)
-            .single();
-
-          if (varError) throw varError;
-
-          if (variation) {
-            const newStock = Math.max(0, variation.stock_quantity - item.quantity);
-            const { error: updateError } = await supabase
+        // Deduct stock for each item
+        for (const item of order.order_items) {
+          if (item.variation_id) {
+            // Deduct from variation - get current stock and update
+            const { data: variation, error: varError } = await supabase
               .from('product_variations')
-              .update({ stock_quantity: newStock })
-              .eq('id', item.variation_id);
+              .select('stock_quantity')
+              .eq('id', item.variation_id)
+              .single();
 
-            if (updateError) throw updateError;
-          }
-        } else {
-          // Deduct from product - get current stock and update
-          const { data: product, error: prodError } = await supabase
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.product_id)
-            .single();
+            if (varError) throw varError;
 
-          if (prodError) throw prodError;
+            if (variation) {
+              const newStock = Math.max(0, variation.stock_quantity - item.quantity);
+              const { error: updateError } = await supabase
+                .from('product_variations')
+                .update({ stock_quantity: newStock })
+                .eq('id', item.variation_id);
 
-          if (product) {
-            const newStock = Math.max(0, product.stock_quantity - item.quantity);
-            const { error: updateError } = await supabase
+              if (updateError) throw updateError;
+            }
+          } else {
+            // Deduct from product - get current stock and update
+            const { data: product, error: prodError } = await supabase
               .from('products')
-              .update({ stock_quantity: newStock })
-              .eq('id', item.product_id);
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single();
 
-            if (updateError) throw updateError;
+            if (prodError) throw prodError;
+
+            if (product) {
+              const newStock = Math.max(0, product.stock_quantity - item.quantity);
+              const { error: updateError } = await supabase
+                .from('products')
+                .update({ stock_quantity: newStock })
+                .eq('id', item.product_id);
+
+              if (updateError) throw updateError;
+            }
           }
         }
       }
@@ -223,7 +233,11 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         $set: { email: order.customer_email, name: order.customer_name },
       });
 
-      alert(`Order confirmed! Stock has been deducted from inventory.`);
+      alert(
+        isBatchOrder
+          ? 'Batch order confirmed. No inventory changes were made.'
+          : 'Order confirmed! Stock has been deducted from inventory.',
+      );
       setSelectedOrder(null);
     } catch (error: any) {
       console.error('Error confirming order:', error);
@@ -249,10 +263,12 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
       const order = orders.find(o => o.id === orderId);
       const eventMap: Record<string, string> = {
-        processing: 'tbs_order_processing',
-        shipped: 'tbs_order_shipped',
+        packing: 'tbs_order_packing',
+        out_for_delivery: 'tbs_order_out_for_delivery',
         delivered: 'tbs_order_delivered',
         cancelled: 'tbs_order_cancelled',
+        processing: 'tbs_order_processing', // legacy
+        shipped: 'tbs_order_shipped', // legacy
       };
       if (eventMap[newStatus] && order) {
         const items_description = order.order_items.map(item =>
@@ -359,8 +375,8 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       all: orders.length,
       new: orders.filter(o => o.order_status === 'new').length,
       confirmed: orders.filter(o => o.order_status === 'confirmed').length,
-      processing: orders.filter(o => o.order_status === 'processing').length,
-      shipped: orders.filter(o => o.order_status === 'shipped').length,
+      packing: orders.filter(o => o.order_status === 'packing').length,
+      out_for_delivery: orders.filter(o => o.order_status === 'out_for_delivery').length,
       delivered: orders.filter(o => o.order_status === 'delivered').length,
       cancelled: orders.filter(o => o.order_status === 'cancelled').length,
     };
@@ -370,10 +386,13 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     switch (status) {
       case 'new': return 'bg-yellow-100 text-black border-yellow-400';
       case 'confirmed': return 'bg-blue-100 text-black border-blue-300';
-      case 'processing': return 'bg-purple-100 text-black border-purple-300';
-      case 'shipped': return 'bg-indigo-100 text-black border-indigo-300';
+      case 'packing': return 'bg-purple-100 text-black border-purple-300';
+      case 'out_for_delivery': return 'bg-indigo-100 text-black border-indigo-300';
       case 'delivered': return 'bg-green-100 text-black border-green-300';
       case 'cancelled': return 'bg-red-100 text-black border-red-300';
+      // legacy statuses
+      case 'processing': return 'bg-purple-100 text-black border-purple-300';
+      case 'shipped': return 'bg-indigo-100 text-black border-indigo-300';
       default: return 'bg-gray-100 text-black border-gray-300';
     }
   };
@@ -382,10 +401,13 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     switch (status) {
       case 'new': return <Clock className="w-4 h-4" />;
       case 'confirmed': return <CheckCircle className="w-4 h-4" />;
-      case 'processing': return <Package className="w-4 h-4" />;
-      case 'shipped': return <Truck className="w-4 h-4" />;
+      case 'packing': return <Package className="w-4 h-4" />;
+      case 'out_for_delivery': return <Truck className="w-4 h-4" />;
       case 'delivered': return <CheckCircle className="w-4 h-4" />;
       case 'cancelled': return <XCircle className="w-4 h-4" />;
+      // legacy statuses
+      case 'processing': return <Package className="w-4 h-4" />;
+      case 'shipped': return <Truck className="w-4 h-4" />;
       default: return <AlertCircle className="w-4 h-4" />;
     }
   };
@@ -472,20 +494,20 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <p className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">{statusCounts.confirmed}</p>
           </button>
           <button
-            onClick={() => setStatusFilter('processing')}
-            className={`bg-white rounded-lg md:rounded-xl shadow-md hover:shadow-lg p-2 md:p-3 lg:p-4 border-2 transition-all ${statusFilter === 'processing' ? 'border-navy-900 shadow-gold-glow' : 'border-gray-200 hover:border-navy-700'
+            onClick={() => setStatusFilter('packing')}
+            className={`bg-white rounded-lg md:rounded-xl shadow-md hover:shadow-lg p-2 md:p-3 lg:p-4 border-2 transition-all ${statusFilter === 'packing' ? 'border-navy-900 shadow-gold-glow' : 'border-gray-200 hover:border-navy-700'
               }`}
           >
-            <p className="text-[10px] md:text-xs text-gray-600 mb-1">Processing</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold text-gray-800">{statusCounts.processing}</p>
+            <p className="text-[10px] md:text-xs text-gray-600 mb-1">Packing</p>
+            <p className="text-lg md:text-xl lg:text-2xl font-bold text-gray-800">{statusCounts.packing}</p>
           </button>
           <button
-            onClick={() => setStatusFilter('shipped')}
-            className={`bg-white rounded-lg md:rounded-xl shadow-md hover:shadow-lg p-2 md:p-3 lg:p-4 border-2 transition-all ${statusFilter === 'shipped' ? 'border-navy-900 shadow-gold-glow' : 'border-gray-200 hover:border-navy-700'
+            onClick={() => setStatusFilter('out_for_delivery')}
+            className={`bg-white rounded-lg md:rounded-xl shadow-md hover:shadow-lg p-2 md:p-3 lg:p-4 border-2 transition-all ${statusFilter === 'out_for_delivery' ? 'border-navy-900 shadow-gold-glow' : 'border-gray-200 hover:border-navy-700'
               }`}
           >
-            <p className="text-[10px] md:text-xs text-gray-600 mb-1">Shipped</p>
-            <p className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">{statusCounts.shipped}</p>
+            <p className="text-[10px] md:text-xs text-gray-600 mb-1">Out for Delivery</p>
+            <p className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900">{statusCounts.out_for_delivery}</p>
           </button>
           <button
             onClick={() => setStatusFilter('delivered')}
@@ -571,7 +593,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onView, getStatusColor, ge
             </h3>
             <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold border flex items-center gap-1 ${getStatusColor(order.order_status)}`}>
               {getStatusIcon(order.order_status)}
-              <span className="hidden sm:inline">{order.order_status.charAt(0).toUpperCase() + order.order_status.slice(1)}</span>
+              <span className="hidden sm:inline">{orderStatusLabel(order.order_status)}</span>
               <span className="sm:hidden">{order.order_status.charAt(0).toUpperCase()}</span>
             </span>
             <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gold-100 text-gold-700'
@@ -689,12 +711,12 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
             <div>
               <span className={`inline-flex items-center px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold border ${order.order_status === 'new' ? 'bg-yellow-100 text-black border-yellow-400' :
                 order.order_status === 'confirmed' ? 'bg-blue-100 text-black border-blue-300' :
-                  order.order_status === 'processing' ? 'bg-purple-100 text-black border-purple-300' :
-                    order.order_status === 'shipped' ? 'bg-indigo-100 text-black border-indigo-300' :
+                  order.order_status === 'packing' || order.order_status === 'processing' ? 'bg-purple-100 text-black border-purple-300' :
+                    order.order_status === 'out_for_delivery' || order.order_status === 'shipped' ? 'bg-indigo-100 text-black border-indigo-300' :
                       order.order_status === 'delivered' ? 'bg-green-100 text-black border-green-300' :
                         'bg-red-100 text-black border-red-300'
                 }`}>
-                {order.order_status.charAt(0).toUpperCase() + order.order_status.slice(1)}
+                {orderStatusLabel(order.order_status)}
               </span>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -722,12 +744,16 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
                   disabled={isProcessing}
                   className="w-full sm:w-auto px-3 md:px-4 py-2 border border-gray-300 rounded-lg text-xs md:text-sm font-medium bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent disabled:opacity-50 cursor-pointer"
                 >
-                  <option value="new">New</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
+                  {/* Surface a legacy status (e.g. processing/shipped) so the select still
+                      shows the current value for older orders. */}
+                  {!ORDER_STATUS_OPTIONS.some((o) => o.value === order.order_status) && (
+                    <option value={order.order_status}>{orderStatusLabel(order.order_status)}</option>
+                  )}
+                  {ORDER_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               )}
             </div>
@@ -933,23 +959,23 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
               <div className="flex flex-wrap gap-2">
                 {order.order_status === 'confirmed' && (
                   <button
-                    onClick={() => onUpdateStatus(order.id, 'processing')}
+                    onClick={() => onUpdateStatus(order.id, 'packing')}
                     disabled={isProcessing}
                     className="px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r from-gray-800 to-black hover:from-gray-900 hover:to-black text-white rounded-lg transition-colors disabled:opacity-50 text-xs md:text-sm font-medium shadow-md hover:shadow-lg border border-navy-900/20"
                   >
-                    Mark as Processing
+                    Mark as Packing
                   </button>
                 )}
-                {order.order_status === 'processing' && (
+                {(order.order_status === 'packing' || order.order_status === 'processing') && (
                   <button
-                    onClick={() => onUpdateStatus(order.id, 'shipped')}
+                    onClick={() => onUpdateStatus(order.id, 'out_for_delivery')}
                     disabled={isProcessing}
                     className="px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r from-gray-800 to-black hover:from-gray-900 hover:to-black text-white rounded-lg transition-colors disabled:opacity-50 text-xs md:text-sm font-medium shadow-md hover:shadow-lg border border-navy-900/20"
                   >
-                    Mark as Shipped
+                    Mark as Out for Delivery
                   </button>
                 )}
-                {order.order_status === 'shipped' && (
+                {(order.order_status === 'out_for_delivery' || order.order_status === 'shipped') && (
                   <button
                     onClick={() => onUpdateStatus(order.id, 'delivered')}
                     disabled={isProcessing}
@@ -958,7 +984,7 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
                     Mark as Delivered
                   </button>
                 )}
-                {(order.order_status === 'new' || order.order_status === 'confirmed' || order.order_status === 'processing') && (
+                {(order.order_status === 'new' || order.order_status === 'confirmed' || order.order_status === 'packing' || order.order_status === 'processing') && (
                   <button
                     onClick={() => {
                       if (confirm('Are you sure you want to cancel this order?')) {

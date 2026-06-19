@@ -1,5 +1,6 @@
 import React from 'react';
-import { HelpCircle, MapPin, Truck, FlaskConical, Heart, Shield } from 'lucide-react';
+import { HelpCircle, MapPin, Truck, FlaskConical, Shield } from 'lucide-react';
+import BlossomLogo from './BlossomLogo';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -11,29 +12,20 @@ const Footer: React.FC = () => {
 
           {/* Brand Section */}
           <div className="flex flex-col items-center md:items-start gap-4">
-            <img
-              src="/logo.jpeg?v=2"
-              alt="The Babe Studio"
-              className="h-14 w-auto object-contain bg-white/10 rounded-lg p-2"
-            />
+            <div className="flex items-center gap-2.5">
+              <BlossomLogo size={28} />
+              <span className="text-white font-display font-extrabold text-xl tracking-[-0.03em]">
+                Pure Peps
+              </span>
+            </div>
             <p className="text-charcoal-400 text-sm max-w-xs text-center md:text-left">
-              Quality peptides for your wellness journey. Lab-tested, high-purity formulations you can trust.
+              Research-grade peptide group buys. Lab-tested, member-priced, shipped cold-chain.
             </p>
           </div>
 
           {/* Contact Us */}
           <div className="flex flex-col items-center md:items-start gap-3">
             <h3 className="text-white font-semibold text-sm uppercase tracking-wider mb-2">Contact Us</h3>
-
-            <a
-              href="mailto:babestudio259@gmail.com"
-              className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
-            >
-              <svg className="w-4 h-4 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              babestudio259@gmail.com
-            </a>
 
             <a
               href="tel:+639496133242"
@@ -91,9 +83,8 @@ const Footer: React.FC = () => {
 
         {/* Footer Bottom */}
         <div className="text-center">
-          <p className="text-xs text-charcoal-500 flex items-center justify-center gap-1">
-            Made with
-            © {currentYear} The Babe Studio.
+          <p className="text-xs text-charcoal-500 flex items-center justify-center gap-1 font-mono uppercase tracking-[0.05em]">
+            Research use only · not for human consumption · © {currentYear} Pure Peps
           </p>
         </div>
       </div>

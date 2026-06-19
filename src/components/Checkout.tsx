@@ -1,42 +1,61 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ShieldCheck, Package, CreditCard, Activity, Copy, Check, MessageCircle, Tag, Upload, Database, Lock, Truck } from 'lucide-react';
-import type { CartItem } from '../types';
+import type { CartItem, GroupBuyProgressItem } from '../types';
+import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useShippingLocations } from '../hooks/useShippingLocations';
 import { useCouriers } from '../hooks/useCouriers';
 import { supabase } from '../lib/supabase';
 import { useImageUpload } from '../hooks/useImageUpload';
+import { useCheckoutInfo } from '../hooks/useCheckoutInfo';
+import { useOrderHistory } from '../hooks/useOrderHistory';
 import posthog, { identifyUser } from '../lib/posthog';
 
 interface CheckoutProps {
     cartItems: CartItem[];
     totalPrice: number;
     onBack: () => void;
+    defaultEmail?: string;
+    isBatchOpen?: boolean;
+    batchId?: string | null;
+    groupBuyItems?: GroupBuyProgressItem[];
+    onRefreshGroupBuy?: () => void | Promise<void>;
 }
 
-const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) => {
+const Checkout: React.FC<CheckoutProps> = ({
+    cartItems,
+    totalPrice,
+    onBack,
+    defaultEmail = '',
+    isBatchOpen = true,
+    batchId = null,
+    groupBuyItems = [],
+    onRefreshGroupBuy,
+}) => {
     const { paymentMethods } = usePaymentMethods();
     const { locations: shippingLocations } = useShippingLocations();
     const { couriers } = useCouriers();
+    const { savedInfo, saveInfo, clearInfo } = useCheckoutInfo();
+    const { addOrder } = useOrderHistory();
     const [step, setStep] = useState<'details' | 'payment' | 'confirmation'>('details');
 
-    // Customer Details
-    const [fullName, setFullName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
+    // Customer Details — prefilled from the last order saved on this device.
+    const [fullName, setFullName] = useState(savedInfo?.fullName ?? '');
+    const [email, setEmail] = useState(savedInfo?.email || defaultEmail);
+    const [phone, setPhone] = useState(savedInfo?.phone ?? '');
 
     // Shipping Details
-    const [address, setAddress] = useState('');
-    const [barangay, setBarangay] = useState('');
-    const [city, setCity] = useState('');
-    const [state, setState] = useState('');
-    const [zipCode, setZipCode] = useState('');
-    const [selectedCourierId, setSelectedCourierId] = useState('');
-    const [shippingLocation, setShippingLocation] = useState<string>('');
+    const [address, setAddress] = useState(savedInfo?.address ?? '');
+    const [barangay, setBarangay] = useState(savedInfo?.barangay ?? '');
+    const [city, setCity] = useState(savedInfo?.city ?? '');
+    const [state, setState] = useState(savedInfo?.state ?? '');
+    const [zipCode, setZipCode] = useState(savedInfo?.zipCode ?? '');
+    const [selectedCourierId, setSelectedCourierId] = useState(savedInfo?.selectedCourierId ?? '');
+    const [shippingLocation, setShippingLocation] = useState<string>(savedInfo?.shippingLocation ?? '');
 
     // Payment
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
-    const [contactMethod, setContactMethod] = useState<'viber' | 'whatsapp' | ''>('viber');
+    const [contactMethod, setContactMethod] = useState<'viber' | 'whatsapp' | ''>(savedInfo?.contactMethod || 'viber');
     const [notes, setNotes] = useState('');
 
     const [orderMessage, setOrderMessage] = useState<string>('');
@@ -191,6 +210,30 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
             return;
         }
 
+        // Group buy must be open (server trigger is the authoritative backstop).
+        if (!isBatchOpen) {
+            alert('Sorry — the group buy just closed, so your order was not placed. Please try again when the next batch opens.');
+            return;
+        }
+
+        // Pre-submit cap check: catch any product whose cart quantity exceeds what
+        // its batch cap still allows before we upload anything.
+        const cartQtyByProduct = cartItems.reduce<Record<string, number>>((acc, item) => {
+            acc[item.product.id] = (acc[item.product.id] || 0) + item.quantity;
+            return acc;
+        }, {});
+        const overCapProducts = Object.entries(cartQtyByProduct)
+            .filter(([productId, qty]) => {
+                const remaining = remainingForProduct(findProgressItem(groupBuyItems, productId));
+                return remaining != null && qty > remaining;
+            })
+            .map(([productId]) => cartItems.find((i) => i.product.id === productId)?.product.name || 'an item');
+        if (overCapProducts.length > 0) {
+            alert(`The group limit was reached for ${overCapProducts.join(', ')}. Please lower the quantity before checking out.`);
+            await onRefreshGroupBuy?.();
+            return;
+        }
+
         const paymentMethod = paymentMethods.find(pm => pm.id === selectedPaymentMethod);
 
         try {
@@ -228,12 +271,20 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
                 };
             });
 
-            // Generate order number before saving
-            const randomDigits = Math.floor(Math.random() * 9000 + 1000); // 1000-9999
-            const customOrderNumber = `TBS-${randomDigits}`;
+            // Generate order number before saving. This RPC is the only source of
+            // truth for order numbers (monotonic sequence + unique index). A failure
+            // here is fatal: never fall back to a timestamp, which would break the
+            // unique-index backstop and the TBS-NNNNNN matching in get_order_bundle.
+            const { data: generatedNumber, error: numErr } = await supabase.rpc('next_order_number');
+            if (numErr || !generatedNumber) {
+                console.error('Failed to generate order number via next_order_number RPC:', numErr);
+                alert('Unable to generate an order number. Your order was NOT placed — please try again.');
+                return;
+            }
+            const customOrderNumber = generatedNumber as string;
 
             // Save order to database
-            const { data: orderData, error: orderError } = await supabase
+            const { error: orderError } = await supabase
                 .from('orders')
                 .insert([{
                     customer_name: fullName,
@@ -259,13 +310,25 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
                     promo_code_id: appliedPromo?.id || null,
                     promo_code: appliedPromo?.code || null,
                     discount_applied: discountAmount,
-                    order_number: customOrderNumber
-                }])
-                .select()
-                .single();
+                    order_number: customOrderNumber,
+                    group_buy_batch_id: batchId, // server trigger re-asserts the open batch
+                }]);
+            // No .select() here: orders is locked down so the anon role cannot
+            // read rows back (a broad anon SELECT would leak customer PII). The
+            // order number is generated client-side above, so the confirmation
+            // screen and emails do not depend on the inserted row being echoed back.
 
             if (orderError) {
                 console.error('❌ Error saving order:', orderError);
+
+                // Group-buy enforcement errors (no open batch / cap reached) are
+                // already user-friendly and come straight from the DB trigger.
+                const lowerMessage = (orderError.message || '').toLowerCase();
+                if (lowerMessage.includes('group buy') || lowerMessage.includes('limit reached')) {
+                    alert(orderError.message);
+                    await onRefreshGroupBuy?.();
+                    return;
+                }
 
                 let errorMessage = orderError.message;
                 if (orderError.message?.includes('Could not find the table') ||
@@ -278,19 +341,45 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
                 return;
             }
 
-            // Update promo code usage count
+            // Bump promo usage atomically via RPC. anon has no direct UPDATE on
+            // promo_codes (that would allow arbitrary usage_count writes); the
+            // SECURITY DEFINER increment_promo_usage only counts an active code
+            // still under its usage_limit, with no read-then-write race.
             if (appliedPromo) {
                 const { error: promoUpdateError } = await supabase
-                    .from('promo_codes')
-                    .update({ usage_count: appliedPromo.usage_count + 1 })
-                    .eq('id', appliedPromo.id);
+                    .rpc('increment_promo_usage', { p_id: appliedPromo.id });
 
                 if (promoUpdateError) {
                     console.error('Failed to update promo usage count:', promoUpdateError);
                 }
             }
 
-            console.log('✅ Order saved to database:', orderData);
+            console.log('✅ Order saved to database:', customOrderNumber);
+
+            // Remember the customer's details for next time and record this order
+            // locally so the tracking page can offer one-tap status lookups.
+            saveInfo({
+                fullName,
+                email,
+                phone,
+                address,
+                barangay,
+                city,
+                state,
+                zipCode,
+                selectedCourierId,
+                shippingLocation,
+                contactMethod,
+            });
+
+            addOrder({
+                orderNumber: customOrderNumber,
+                total: finalTotal,
+                itemSummary: orderItems
+                    .map((item) => `${item.quantity}x ${item.product_name}`)
+                    .join(', '),
+                placedAt: new Date().toISOString(),
+            });
 
             // Build item descriptions for email
             const items_description = orderItems.map(item =>
@@ -309,7 +398,6 @@ const Checkout: React.FC<CheckoutProps> = ({ cartItems, totalPrice, onBack }) =>
 
             posthog.capture('tbs_order_placed', {
                 order_number: customOrderNumber,
-                order_id: orderData?.id,
                 email: email,
                 customer_name: fullName,
                 customer_phone: phone,
@@ -774,6 +862,34 @@ Please confirm this order. Thank you!
                     Checkout Information
                     <Activity className="w-6 h-6 text-brand-600" />
                 </h1>
+
+                {savedInfo && (
+                    <div className="mb-6 flex items-center justify-between gap-3 rounded border border-brand-100 bg-brand-50/40 px-4 py-3">
+                        <p className="text-sm text-brand-700 flex items-center gap-2">
+                            <Check className="w-4 h-4 shrink-0" />
+                            We prefilled your details from your last order.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                clearInfo();
+                                setFullName('');
+                                setEmail(defaultEmail);
+                                setPhone('');
+                                setAddress('');
+                                setBarangay('');
+                                setCity('');
+                                setState('');
+                                setZipCode('');
+                                setSelectedCourierId('');
+                                setShippingLocation('');
+                            }}
+                            className="text-xs font-bold text-brand-700 hover:text-brand-900 underline shrink-0 whitespace-nowrap"
+                        >
+                            Clear saved details
+                        </button>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Form */}

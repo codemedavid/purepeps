@@ -1,6 +1,7 @@
 import React from 'react';
-import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity } from 'lucide-react';
-import type { CartItem } from '../types';
+import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity, Lock } from 'lucide-react';
+import type { CartItem, GroupBuyProgressItem } from '../types';
+import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -10,6 +11,8 @@ interface CartProps {
   getTotalPrice: () => number;
   onContinueShopping: () => void;
   onCheckout: () => void;
+  isBatchOpen?: boolean;
+  groupBuyItems?: GroupBuyProgressItem[];
 }
 
 const Cart: React.FC<CartProps> = ({
@@ -20,6 +23,8 @@ const Cart: React.FC<CartProps> = ({
   getTotalPrice,
   onContinueShopping,
   onCheckout,
+  isBatchOpen = true,
+  groupBuyItems = [],
 }) => {
   if (cartItems.length === 0) {
     return (
@@ -51,6 +56,23 @@ const Cart: React.FC<CartProps> = ({
   const totalPrice = getTotalPrice();
   // Shipping fee will be discussed via chat
   const finalTotal = totalPrice;
+
+  // Group-buy gating: block checkout if no batch is open, or if a product's
+  // total quantity in the cart exceeds what its batch cap still allows. The
+  // database trigger is the authoritative backstop; this is the friendly,
+  // pre-submit guard.
+  const cartQtyByProduct = cartItems.reduce<Record<string, number>>((acc, item) => {
+    acc[item.product.id] = (acc[item.product.id] || 0) + item.quantity;
+    return acc;
+  }, {});
+  const overCapProducts = Object.entries(cartQtyByProduct)
+    .filter(([productId, qty]) => {
+      const remaining = remainingForProduct(findProgressItem(groupBuyItems, productId));
+      return remaining != null && qty > remaining;
+    })
+    .map(([productId]) => cartItems.find((i) => i.product.id === productId)?.product.name || 'an item');
+  const capBlocked = overCapProducts.length > 0;
+  const checkoutDisabled = !isBatchOpen || capBlocked;
 
   return (
     <div className="min-h-screen bg-white py-6 md:py-8">
@@ -247,12 +269,25 @@ const Cart: React.FC<CartProps> = ({
                 </ul>
               </div>
 
+              {!isBatchOpen && (
+                <div className="mb-3 flex items-start gap-2 rounded bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+                  <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>No group buy is open right now. Checkout will reopen once the next batch starts.</span>
+                </div>
+              )}
+              {isBatchOpen && capBlocked && (
+                <div className="mb-3 rounded bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+                  The group limit was reached for {overCapProducts.join(', ')}. Lower the quantity to continue.
+                </div>
+              )}
+
               <button
                 onClick={onCheckout}
-                className="w-full btn-primary py-3 md:py-4 text-sm md:text-base mb-3 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                disabled={checkoutDisabled}
+                className="w-full btn-primary py-3 md:py-4 text-sm md:text-base mb-3 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CreditCard className="w-4 h-4" />
-                Proceed to Checkout
+                {!isBatchOpen ? 'Checkout closed' : 'Proceed to Checkout'}
               </button>
 
               <button

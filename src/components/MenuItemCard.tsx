@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Package } from 'lucide-react';
-import type { Product, ProductVariation } from '../types';
+import { ImageIcon, Lock, ShoppingBag } from 'lucide-react';
+import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
+import { formatPrice } from '../utils/currency';
+import { isSoldOut as isCapSoldOut } from '../utils/groupBuy';
 
 interface MenuItemCardProps {
   product: Product;
@@ -8,6 +10,10 @@ interface MenuItemCardProps {
   cartQuantity?: number;
   onUpdateQuantity?: (index: number, quantity: number) => void;
   onProductClick?: (product: Product) => void;
+  isVerified?: boolean;
+  onGetAccess?: () => void;
+  groupBuyItem?: GroupBuyProgressItem;
+  isBatchOpen?: boolean;
 }
 
 const MenuItemCard: React.FC<MenuItemCardProps> = ({
@@ -15,190 +21,211 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   onAddToCart,
   cartQuantity = 0,
   onProductClick,
+  isVerified = false,
+  onGetAccess,
+  groupBuyItem,
+  isBatchOpen = true,
 }) => {
   const [imageError, setImageError] = useState(false);
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | undefined>(
-    product.variations && product.variations.length > 0 ? product.variations[0] : undefined
+    product.variations && product.variations.length > 0 ? product.variations[0] : undefined,
   );
 
-  // Calculate current price considering both product and variation discounts
-  const currentPrice = (() => {
-    // Falls back to variation or product price
-    return selectedVariation
-      ? (selectedVariation.discount_active && selectedVariation.discount_price)
-        ? selectedVariation.discount_price
-        : selectedVariation.price
-      : (product.discount_active && product.discount_price)
-        ? product.discount_price
-        : product.base_price;
-  })();
+  const currentPrice = selectedVariation
+    ? selectedVariation.discount_active && selectedVariation.discount_price
+      ? selectedVariation.discount_price
+      : selectedVariation.price
+    : product.discount_active && product.discount_price
+      ? product.discount_price
+      : product.base_price;
 
-  // Check if there's an active discount
-  const hasDiscount = selectedVariation
-    ? (selectedVariation.discount_active && selectedVariation.discount_price !== null)
-    : (product.discount_active && product.discount_price !== null);
-
-  // Get original price for strikethrough
   const originalPrice = selectedVariation ? selectedVariation.price : product.base_price;
+  const hasDiscount = currentPrice < originalPrice;
+  const savePct = hasDiscount ? Math.round((1 - currentPrice / originalPrice) * 100) : 0;
 
-  // Check if product has any available stock (either in variations or product itself)
-  const hasAnyStock = product.variations && product.variations.length > 0
-    ? product.variations.some(v => v.stock_quantity > 0)
-    : product.stock_quantity > 0;
+  const hasAnyStock =
+    product.variations && product.variations.length > 0
+      ? product.variations.some((v) => v.stock_quantity > 0)
+      : product.stock_quantity > 0;
+  const soldOut = !product.available || !hasAnyStock;
+
+  // Group-buy cap (per product, across the whole batch). cap_quantity null = no cap.
+  const capQuantity = groupBuyItem?.cap_quantity ?? null;
+  const capReserved = groupBuyItem?.total_quantity ?? 0;
+  const capReached = isCapSoldOut(groupBuyItem);
+  const canAdd = !soldOut && !capReached && isBatchOpen;
+  const ctaLabel = !isBatchOpen
+    ? 'Group buy closed'
+    : soldOut
+      ? 'Sold out'
+      : capReached
+        ? 'Group limit reached'
+        : 'Add to cart';
 
   return (
-    <div className="card h-full flex flex-col group relative">
-      {/* Click overlay for product details */}
-      <div
-        onClick={() => onProductClick?.(product)}
-        className="absolute inset-x-0 top-0 h-28 sm:h-44 z-10 cursor-pointer"
-        title="View details"
-      />
-
-      {/* Product Image */}
-      <div className="relative h-28 sm:h-44 bg-secondary-50 overflow-hidden border-b border-gray-50">
+    <div
+      onClick={() => onProductClick?.(product)}
+      className="relative bg-white border border-sakura-ink/[0.08] rounded-[20px] overflow-hidden cursor-pointer transition-shadow duration-300 hover:shadow-[0_20px_44px_-26px_rgba(60,20,35,0.34)] font-display flex flex-col"
+    >
+      {/* Image */}
+      <div className="relative h-44 sm:h-[238px] bg-sakura-blush-soft border-b border-sakura-edge overflow-hidden">
         {product.image_url && !imageError ? (
           <img
             src={product.image_url}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-charcoal-200 bg-charcoal-50">
-            <Package className="w-16 h-16 opacity-50" />
+          <div className="w-full h-full flex flex-col items-center justify-center text-sakura-soft gap-2">
+            <ImageIcon className="w-8 h-8" />
+            <span className="text-xs">Add product photo</span>
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col gap-2 pointer-events-none z-20">
-          {product.featured && (
-            <span className="px-2 py-1 bg-brand-600 text-white text-[10px] font-bold uppercase tracking-wider rounded shadow-sm">
-              Featured
-            </span>
-          )}
-          {hasDiscount && (
-            <span className="px-2 py-1 bg-brand-600 text-white text-[10px] font-bold rounded shadow-sm">
-              {Math.round((1 - currentPrice / originalPrice) * 100)}% OFF
-            </span>
-          )}
-        </div>
+        {(product.featured || hasDiscount) && (
+          <span className="absolute top-4 left-4 z-20 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase text-white bg-sakura-primary rounded-full px-2.5 py-1 whitespace-nowrap">
+            {product.featured ? 'Best seller' : `${savePct}% off`}
+          </span>
+        )}
 
-        {/* Stock Status Overlay */}
-        {(!product.available || !hasAnyStock) && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] flex items-center justify-center z-20">
-            <span className="bg-gray-100 text-gray-500 px-3 py-1 text-xs font-bold rounded border border-gray-200 uppercase tracking-wide">
-              {!product.available ? 'Unavailable' : 'Out of Stock'}
+        {product.sequence && (
+          <span className="absolute bottom-3.5 left-4 z-20 font-mono text-[10px] tracking-[0.08em] uppercase text-sakura-deep bg-white/[0.86] rounded-md px-2 py-1">
+            {product.sequence}
+          </span>
+        )}
+
+        {soldOut && (
+          <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex items-center justify-center z-20">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-wide text-sakura-muted bg-white px-3 py-1 rounded-full border border-sakura-ink/10">
+              {!product.available ? 'Unavailable' : 'Out of stock'}
             </span>
           </div>
         )}
       </div>
 
-      {/* Product Details */}
-      <div className="p-4 sm:p-5 flex-1 flex flex-col">
-        <h3 className="font-heading font-semibold text-charcoal-900 text-sm sm:text-base mb-1 line-clamp-2 tracking-tight">
+      {/* Details */}
+      <div className="p-5 sm:p-[22px] flex-1 flex flex-col">
+        <div className="text-lg sm:text-xl font-extrabold tracking-[-0.025em] text-sakura-ink leading-tight line-clamp-1">
           {product.name}
-        </h3>
-        <p className="text-[10px] sm:text-xs text-gray-500 mb-2 sm:mb-3 line-clamp-2 min-h-[1.5rem] sm:min-h-[2.5rem] leading-relaxed">
-          {product.description}
-        </p>
+        </div>
+        <div className="text-[13px] text-sakura-faint mt-0.5 line-clamp-1">{product.description}</div>
 
-        {/* Variations (Sizes) */}
-        <div className="mb-2 sm:mb-4 min-h-[1.5rem] sm:min-h-[2rem]">
-          {product.variations && product.variations.length > 0 && (
-            <div className="flex flex-wrap gap-1 sm:gap-2">
-              {product.variations.slice(0, 2).map((variation) => {
-                const isOutOfStock = variation.stock_quantity === 0;
-                return (
-                  <button
-                    key={variation.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isOutOfStock) {
-                        setSelectedVariation(variation);
-                      }
-                    }}
-                    disabled={isOutOfStock}
-                    className={`
-                      px-2 sm:px-2.5 py-1 text-[10px] sm:text-xs font-medium rounded-lg border transition-all duration-200 relative z-20
-                      ${selectedVariation?.id === variation.id && !isOutOfStock
-                        ? 'bg-brand-50 border-brand-400 text-brand-700'
-                        : isOutOfStock
-                          ? 'bg-charcoal-50 text-charcoal-300 border-charcoal-100 cursor-not-allowed'
-                          : 'bg-white text-charcoal-600 border-charcoal-200 hover:border-brand-300 hover:text-brand-600'
-                      }
-                    `}
-                  >
-                    {variation.name}
-                  </button>
-                );
-              })}
-              {product.variations.length > 2 && (
-                <span className="text-[9px] sm:text-[10px] text-gray-400 self-center">
-                  +{product.variations.length - 2}
+        <div className="flex flex-wrap gap-1.5 mt-3.5">
+          {selectedVariation && (
+            <span className="font-mono text-[11px] font-medium text-sakura-muted bg-[#F2EFED] rounded-md px-2.5 py-1.5">
+              {selectedVariation.name}
+            </span>
+          )}
+          {product.purity_percentage > 0 && (
+            <span className="font-mono text-[11px] font-medium text-sakura-sage bg-sakura-sage-soft rounded-md px-2.5 py-1.5">
+              {product.purity_percentage}% HPLC
+            </span>
+          )}
+        </div>
+
+        {/* extra variation chips */}
+        {product.variations && product.variations.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {product.variations.slice(0, 3).map((v) => (
+              <button
+                key={v.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (v.stock_quantity > 0) setSelectedVariation(v);
+                }}
+                disabled={v.stock_quantity === 0}
+                className={`font-mono text-[10px] px-2 py-1 rounded-md border transition-colors ${
+                  selectedVariation?.id === v.id
+                    ? 'border-sakura-primary text-sakura-primary bg-sakura-blush-soft'
+                    : 'border-sakura-ink/10 text-sakura-muted hover:border-sakura-primary/40'
+                } ${v.stock_quantity === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="h-px bg-sakura-ink/[0.08] my-4" />
+
+        <div className="flex items-end justify-between mt-auto">
+          <div>
+            <div className="font-mono text-[10px] font-semibold tracking-[0.06em] uppercase text-sakura-soft">
+              Group price
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-mono text-2xl sm:text-[26px] font-semibold text-sakura-primary tracking-[-0.01em]">
+                {formatPrice(currentPrice)}
+              </span>
+              {hasDiscount && (
+                <span className="font-mono text-[13px] text-sakura-soft line-through">
+                  {formatPrice(originalPrice)}
                 </span>
               )}
             </div>
-          )}
-        </div>
-
-
-
-        <div className="flex-1" />
-
-        {/* Price and Cart Actions */}
-        <div className="flex flex-col gap-2 sm:gap-3 mt-auto">
-          {hasDiscount ? (
-            <div className="flex items-baseline gap-1 sm:gap-2">
-              <span className="text-base sm:text-lg font-semibold text-charcoal-900">
-                ₱{currentPrice.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-              </span>
-              <span className="text-[10px] sm:text-xs text-charcoal-400 line-through">
-                ₱{originalPrice.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-baseline">
-              <span className="text-base sm:text-lg font-semibold text-charcoal-900">
-                ₱{currentPrice.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-              </span>
-            </div>
-          )}
-
-          <div className="flex w-full pt-2">
-            {/* Add to Cart Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!product.available || !hasAnyStock) return;
-
-                // If it has variations, ensure one is selected
-                if (product.variations && product.variations.length > 0 && !selectedVariation) {
-                  onProductClick?.(product);
-                  return;
-                }
-
-                onAddToCart?.(product, selectedVariation, 1);
-              }}
-              disabled={!product.available || !hasAnyStock}
-              className={`w-full py-2 sm:py-3 px-2 text-[11px] sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 font-semibold whitespace-nowrap transition-all
-                ${(!product.available || !hasAnyStock)
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed rounded'
-                  : 'btn-primary'}
-              `}
-            >
-              <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>Add to Cart</span>
-            </button>
           </div>
-
-          {/* Cart Status */}
-          {cartQuantity > 0 && (
-            <div className="text-center text-[10px] text-emerald-600 font-medium bg-emerald-100/50 rounded py-1">
-              {cartQuantity} in cart
-            </div>
+          {hasDiscount && (
+            <span className="font-mono text-xs font-semibold text-sakura-sage">−{savePct}%</span>
           )}
         </div>
+
+        {/* Group-buy limit progress — lets shoppers see how many can still be bought */}
+        {capQuantity != null && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[11px] font-mono mb-1">
+              <span className="text-sakura-soft uppercase tracking-[0.06em]">Group limit</span>
+              <span className={capReached ? 'text-sakura-primary font-semibold' : 'text-sakura-muted'}>
+                {capReserved} / {capQuantity} reserved
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[#F2EFED] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${capReached ? 'bg-sakura-primary' : 'bg-sakura-sage'}`}
+                style={{ width: `${Math.min(100, Math.round((capReserved / capQuantity) * 100))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* CTA — gated on access */}
+        {isVerified ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!canAdd) return;
+              if (product.variations && product.variations.length > 0 && !selectedVariation) {
+                onProductClick?.(product);
+                return;
+              }
+              onAddToCart?.(product, selectedVariation, 1);
+            }}
+            disabled={!canAdd}
+            className={`mt-4 w-full flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold transition-colors ${
+              !canAdd
+                ? 'bg-[#F2EFED] text-sakura-soft cursor-not-allowed'
+                : 'bg-sakura-primary hover:bg-sakura-deep text-white'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4" /> {ctaLabel}
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onGetAccess?.();
+            }}
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold bg-[#F2EFED] text-[#A89098] hover:text-sakura-deep transition-colors"
+          >
+            <Lock className="w-4 h-4" /> Members only
+          </button>
+        )}
+
+        {cartQuantity > 0 && (
+          <div className="mt-2 text-center text-[11px] text-sakura-sage font-medium">
+            {cartQuantity} in cart
+          </div>
+        )}
       </div>
     </div>
   );

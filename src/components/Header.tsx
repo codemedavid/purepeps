@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, ClipboardList } from 'lucide-react';
+import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, Lock, Check } from 'lucide-react';
+import BlossomLogo from './BlossomLogo';
 
 interface HeaderProps {
   cartItemsCount: number;
   onCartClick: () => void;
   onMenuClick: () => void;
+  onGetAccess: () => void;
+  isVerified: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClick }) => {
+const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClick, onGetAccess, isVerified }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -18,15 +21,11 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
             {/* Logo - Rectangular */}
             <button
               onClick={() => { onMenuClick(); setMobileMenuOpen(false); }}
-              className="flex items-center hover:opacity-90 transition-opacity"
+              className="flex items-center gap-2 hover:opacity-90 transition-opacity"
             >
-              <img
-                src="/logo.jpeg?v=2"
-                alt="The Babe Studio"
-                className="h-10 sm:h-12 w-auto object-contain rounded-lg"
-              />
-              <span className="ml-2 sm:ml-3 text-base sm:text-xl font-heading font-bold text-brand-600 tracking-tight">
-                The Babe Studio
+              <BlossomLogo size={26} />
+              <span className="text-base sm:text-xl font-display font-extrabold text-sakura-ink tracking-[-0.03em]">
+                Pure Peps
               </span>
             </button>
 
@@ -41,13 +40,6 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
                   <FlaskConical className="w-4 h-4" />
                   Products
                 </button>
-                <a
-                  href="/assessment"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <ClipboardList className="w-4 h-4" />
-                  Assessment
-                </a>
                 <a
                   href="/calculator"
                   className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -88,14 +80,27 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
               {/* Cart Button */}
               <button
                 onClick={onCartClick}
-                className="relative p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"
+                className="relative p-2.5 text-sakura-ink hover:bg-sakura-blush-soft rounded-xl transition-colors"
               >
                 <ShoppingCart className="w-5 h-5" />
                 {cartItemsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-brand-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  <span className="absolute -top-1 -right-1 bg-sakura-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                     {cartItemsCount > 99 ? '99+' : cartItemsCount}
                   </span>
                 )}
+              </button>
+
+              {/* Get Access / Verified pill */}
+              <button
+                onClick={onGetAccess}
+                className={`hidden sm:inline-flex items-center gap-1.5 font-mono rounded-full px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors ${
+                  isVerified
+                    ? 'bg-sakura-sage-soft text-sakura-sage'
+                    : 'bg-sakura-ink text-white hover:bg-sakura-deep'
+                }`}
+              >
+                {isVerified ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                {isVerified ? 'Member' : 'Get access'}
               </button>
 
               {/* Mobile Menu Button */}
@@ -164,16 +169,6 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
                   </div>
                   Products
                 </button>
-
-                <a
-                  href="/assessment"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <ClipboardList className="w-[18px] h-[18px]" />
-                  </div>
-                  Assessment
-                </a>
 
                 <a
                   href="/calculator"
