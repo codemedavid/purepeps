@@ -160,6 +160,8 @@ export interface GroupBuyBatch {
   opened_by?: string | null;
   created_at?: string;
   fulfillment_stage: FulfillmentStage | null;
+  /** Admin-set paid access fee for this batch (PHP). Members pay this per batch. */
+  access_fee?: number;
 }
 
 export interface GroupBuyCap {

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, Check, Clock, Copy, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Copy, Lock, RefreshCw, ShieldCheck } from 'lucide-react';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useAccessRequests } from '../hooks/useAccessRequests';
+import { useActiveAccess } from '../hooks/useActiveAccess';
 import type { VerifyResult } from '../hooks/useAccess';
 import { ACCESS_FEE_PHP, isValidEmail } from '../utils/access';
 import { formatPrice } from '../utils/currency';
@@ -14,22 +15,31 @@ interface GetAccessProps {
   onVerified: () => void;
   /** Lifted from MainApp's single useAccess() instance so verifying here unlocks the gated UI in-session. */
   verifyEmail: (candidate: string) => Promise<VerifyResult>;
+  /** Set when a returning member was approved on a prior batch but not the open one. */
+  renewalEmail?: string | null;
 }
 
 const PERKS = [
-  'Checkout on every live group buy',
+  'Checkout on this live group buy',
   'Member pricing on all vials',
-  'Early access to new drops',
+  'Early access to this batch’s drops',
 ];
 
 const LABEL = 'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-sakura-soft';
 
-function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
+function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessProps) {
   const { paymentMethods, loading: methodsLoading } = usePaymentMethods();
   const { submitRequest } = useAccessRequests();
+  const { info: accessInfo } = useActiveAccess();
+
+  // Per-batch fee: the open batch's admin-set fee, falling back to the constant
+  // until it loads / if no batch is open.
+  const accessFee = accessInfo.accessFee ?? ACCESS_FEE_PHP;
+  const batchNumber = accessInfo.batchNumber;
+  const isRenewal = Boolean(renewalEmail);
 
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(renewalEmail ?? '');
   const [proofUrl, setProofUrl] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -82,7 +92,7 @@ function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
       payment_method_id: selectedMethod?.id ?? null,
       payment_method_name: selectedMethod?.name ?? null,
       payment_proof_url: proofUrl,
-      amount: ACCESS_FEE_PHP,
+      amount: accessFee,
     });
     setSubmitting(false);
 
@@ -124,7 +134,7 @@ function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
             <div>
               <div className="text-sm font-bold text-sakura-ink">Payment proof attached</div>
               <div className="font-mono text-[11.5px] text-sakura-sage mt-0.5">
-                {formatPrice(ACCESS_FEE_PHP)} · {selectedMethod?.name ?? 'Payment'}
+                {formatPrice(accessFee)} · {selectedMethod?.name ?? 'Payment'}
               </div>
             </div>
           </div>
@@ -158,15 +168,31 @@ function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
         <ArrowLeft className="w-3.5 h-3.5" /> Back
       </button>
 
+      {isRenewal && (
+        <div className="mb-5 flex items-start gap-3 bg-sakura-blush border border-sakura-edge rounded-2xl p-4">
+          <RefreshCw className="w-5 h-5 text-sakura-primary shrink-0 mt-0.5" strokeWidth={2.2} />
+          <div>
+            <div className="text-sm font-bold text-sakura-ink">
+              {batchNumber ? `Batch #${batchNumber} is open` : 'A new group buy is open'} — renew your
+              access
+            </div>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-sakura-muted">
+              Access is per batch. Your previous approval has expired with the last group buy — send
+              this batch’s access fee below to unlock checkout again.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="font-mono text-xs font-semibold tracking-[0.1em] uppercase text-sakura-deep mb-3.5">
-        Members only · paid access
+        Members only · paid access{batchNumber ? ` · batch #${batchNumber}` : ''}
       </div>
       <h1 className="text-5xl font-extrabold tracking-[-0.04em] text-sakura-ink leading-[1.0]">
-        Get access
+        {isRenewal ? 'Renew access' : 'Get access'}
       </h1>
       <p className="mt-4 text-lg leading-relaxed text-sakura-muted max-w-xl">
-        Send the one-time access fee, attach a screenshot of your payment, and submit. An admin
-        reviews it and unlocks checkout on your account — usually within a few hours.
+        Send this batch’s access fee, attach a screenshot of your payment, and submit. An admin
+        reviews it and unlocks checkout for the current group buy — usually within a few hours.
       </p>
 
       {/* Already paid? verify email */}
@@ -211,13 +237,13 @@ function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
         <div>
           <div className="bg-sakura-blush rounded-[18px] p-6">
             <div className="font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-sakura-deep">
-              One-time access
+              {batchNumber ? `Batch #${batchNumber} access` : 'Group buy access'}
             </div>
             <div className="flex items-baseline gap-2.5 mt-1.5">
               <span className="text-[44px] font-extrabold tracking-[-0.03em] text-sakura-ink">
-                {formatPrice(ACCESS_FEE_PHP)}
+                {formatPrice(accessFee)}
               </span>
-              <span className="text-[15px] text-sakura-deep/80">one-time</span>
+              <span className="text-[15px] text-sakura-deep/80">per batch</span>
             </div>
             <div className="flex flex-col gap-2.5 mt-4 text-[14.5px] text-sakura-muted">
               {PERKS.map((perk) => (
@@ -298,7 +324,7 @@ function GetAccess({ onBack, onVerified, verifyEmail }: GetAccessProps) {
                   Send exactly
                 </span>
                 <span className="font-mono text-2xl font-semibold text-sakura-primary">
-                  {formatPrice(ACCESS_FEE_PHP)}
+                  {formatPrice(accessFee)}
                 </span>
               </div>
             </div>

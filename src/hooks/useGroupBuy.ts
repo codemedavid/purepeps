@@ -96,9 +96,10 @@ export const useGroupBuy = () => {
   }, [refresh]);
 
   const openBatch = useCallback(
-    async (name?: string) => {
+    async (name?: string, accessFee?: number | null) => {
       const { error: rpcError } = await supabase.rpc('open_group_buy_batch', {
         p_name: name?.trim() ? name.trim() : null,
+        p_access_fee: accessFee ?? null,
       });
       if (rpcError) throw rpcError;
       await refresh();

@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ACCESS_EMAIL_KEY, isValidEmail } from '../utils/access';
+import { ACCESS_EMAIL_KEY, isValidEmail, type AccessGateStatus } from '../utils/access';
 
 export interface VerifyResult {
   ok: boolean;
-  status: 'approved' | 'pending' | 'none';
+  status: AccessGateStatus;
 }
 
 /**
- * Group-buy access gate. A member is "verified" once an admin approves their
- * access request. The verified email is cached in localStorage so checkout
- * stays unlocked across visits; verification is always re-checked against
- * Supabase so a revoked member loses access.
+ * Group-buy access gate. Access is per-batch: a member is "verified" only while
+ * an admin-approved request exists for the CURRENTLY-OPEN batch. The verified
+ * email is cached in localStorage so checkout stays unlocked across visits, but
+ * verification is always re-checked against Supabase — so when a new batch opens
+ * the cached email resolves to 'renew' and the stale cache is cleared
+ * automatically (no client-side batch tracking needed).
  */
 export function useAccess() {
   const [email, setEmail] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
   const [checking, setChecking] = useState(true);
+  // Email approved on a prior batch but not the open one — drives the renewal prompt.
+  const [renewalEmail, setRenewalEmail] = useState<string | null>(null);
 
   const lookup = useCallback(async (candidate: string): Promise<VerifyResult> => {
     const normalized = candidate.trim().toLowerCase();
@@ -24,8 +28,8 @@ export function useAccess() {
 
     // Privacy-preserving: the anon role can no longer SELECT access_requests
     // (that leaked every member's email + payment proof). get_access_status is a
-    // SECURITY DEFINER RPC that returns only this email's decisive status:
-    // most-recent approved/rejected wins; else pending; else none.
+    // SECURITY DEFINER RPC that returns only this email's decisive status for the
+    // open batch: 'approved' | 'pending' | 'renew' | 'none'.
     const { data, error } = await supabase.rpc('get_access_status', { p_email: normalized });
 
     if (error) {
@@ -35,6 +39,7 @@ export function useAccess() {
 
     if (data === 'approved') return { ok: true, status: 'approved' };
     if (data === 'pending') return { ok: false, status: 'pending' };
+    if (data === 'renew') return { ok: false, status: 'renew' };
     return { ok: false, status: 'none' };
   }, []);
 
@@ -53,6 +58,9 @@ export function useAccess() {
         setEmail(cached);
         setIsVerified(true);
       } else {
+        // Cached email no longer unlocks the open batch. If it was approved on a
+        // prior batch, remember it so the storefront can offer a renewal.
+        if (result.status === 'renew') setRenewalEmail(cached.trim().toLowerCase());
         localStorage.removeItem(ACCESS_EMAIL_KEY);
       }
       setChecking(false);
@@ -67,11 +75,14 @@ export function useAccess() {
   const verifyEmail = useCallback(
     async (candidate: string): Promise<VerifyResult> => {
       const result = await lookup(candidate);
+      const normalized = candidate.trim().toLowerCase();
       if (result.ok) {
-        const normalized = candidate.trim().toLowerCase();
         localStorage.setItem(ACCESS_EMAIL_KEY, normalized);
         setEmail(normalized);
         setIsVerified(true);
+        setRenewalEmail(null);
+      } else if (result.status === 'renew') {
+        setRenewalEmail(normalized);
       }
       return result;
     },
@@ -82,7 +93,17 @@ export function useAccess() {
     localStorage.removeItem(ACCESS_EMAIL_KEY);
     setEmail(null);
     setIsVerified(false);
+    setRenewalEmail(null);
   }, []);
 
-  return { email, isVerified, checking, verifyEmail, signOut };
+  return {
+    email,
+    isVerified,
+    checking,
+    verifyEmail,
+    signOut,
+    /** Set when a returning member is approved on a prior batch but not the open one. */
+    needsRenewal: renewalEmail !== null,
+    renewalEmail,
+  };
 }

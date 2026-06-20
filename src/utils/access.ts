@@ -1,12 +1,34 @@
 // Pure Peps — paid group-buy access constants and helpers.
 
-/** One-time access fee in Philippine Peso. Admin-priced; shown via formatPrice. */
+/**
+ * Fallback access fee in Philippine Peso, used only until the open batch's
+ * admin-set fee loads (get_active_access_info). Access is now per-batch: each
+ * new group buy requires its own paid request + approval.
+ */
 export const ACCESS_FEE_PHP = 250;
 
 /** localStorage key holding the verified member email (set after admin approval). */
 export const ACCESS_EMAIL_KEY = 'pp_access_email';
 
+/** Persisted status of an individual access request row. */
 export type AccessStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Decisive access state for a member on the CURRENTLY-OPEN batch, returned by
+ * the get_access_status RPC:
+ *   approved — unlocked for the open batch
+ *   pending  — paid for the open batch, awaiting admin review
+ *   renew    — approved on a PRIOR batch, but must pay again for the open one
+ *   none     — never approved (or rejected on the open batch)
+ */
+export type AccessGateStatus = 'approved' | 'pending' | 'renew' | 'none';
+
+/** Open batch number + access fee for the storefront (get_active_access_info). */
+export interface ActiveAccessInfo {
+  batchNumber: number | null;
+  accessFee: number | null;
+  name: string | null;
+}
 
 export interface AccessRequest {
   id: string;
@@ -17,6 +39,9 @@ export interface AccessRequest {
   amount: number;
   status: AccessStatus;
   notes: string | null;
+  group_buy_batch_id: string | null;
+  /** Batch number for the request's batch — populated by the admin fetch join, not a column. */
+  batch_number?: number | null;
   created_at: string;
   updated_at: string;
 }

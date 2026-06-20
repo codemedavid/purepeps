@@ -87,6 +87,7 @@ function MainApp() {
                         onBack={() => handleViewChange('menu')}
                         onVerified={() => handleViewChange('cart')}
                         verifyEmail={access.verifyEmail}
+                        renewalEmail={access.renewalEmail}
                     />
                 )}
 

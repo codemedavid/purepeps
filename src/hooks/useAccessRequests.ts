@@ -29,13 +29,21 @@ export function useAccessRequests() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
+      // Embed the batch number (admin-only join) so the queue can show which
+      // group buy each paid request unlocks.
       const { data, error: fetchError } = await supabase
         .from('access_requests')
-        .select('*')
+        .select('*, group_buy_batches ( batch_number )')
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
-      setRequests((data as AccessRequest[]) || []);
+      const rows = ((data ?? []) as (AccessRequest & {
+        group_buy_batches?: { batch_number: number } | null;
+      })[]).map((row) => ({
+        ...row,
+        batch_number: row.group_buy_batches?.batch_number ?? null,
+      }));
+      setRequests(rows);
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load access requests';

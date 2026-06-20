@@ -122,6 +122,11 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
                 </div>
                 <div className="font-mono text-xs text-charcoal-500 mt-1">
                   {formatPrice(Number(req.amount))} · {req.payment_method_name ?? 'Payment'}
+                  {req.batch_number != null && (
+                    <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-sakura-blush-soft text-sakura-deep border border-sakura-edge">
+                      Batch #{req.batch_number}
+                    </span>
+                  )}
                 </div>
                 <div className="font-mono text-[11px] text-charcoal-400 mt-0.5">
                   {new Date(req.created_at).toLocaleString('en-PH')}

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PurePeps — Batch 3 Pricelist</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #0a1628;
+    --navy-mid: #112240;
+    --navy-light: #1a3356;
+    --teal: #00c4b4;
+    --teal-dim: rgba(0,196,180,0.12);
+    --teal-glow: rgba(0,196,180,0.25);
+    --white: #ffffff;
+    --off-white: #f0f4f8;
+    --muted: #8899aa;
+    --border: rgba(255,255,255,0.07);
+    --row-alt: rgba(255,255,255,0.025);
+    --text: #ccd6e8;
+    --text-dim: #7a8fa8;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(135deg, #0a1628 0%, #0d2040 60%, #0f2a50 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 40px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 320px; height: 320px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,196,180,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: 30%;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,196,180,0.05) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+    position: relative;
+    z-index: 1;
+  }
+  .brand { display: flex; flex-direction: column; gap: 6px; }
+  .brand-logo {
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--white);
+  }
+  .brand-logo span { color: var(--teal); }
+  .brand-tagline {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 400;
+    max-width: 400px;
+    line-height: 1.6;
+  }
+  .batch-badge {
+    background: var(--teal-dim);
+    border: 1px solid var(--teal-glow);
+    color: var(--teal);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: 'DM Mono', monospace;
+    padding: 6px 14px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    align-self: flex-start;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    background: var(--navy-mid);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .controls-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+  }
+  .search-box input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 10px 16px 10px 40px;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .search-box input::placeholder { color: var(--text-dim); }
+  .search-box input:focus { border-color: var(--teal); background: rgba(0,196,180,0.05); }
+  .search-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 16px;
+    pointer-events: none;
+  }
+  .filter-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-dim);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: rgba(0,196,180,0.4); color: var(--teal); }
+  .filter-btn.active {
+    background: var(--teal-dim);
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .result-count {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    white-space: nowrap;
+    padding: 0 4px;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 40px 64px;
+  }
+
+  /* ── SECTION ── */
+  .section { margin-bottom: 40px; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--teal);
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal);
+    font-family: 'DM Mono', monospace;
+  }
+  .section-count {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace;
+    margin-left: auto;
+  }
+
+  /* ── TABLE ── */
+  .table-wrap { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  thead th {
+    background: var(--navy-light);
+    color: var(--text-dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+  }
+  thead th.right { text-align: right; }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr:hover { background: rgba(0,196,180,0.04); }
+  td { padding: 11px 16px; vertical-align: middle; }
+  td.code {
+    font-family: 'DM Mono', monospace;
+    font-size: 11.5px;
+    color: var(--teal);
+    opacity: 0.75;
+    white-space: nowrap;
+    width: 80px;
+  }
+  td.product { color: var(--white); font-weight: 400; }
+  td.dose {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  td.price {
+    text-align: right;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  td.price-kit { color: var(--text-dim); }
+  td.price-piece { color: var(--white); font-weight: 500; }
+
+  /* ── NO RESULTS ── */
+  .no-results {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-dim);
+    font-size: 14px;
+    display: none;
+  }
+  .no-results.show { display: block; }
+
+  /* ── FOOTER ── */
+  .footer {
+    background: var(--navy-mid);
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    text-align: center;
+  }
+  .footer p {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+  .footer strong { color: var(--teal); font-weight: 500; }
+
+  .hidden-row { display: none !important; }
+
+  @media (max-width: 640px) {
+    .header { padding: 32px 20px 28px; }
+    .controls { padding: 16px 20px; }
+    .main { padding: 24px 20px 48px; }
+    .brand-logo { font-size: 28px; }
+    table { font-size: 12px; }
+    td, thead th { padding: 10px 10px; }
+    td.code { display: none; }
+  }
+
+  @media print {
+    .controls { display: none; }
+    body { background: white; color: #111; }
+    .header { background: #0a1628 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-logo">Pure<span>Peps</span></div>
+      <p class="brand-tagline">Authentic COAs · Quality sourced · Shared international shipping to keep costs low for every buyer.</p>
+    </div>
+    <div class="batch-badge">BATCH 3 · PRICELIST</div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="controls-inner">
+    <div class="search-box">
+      <span class="search-icon">&#9906;</span>
+      <input type="text" id="searchInput" placeholder="Search product name or item code…" oninput="filterAll()">
+    </div>
+    <button class="filter-btn active" onclick="filterCat('ALL',this)">All</button>
+    <button class="filter-btn" onclick="filterCat('MIXING',this)">Mixing Supplies</button>
+    <button class="filter-btn" onclick="filterCat('PEPTIDES',this)">Peptides</button>
+    <button class="filter-btn" onclick="filterCat('BIORHYTHM',this)">Biorhythm</button>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+</div>
+
+<main class="main">
+
+  <!-- MIXING SUPPLIES -->
+  <section class="section" data-cat="MIXING" id="sec-MIXING">
+    <div class="section-header">
+      <div class="section-dot"></div>
+      <span class="section-title">Mixing Supplies</span>
+      <span class="section-count" id="cnt-MIXING"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-MIXING">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Product</th>
+            <th>Volume</th>
+            <th class="right">Per Kit (PHP)</th>
+            <th class="right">Per Piece (PHP)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-name="acetic acid water 10ml aa10"><td class="code">AA10</td><td class="product">Acetic Acid Water 10mL</td><td class="dose">10mL</td><td class="price price-kit">₱930.00</td><td class="price price-piece">₱93.00</td></tr>
+          <tr data-name="acetic acid water 3ml aa3"><td class="code">AA3</td><td class="product">Acetic Acid Water 3mL</td><td class="dose">3mL</td><td class="price price-kit">₱868.00</td><td class="price price-piece">₱86.80</td></tr>
+          <tr data-name="bacteriostatic water 10ml ba10"><td class="code">BA10</td><td class="product">Bacteriostatic Water 10mL</td><td class="dose">10mL</td><td class="price price-kit">₱950.00</td><td class="price price-piece">₱95.00</td></tr>
+          <tr data-name="bacteriostatic water 5ml ba5"><td class="code">BA5</td><td class="product">Bacteriostatic Water 5mL</td><td class="dose">5mL</td><td class="price price-kit">₱900.00</td><td class="price price-piece">₱90.00</td></tr>
+          <tr data-name="bacteriostatic water 3ml ba3"><td class="code">BA3</td><td class="product">Bacteriostatic Water 3mL</td><td class="dose">3mL</td><td class="price price-kit">₱800.00</td><td class="price price-piece">₱80.00</td></tr>
+          <tr data-name="pharma bacteriostatic water genetek 10ml"><td class="code">—</td><td class="product">Pharma Bacteriostatic Water 10mL <span style="color:var(--teal);font-size:11px">(Genetek)</span></td><td class="dose">10mL</td><td class="price price-kit">₱900.00</td><td class="price price-piece">₱90.00</td></tr>
+          <tr data-name="sterile water 5ml"><td class="code">—</td><td class="product">Sterile Water 5mL</td><td class="dose">5mL</td><td class="price price-kit">₱350.00</td><td class="price price-piece">₱35.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="no-results" id="no-MIXING">No matching products found.</div>
+  </section>
+
+  <!-- PEPTIDES -->
+  <section class="section" data-cat="PEPTIDES" id="sec-PEPTIDES">
+    <div class="section-header">
+      <div class="section-dot"></div>
+      <span class="section-title">Peptides</span>
+      <span class="section-count" id="cnt-PEPTIDES"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-PEPTIDES">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Product</th>
+            <th>Dose / Volume</th>
+            <th class="right">Per Kit (PHP)</th>
+            <th class="right">Per Piece (PHP)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-name="ace-031 ae1 1mg"><td class="code">AE1</td><td class="product">ACE-031</td><td class="dose">1mg</td><td class="price price-kit">₱3,015.00</td><td class="price price-piece">₱301.50</td></tr>
+          <tr data-name="5-amino-1mq 5mg 5am"><td class="code">5AM</td><td class="product">5-Amino-1MQ</td><td class="dose">5mg</td><td class="price price-kit">₱2,800.00</td><td class="price price-piece">₱280.00</td></tr>
+          <tr data-name="5-amino-1mq 10mg 10am"><td class="code">10AM</td><td class="product">5-Amino-1MQ</td><td class="dose">10mg</td><td class="price price-kit">₱3,600.00</td><td class="price price-piece">₱360.00</td></tr>
+          <tr data-name="5-amino-1mq 50mg 50am"><td class="code">50AM</td><td class="product">5-Amino-1MQ</td><td class="dose">50mg</td><td class="price price-kit">₱4,700.00</td><td class="price price-piece">₱470.00</td></tr>
+          <tr data-name="adamax 5mg ad5"><td class="code">AD5</td><td class="product">Adamax</td><td class="dose">5mg</td><td class="price price-kit">₱7,500.00</td><td class="price price-piece">₱750.00</td></tr>
+          <tr data-name="adipotide 2mg ap2"><td class="code">AP2</td><td class="product">Adipotide</td><td class="dose">2mg</td><td class="price price-kit">₱4,757.00</td><td class="price price-piece">₱475.70</td></tr>
+          <tr data-name="adipotide 5mg ap5"><td class="code">AP5</td><td class="product">Adipotide</td><td class="dose">5mg</td><td class="price price-kit">₱9,179.00</td><td class="price price-piece">₱917.90</td></tr>
+          <tr data-name="ahk-cu 100mg au50"><td class="code">AU50</td><td class="product">AHK-CU</td><td class="dose">100mg</td><td class="price price-kit">₱4,000.00</td><td class="price price-piece">₱400.00</td></tr>
+          <tr data-name="aicara 100mg ar100"><td class="code">AR100</td><td class="product">AICARA</td><td class="dose">100mg</td><td class="price price-kit">₱5,600.00</td><td class="price price-piece">₱560.00</td></tr>
+          <tr data-name="aicara 50mg ar50"><td class="code">AR50</td><td class="product">AICARA</td><td class="dose">50mg</td><td class="price price-kit">₱3,600.00</td><td class="price price-piece">₱360.00</td></tr>
+          <tr data-name="alprostadil 20mcg pro20"><td class="code">PRO20</td><td class="product">Alprostadil</td><td class="dose">20mcg</td><td class="price price-kit">₱3,600.00</td><td class="price price-piece">₱360.00</td></tr>
+          <tr data-name="aod-9604 5mg 5ad"><td class="code">5AD</td><td class="product">AOD-9604</td><td class="dose">5mg</td><td class="price price-kit">₱6,350.00</td><td class="price price-piece">₱635.00</td></tr>
+          <tr data-name="aod-9604 10mg 10ad"><td class="code">10AD</td><td class="product">AOD-9604</td><td class="dose">10mg</td><td class="price price-kit">₱10,400.00</td><td class="price price-piece">₱1,040.00</td></tr>
+          <tr data-name="ara-290 10mg ra10"><td class="code">RA10</td><td class="product">ARA-290</td><td class="dose">10mg</td><td class="price price-kit">₱3,685.00</td><td class="price price-piece">₱368.50</td></tr>
+          <tr data-name="b12 10ml"><td class="code">B12</td><td class="product">B12</td><td class="dose">10mL</td><td class="price price-kit">₱1,860.00</td><td class="price price-piece">₱186.00</td></tr>
+          <tr data-name="botulinum toxin 100iu xt100"><td class="code">XT100</td><td class="product">Botulinum Toxin</td><td class="dose">100iu</td><td class="price price-kit">₱7,035.00</td><td class="price price-piece">₱703.50</td></tr>
+          <tr data-name="bpc tb 10mg+10mg bb20"><td class="code">BB20</td><td class="product">BPC 10mg + TB 10mg</td><td class="dose">20mg</td><td class="price price-kit">₱11,055.00</td><td class="price price-piece">₱1,105.50</td></tr>
+          <tr data-name="bpc tb 5mg+5mg bb10"><td class="code">BB10</td><td class="product">BPC 5mg + TB 5mg</td><td class="dose">10mg</td><td class="price price-kit">₱5,695.00</td><td class="price price-piece">₱569.50</td></tr>
+          <tr data-name="bpc-157 10mg bc10"><td class="code">BC10</td><td class="product">BPC-157</td><td class="dose">10mg</td><td class="price price-kit">₱3,844.00</td><td class="price price-piece">₱384.40</td></tr>
+          <tr data-name="bpc-157 20mg bpc20"><td class="code">BPC20</td><td class="product">BPC-157</td><td class="dose">20mg</td><td class="price price-kit">₱6,901.00</td><td class="price price-piece">₱690.10</td></tr>
+          <tr data-name="bpc-157 5mg bc5"><td class="code">BC5</td><td class="product">BPC-157</td><td class="dose">5mg</td><td class="price price-kit">₱2,852.00</td><td class="price price-piece">₱285.20</td></tr>
+          <tr data-name="bronchogen 20mg br20"><td class="code">BR20</td><td class="product">Bronchogen</td><td class="dose">20mg</td><td class="price price-kit">₱6,400.00</td><td class="price price-piece">₱640.00</td></tr>
+          <tr data-name="cagrilintide 5mg cgl5"><td class="code">CGL5</td><td class="product">Cagrilintide</td><td class="dose">5mg</td><td class="price price-kit">₱4,700.00</td><td class="price price-piece">₱470.00</td></tr>
+          <tr data-name="cagrilintide 10mg cgl10"><td class="code">CGL10</td><td class="product">Cagrilintide</td><td class="dose">10mg</td><td class="price price-kit">₱7,700.00</td><td class="price price-piece">₱770.00</td></tr>
+          <tr data-name="cagrilintide 20mg cgl20"><td class="code">CGL20</td><td class="product">Cagrilintide</td><td class="dose">20mg</td><td class="price price-kit">₱12,300.00</td><td class="price price-piece">₱1,230.00</td></tr>
+          <tr data-name="cagrilintide semaglutide 5mg+5mg cs10"><td class="code">CS10</td><td class="product">Cagrilintide 5mg + Semaglutide 5mg</td><td class="dose">10mg</td><td class="price price-kit">₱6,500.00</td><td class="price price-piece">₱650.00</td></tr>
+          <tr data-name="cardiogen 20mg ca20"><td class="code">CA20</td><td class="product">Cardiogen</td><td class="dose">20mg</td><td class="price price-kit">₱6,400.00</td><td class="price price-piece">₱640.00</td></tr>
+          <tr data-name="cartalax 20mg lax20"><td class="code">LAX20</td><td class="product">Cartalax</td><td class="dose">20mg</td><td class="price price-kit">₱6,000.00</td><td class="price price-piece">₱600.00</td></tr>
+          <tr data-name="cjc-1295 with dac 2mg cd2"><td class="code">CD2</td><td class="product">CJC-1295 with DAC</td><td class="dose">2mg</td><td class="price price-kit">₱6,400.00</td><td class="price price-piece">₱640.00</td></tr>
+          <tr data-name="cjc-1295 with dac 5mg cd5"><td class="code">CD5</td><td class="product">CJC-1295 with DAC</td><td class="dose">5mg</td><td class="price price-kit">₱8,300.00</td><td class="price price-piece">₱830.00</td></tr>
+          <tr data-name="cjc-1295 with dac 10mg cd10"><td class="code">CD10</td><td class="product">CJC-1295 with DAC</td><td class="dose">10mg</td><td class="price price-kit">₱10,800.00</td><td class="price price-piece">₱1,080.00</td></tr>
+          <tr data-name="cjc-1295 without dac 5mg cnd5"><td class="code">CND5</td><td class="product">CJC-1295 without DAC</td><td class="dose">5mg</td><td class="price price-kit">₱5,000.00</td><td class="price price-piece">₱500.00</td></tr>
+          <tr data-name="cjc-1295 without dac 10mg cnd10"><td class="code">CND10</td><td class="product">CJC-1295 without DAC</td><td class="dose">10mg</td><td class="price price-kit">₱8,000.00</td><td class="price price-piece">₱800.00</td></tr>
+          <tr data-name="cjc-1295 without dac ipa 5mg+5mg cp10"><td class="code">CP10</td><td class="product">CJC-1295 w/o DAC 5mg + Ipamorelin 5mg</td><td class="dose">10mg</td><td class="price price-kit">₱5,700.00</td><td class="price price-piece">₱570.00</td></tr>
+          <tr data-name="dsip 5mg ds5"><td class="code">DS5</td><td class="product">DSIP</td><td class="dose">5mg</td><td class="price price-kit">₱2,800.00</td><td class="price price-piece">₱280.00</td></tr>
+          <tr data-name="dsip 10mg ds10"><td class="code">DS10</td><td class="product">DSIP</td><td class="dose">10mg</td><td class="price price-kit">₱4,000.00</td><td class="price price-piece">₱400.00</td></tr>
+          <tr data-name="dsip 15mg ds15"><td class="code">DS15</td><td class="product">DSIP</td><td class="dose">15mg</td><td class="price price-kit">₱5,200.00</td><td class="price price-piece">₱520.00</td></tr>
+          <tr data-name="epithalon 10mg et10"><td class="code">ET10</td><td class="product">Epithalon</td><td class="dose">10mg</td><td class="price price-kit">₱3,200.00</td><td class="price price-piece">₱320.00</td></tr>
+          <tr data-name="epithalon 20mg et40"><td class="code">ET40</td><td class="product">Epithalon</td><td class="dose">20mg</td><td class="price price-kit">₱8,200.00</td><td class="price price-piece">₱820.00</td></tr>
+          <tr data-name="epo 3000iu e3k"><td class="code">E3K</td><td class="product">EPO</td><td class="dose">3000IU</td><td class="price price-kit">₱4,757.00</td><td class="price price-piece">₱475.70</td></tr>
+          <tr data-name="fox04 10mg f410"><td class="code">F410</td><td class="product">FOX04</td><td class="dose">10mg</td><td class="price price-kit">₱19,765.00</td><td class="price price-piece">₱1,976.50</td></tr>
+          <tr data-name="gaz 10ml"><td class="code">GAZ</td><td class="product">GAZ</td><td class="dose">10mL</td><td class="price price-kit">₱9,500.00</td><td class="price price-piece">₱950.00</td></tr>
+          <tr data-name="ggh 10ml"><td class="code">GGH</td><td class="product">GGH</td><td class="dose">10mL</td><td class="price price-kit">₱7,400.00</td><td class="price price-piece">₱740.00</td></tr>
+          <tr data-name="ghk kpv 50mg+10mg"><td class="code">—</td><td class="product">GHK 50mg + KPV 10mg</td><td class="dose">60mg</td><td class="price price-kit">₱5,600.00</td><td class="price price-piece">₱560.00</td></tr>
+          <tr data-name="ghk-cu 50mg cu50"><td class="code">CU50</td><td class="product">GHK-CU</td><td class="dose">50mg</td><td class="price price-kit">₱1,980.00</td><td class="price price-piece">₱198.00</td></tr>
+          <tr data-name="ghk-cu 100mg cu100"><td class="code">CU100</td><td class="product">GHK-CU</td><td class="dose">100mg</td><td class="price price-kit">₱2,604.00</td><td class="price price-piece">₱260.40</td></tr>
+          <tr data-name="ghrp-2 acetate 10mg g210"><td class="code">G210</td><td class="product">GHRP-2 Acetate</td><td class="dose">10mg</td><td class="price price-kit">₱3,350.00</td><td class="price price-piece">₱335.00</td></tr>
+          <tr data-name="ghrp-2 acetate 15mg g215"><td class="code">G215</td><td class="product">GHRP-2 Acetate</td><td class="dose">15mg</td><td class="price price-kit">₱4,020.00</td><td class="price price-piece">₱402.00</td></tr>
+          <tr data-name="ghrp-2 acetate 5mg g25"><td class="code">G25</td><td class="product">GHRP-2 Acetate</td><td class="dose">5mg</td><td class="price price-kit">₱2,345.00</td><td class="price price-piece">₱234.50</td></tr>
+          <tr data-name="ghrp-6 acetate 10mg g610"><td class="code">G610</td><td class="product">GHRP-6 Acetate</td><td class="dose">10mg</td><td class="price price-kit">₱3,350.00</td><td class="price price-piece">₱335.00</td></tr>
+          <tr data-name="ghrp-6 acetate 5mg g65"><td class="code">G65</td><td class="product">GHRP-6 Acetate</td><td class="dose">5mg</td><td class="price price-kit">₱2,345.00</td><td class="price price-piece">₱234.50</td></tr>
+          <tr data-name="glow blend tb bpc ghk-cu bbg70"><td class="code">BBG70</td><td class="product">GLOW BLEND (TB + BPC + GHK-CU)</td><td class="dose">70mg</td><td class="price price-kit">₱11,460.00</td><td class="price price-piece">₱1,146.00</td></tr>
+          <tr data-name="glutathione 1200mg korean"><td class="code">—</td><td class="product">Glutathione 1200mg <span style="color:var(--teal);font-size:11px">(Korean)</span></td><td class="dose">1200mg</td><td class="price price-kit">₱3,400.00</td><td class="price price-piece">₱340.00</td></tr>
+          <tr data-name="glutathione 1500mg fuan gtt1500"><td class="code">GTT1500</td><td class="product">Glutathione 1500mg <span style="color:var(--teal);font-size:11px">(FUAN)</span></td><td class="dose">1500mg</td><td class="price price-kit">₱3,720.00</td><td class="price price-piece">₱372.00</td></tr>
+          <tr data-name="glutathione 600mg g500"><td class="code">G500</td><td class="product">Glutathione 600mg</td><td class="dose">600mg</td><td class="price price-kit">₱3,300.00</td><td class="price price-piece">₱330.00</td></tr>
+          <tr data-name="gonadorelin acetate 2mg gnd2"><td class="code">GND2</td><td class="product">Gonadorelin Acetate</td><td class="dose">2mg</td><td class="price price-kit">₱3,283.00</td><td class="price price-piece">₱328.30</td></tr>
+          <tr data-name="healthy hair skin nail blend 10ml"><td class="code">—</td><td class="product">Healthy Hair Skin Nail Blend</td><td class="dose">10mL</td><td class="price price-kit">₱6,500.00</td><td class="price price-piece">₱650.00</td></tr>
+          <tr data-name="hgh 191aa 15iu"><td class="code">—</td><td class="product">HGH 191AA</td><td class="dose">15iu</td><td class="price price-kit">₱3,348.00</td><td class="price price-piece">₱334.80</td></tr>
+          <tr data-name="hgh 191aa 24iu"><td class="code">—</td><td class="product">HGH 191AA</td><td class="dose">24iu</td><td class="price price-kit">₱4,340.00</td><td class="price price-piece">₱434.00</td></tr>
+          <tr data-name="igf-1 lr3 100mcg ig01"><td class="code">IG01</td><td class="product">IGF-1 LR3</td><td class="dose">100mcg</td><td class="price price-kit">₱2,345.00</td><td class="price price-piece">₱234.50</td></tr>
+          <tr data-name="igf-1 lr3 1mg ig1"><td class="code">IG1</td><td class="product">IGF-1 LR3</td><td class="dose">1mg</td><td class="price price-kit">₱9,715.00</td><td class="price price-piece">₱971.50</td></tr>
+          <tr data-name="ipamorelin 10mg ip10"><td class="code">IP10</td><td class="product">Ipamorelin</td><td class="dose">10mg</td><td class="price price-kit">₱4,087.00</td><td class="price price-piece">₱408.70</td></tr>
+          <tr data-name="ipamorelin 5mg ip5"><td class="code">IP5</td><td class="product">Ipamorelin</td><td class="dose">5mg</td><td class="price price-kit">₱3,906.00</td><td class="price price-piece">₱390.60</td></tr>
+          <tr data-name="kisspeptin 5mg ks5"><td class="code">KS5</td><td class="product">Kisspeptin</td><td class="dose">5mg</td><td class="price price-kit">₱3,400.00</td><td class="price price-piece">₱340.00</td></tr>
+          <tr data-name="kisspeptin 10mg ks10"><td class="code">KS10</td><td class="product">Kisspeptin</td><td class="dose">10mg</td><td class="price price-kit">₱4,700.00</td><td class="price price-piece">₱470.00</td></tr>
+          <tr data-name="klow blend tb bpc ghk-cu kpv klow80"><td class="code">KLOW80</td><td class="product">KLOW BLEND (TB + BPC + GHK-CU + KPV)</td><td class="dose">80mg</td><td class="price price-kit">₱11,900.00</td><td class="price price-piece">₱1,190.00</td></tr>
+          <tr data-name="kpv 10mg kpv10"><td class="code">KPV10</td><td class="product">KPV</td><td class="dose">10mg</td><td class="price price-kit">₱3,348.00</td><td class="price price-piece">₱334.80</td></tr>
+          <tr data-name="kpv 5mg kpv5"><td class="code">KPV5</td><td class="product">KPV</td><td class="dose">5mg</td><td class="price price-kit">₱2,666.00</td><td class="price price-piece">₱266.60</td></tr>
+          <tr data-name="l-carnitine 600mg lc600"><td class="code">LC600</td><td class="product">L-Carnitine 600mg</td><td class="dose">10mL</td><td class="price price-kit">₱3,800.00</td><td class="price price-piece">₱380.00</td></tr>
+          <tr data-name="l-carnitine 1200mg"><td class="code">—</td><td class="product">L-Carnitine 1200mg</td><td class="dose">10mL</td><td class="price price-kit">₱4,800.00</td><td class="price price-piece">₱480.00</td></tr>
+          <tr data-name="lemon bottle 10ml china"><td class="code">—</td><td class="product">Lemon Bottle 10mL <span style="color:var(--teal);font-size:11px">(China)</span></td><td class="dose">10mL</td><td class="price price-kit">₱3,600.00</td><td class="price price-piece">₱360.00</td></tr>
+          <tr data-name="lemon bottle 50ml china"><td class="code">—</td><td class="product">Lemon Bottle 50mL <span style="color:var(--teal);font-size:11px">(China)</span></td><td class="dose">50mL</td><td class="price price-kit">₱8,700.00</td><td class="price price-piece">₱870.00</td></tr>
+          <tr data-name="lipo-c 10ml lc120"><td class="code">LC120</td><td class="product">Lipo-C</td><td class="dose">10mL</td><td class="price price-kit">₱3,720.00</td><td class="price price-piece">₱372.00</td></tr>
+          <tr data-name="lipo-c with b12 10ml lc216"><td class="code">LC216</td><td class="product">Lipo-C with Vitamins B12</td><td class="dose">10mL</td><td class="price price-kit">₱3,720.00</td><td class="price price-piece">₱372.00</td></tr>
+          <tr data-name="lipo-c focus 10ml lc425"><td class="code">LC425</td><td class="product">Lipo-C Focus</td><td class="dose">10mL</td><td class="price price-kit">₱6,300.00</td><td class="price price-piece">₱630.00</td></tr>
+          <tr data-name="lipo c fat blaster 10ml lc526"><td class="code">LC526</td><td class="product">Lipo C Fat Blaster <span style="color:var(--teal);font-size:11px">(Pink)</span></td><td class="dose">10mL</td><td class="price price-kit">₱5,000.00</td><td class="price price-piece">₱500.00</td></tr>
+          <tr data-name="lipo mino mix 10ml new"><td class="code">—</td><td class="product">Lipo Mino Mix <span style="background:var(--teal-dim);color:var(--teal);font-size:10px;padding:1px 6px;border-radius:3px;margin-left:4px">NEW</span></td><td class="dose">10mL</td><td class="price price-kit">₱6,400.00</td><td class="price price-piece">₱640.00</td></tr>
+          <tr data-name="liraglutide 5mg ll5"><td class="code">LL5</td><td class="product">Liraglutide</td><td class="dose">5mg</td><td class="price price-kit">₱5,025.00</td><td class="price price-piece">₱502.50</td></tr>
+          <tr data-name="liraglutide 10mg ll10"><td class="code">LL10</td><td class="product">Liraglutide</td><td class="dose">10mg</td><td class="price price-kit">₱6,700.00</td><td class="price price-piece">₱670.00</td></tr>
+          <tr data-name="liraglutide 30mg ll30"><td class="code">LL30</td><td class="product">Liraglutide</td><td class="dose">30mg</td><td class="price price-kit">₱13,400.00</td><td class="price price-piece">₱1,340.00</td></tr>
+          <tr data-name="livagen 20mg li20"><td class="code">LI20</td><td class="product">Livagen</td><td class="dose">20mg</td><td class="price price-kit">₱6,901.00</td><td class="price price-piece">₱690.10</td></tr>
+          <tr data-name="ll37 5mg 375"><td class="code">375</td><td class="product">LL37</td><td class="dose">5mg</td><td class="price price-kit">₱4,757.00</td><td class="price price-piece">₱475.70</td></tr>
+          <tr data-name="matrixyl 20mg ma10"><td class="code">MA10</td><td class="product">Matrixyl</td><td class="dose">20mg</td><td class="price price-kit">₱2,814.00</td><td class="price price-piece">₱281.40</td></tr>
+          <tr data-name="mazdutide 5mg mz"><td class="code">MZ</td><td class="product">Mazdutide</td><td class="dose">5mg</td><td class="price price-kit">₱4,700.00</td><td class="price price-piece">₱470.00</td></tr>
+          <tr data-name="mazdutide 10mg mz"><td class="code">MZ</td><td class="product">Mazdutide</td><td class="dose">10mg</td><td class="price price-kit">₱8,300.00</td><td class="price price-piece">₱830.00</td></tr>
+          <tr data-name="melatonin 10mg"><td class="code">—</td><td class="product">Melatonin</td><td class="dose">10mg</td><td class="price price-kit">₱3,500.00</td><td class="price price-piece">₱350.00</td></tr>
+          <tr data-name="mots-c 10mg ms10"><td class="code">MS10</td><td class="product">MOTS-c</td><td class="dose">10mg</td><td class="price price-kit">₱3,720.00</td><td class="price price-piece">₱372.00</td></tr>
+          <tr data-name="mots-c 15mg ms15"><td class="code">MS15</td><td class="product">MOTS-c</td><td class="dose">15mg</td><td class="price price-kit">₱6,834.00</td><td class="price price-piece">₱683.40</td></tr>
+          <tr data-name="mots-c 20mg ms20"><td class="code">MS20</td><td class="product">MOTS-c</td><td class="dose">20mg</td><td class="price price-kit">₱9,045.00</td><td class="price price-piece">₱904.50</td></tr>
+          <tr data-name="mots-c 40mg ms40"><td class="code">MS40</td><td class="product">MOTS-c</td><td class="dose">40mg</td><td class="price price-kit">₱9,715.00</td><td class="price price-piece">₱971.50</td></tr>
+          <tr data-name="mounjaro pre-filled 15mg"><td class="code">—</td><td class="product">Mounjaro Pre-filled</td><td class="dose">15mg</td><td class="price price-kit">₱20,140.00</td><td class="price price-piece">₱2,014.00</td></tr>
+          <tr data-name="mounjaro pre-filled 30mg"><td class="code">—</td><td class="product">Mounjaro Pre-filled</td><td class="dose">30mg</td><td class="price price-kit">₱30,220.00</td><td class="price price-piece">₱3,022.00</td></tr>
+          <tr data-name="mt-1 mt1"><td class="code">MT1</td><td class="product">MT-1</td><td class="dose">—</td><td class="price price-kit">₱2,747.00</td><td class="price price-piece">₱274.70</td></tr>
+          <tr data-name="mt-2 melanotan 2 acetate 10mg ml10"><td class="code">mL10</td><td class="product">MT-2 (Melanotan 2 Acetate)</td><td class="dose">10mg</td><td class="price price-kit">₱2,479.00</td><td class="price price-piece">₱247.90</td></tr>
+          <tr data-name="n-acetyl epithalon amidate 5mg net5"><td class="code">NET5</td><td class="product">N-Acetyl Epithalon Amidate</td><td class="dose">5mg</td><td class="price price-kit">₱4,020.00</td><td class="price price-piece">₱402.00</td></tr>
+          <tr data-name="n-acetyl selank amidate 30mg nxa30"><td class="code">NXA30</td><td class="product">N-Acetyl Selank Amidate</td><td class="dose">30mg</td><td class="price price-kit">₱9,380.00</td><td class="price price-piece">₱938.00</td></tr>
+          <tr data-name="nad+ 100mg nj100"><td class="code">NJ100</td><td class="product">NAD+</td><td class="dose">100mg</td><td class="price price-kit">₱2,400.00</td><td class="price price-piece">₱240.00</td></tr>
+          <tr data-name="nad+ 500mg nj500"><td class="code">NJ500</td><td class="product">NAD+</td><td class="dose">500mg</td><td class="price price-kit">₱3,400.00</td><td class="price price-piece">₱340.00</td></tr>
+          <tr data-name="nad+ 1000mg nj1000"><td class="code">NJ1000</td><td class="product">NAD+</td><td class="dose">1000mg</td><td class="price price-kit">₱7,000.00</td><td class="price price-piece">₱700.00</td></tr>
+          <tr data-name="ovagen 20mg ov20"><td class="code">OV20</td><td class="product">Ovagen</td><td class="dose">20mg</td><td class="price price-kit">₱6,901.00</td><td class="price price-piece">₱690.10</td></tr>
+          <tr data-name="oxytocin acetate 2mg ot2"><td class="code">OT2</td><td class="product">Oxytocin Acetate</td><td class="dose">2mg</td><td class="price price-kit">₱2,345.00</td><td class="price price-piece">₱234.50</td></tr>
+          <tr data-name="oxytocin acetate 5mg ot5"><td class="code">OT5</td><td class="product">Oxytocin Acetate</td><td class="dose">5mg</td><td class="price price-kit">₱3,551.00</td><td class="price price-piece">₱355.10</td></tr>
+          <tr data-name="oxytocin acetate 10mg ot10"><td class="code">OT10</td><td class="product">Oxytocin Acetate</td><td class="dose">10mg</td><td class="price price-kit">₱4,757.00</td><td class="price price-piece">₱475.70</td></tr>
+          <tr data-name="p21 10mg p210"><td class="code">P210</td><td class="product">P21</td><td class="dose">10mg</td><td class="price price-kit">₱5,025.00</td><td class="price price-piece">₱502.50</td></tr>
+          <tr data-name="pancragen 20mg pa20"><td class="code">PA20</td><td class="product">Pancragen</td><td class="dose">20mg</td><td class="price price-kit">₱6,901.00</td><td class="price price-piece">₱690.10</td></tr>
+          <tr data-name="pe 22-28 10mg pe10"><td class="code">PE10</td><td class="product">PE 22-28</td><td class="dose">10mg</td><td class="price price-kit">₱4,556.00</td><td class="price price-piece">₱455.60</td></tr>
+          <tr data-name="peg mgf 2mg fmp2"><td class="code">FMP2</td><td class="product">PEG MGF</td><td class="dose">2mg</td><td class="price price-kit">₱5,561.00</td><td class="price price-piece">₱556.10</td></tr>
+          <tr data-name="pinealon 5mg pin5"><td class="code">PIN5</td><td class="product">Pinealon</td><td class="dose">5mg</td><td class="price price-kit">₱2,820.00</td><td class="price price-piece">₱282.00</td></tr>
+          <tr data-name="pinealon 10mg pin10"><td class="code">PIN10</td><td class="product">Pinealon</td><td class="dose">10mg</td><td class="price price-kit">₱4,200.00</td><td class="price price-piece">₱420.00</td></tr>
+          <tr data-name="pinealon 20mg pin20"><td class="code">PIN20</td><td class="product">Pinealon</td><td class="dose">20mg</td><td class="price price-kit">₱5,500.00</td><td class="price price-piece">₱550.00</td></tr>
+          <tr data-name="pnc 27 5mg pnc27-5"><td class="code">PNC27-5</td><td class="product">PNC 27</td><td class="dose">5mg</td><td class="price price-kit">₱5,695.00</td><td class="price price-piece">₱569.50</td></tr>
+          <tr data-name="pnc 27 10mg pnc27-10"><td class="code">PNC27-10</td><td class="product">PNC 27</td><td class="dose">10mg</td><td class="price price-kit">₱9,045.00</td><td class="price price-piece">₱904.50</td></tr>
+          <tr data-name="prostamax 20mg max20"><td class="code">MAX20</td><td class="product">Prostamax</td><td class="dose">20mg</td><td class="price price-kit">₱6,901.00</td><td class="price price-piece">₱690.10</td></tr>
+          <tr data-name="pt-141 10mg p41"><td class="code">P41</td><td class="product">PT-141</td><td class="dose">10mg</td><td class="price price-kit">₱3,286.00</td><td class="price price-piece">₱328.60</td></tr>
+          <tr data-name="relax pm 10ml pm266"><td class="code">PM266</td><td class="product">Relax PM</td><td class="dose">10mL</td><td class="price price-kit">₱7,000.00</td><td class="price price-piece">₱700.00</td></tr>
+          <tr data-name="retatrutide cagrilintide 5mg+5mg rc10"><td class="code">RC10</td><td class="product">Retatrutide 5mg + Cagrilintide 5mg</td><td class="dose">10mg</td><td class="price price-kit">₱8,000.00</td><td class="price price-piece">₱800.00</td></tr>
+          <tr data-name="retatrutide 5mg rt5"><td class="code">RT5</td><td class="product">Retatrutide</td><td class="dose">5mg</td><td class="price price-kit">₱3,500.00</td><td class="price price-piece">₱350.00</td></tr>
+          <tr data-name="retatrutide 10mg rt10"><td class="code">RT10</td><td class="product">Retatrutide</td><td class="dose">10mg</td><td class="price price-kit">₱5,100.00</td><td class="price price-piece">₱510.00</td></tr>
+          <tr data-name="retatrutide 15mg rt15"><td class="code">RT15</td><td class="product">Retatrutide</td><td class="dose">15mg</td><td class="price price-kit">₱6,300.00</td><td class="price price-piece">₱630.00</td></tr>
+          <tr data-name="retatrutide 20mg rt20"><td class="code">RT20</td><td class="product">Retatrutide</td><td class="dose">20mg</td><td class="price price-kit">₱7,600.00</td><td class="price price-piece">₱760.00</td></tr>
+          <tr data-name="retatrutide 30mg rt30"><td class="code">RT30</td><td class="product">Retatrutide</td><td class="dose">30mg</td><td class="price price-kit">₱9,500.00</td><td class="price price-piece">₱950.00</td></tr>
+          <tr data-name="retatrutide 40mg rt40"><td class="code">RT40</td><td class="product">Retatrutide</td><td class="dose">40mg</td><td class="price price-kit">₱11,600.00</td><td class="price price-piece">₱1,160.00</td></tr>
+          <tr data-name="selank 5mg sk5"><td class="code">SK5</td><td class="product">Selank</td><td class="dose">5mg</td><td class="price price-kit">₱2,850.00</td><td class="price price-piece">₱285.00</td></tr>
+          <tr data-name="selank 10mg sk10"><td class="code">SK10</td><td class="product">Selank</td><td class="dose">10mg</td><td class="price price-kit">₱3,300.00</td><td class="price price-piece">₱330.00</td></tr>
+          <tr data-name="semaglutide 2mg sm2"><td class="code">SM2</td><td class="product">Semaglutide</td><td class="dose">2mg</td><td class="price price-kit">₱1,943.00</td><td class="price price-piece">₱194.30</td></tr>
+          <tr data-name="semaglutide 5mg sm5"><td class="code">SM5</td><td class="product">Semaglutide</td><td class="dose">5mg</td><td class="price price-kit">₱2,345.00</td><td class="price price-piece">₱234.50</td></tr>
+          <tr data-name="semaglutide 10mg sm10"><td class="code">SM10</td><td class="product">Semaglutide</td><td class="dose">10mg</td><td class="price price-kit">₱3,015.00</td><td class="price price-piece">₱301.50</td></tr>
+          <tr data-name="semaglutide 15mg sm15"><td class="code">SM15</td><td class="product">Semaglutide</td><td class="dose">15mg</td><td class="price price-kit">₱3,819.00</td><td class="price price-piece">₱381.90</td></tr>
+          <tr data-name="semaglutide 20mg sm20"><td class="code">SM20</td><td class="product">Semaglutide</td><td class="dose">20mg</td><td class="price price-kit">₱4,489.00</td><td class="price price-piece">₱448.90</td></tr>
+          <tr data-name="semaglutide 30mg sm30"><td class="code">SM30</td><td class="product">Semaglutide</td><td class="dose">30mg</td><td class="price price-kit">₱5,695.00</td><td class="price price-piece">₱569.50</td></tr>
+          <tr data-name="semaglutide 40mg sm40"><td class="code">SM40</td><td class="product">Semaglutide</td><td class="dose">40mg</td><td class="price price-kit">₱6,231.00</td><td class="price price-piece">₱623.10</td></tr>
+          <tr data-name="semaglutide 50mg sm50"><td class="code">SM50</td><td class="product">Semaglutide</td><td class="dose">50mg</td><td class="price price-kit">₱6,700.00</td><td class="price price-piece">₱670.00</td></tr>
+          <tr data-name="semax 5mg xa5"><td class="code">XA5</td><td class="product">Semax</td><td class="dose">5mg</td><td class="price price-kit">₱2,500.00</td><td class="price price-piece">₱250.00</td></tr>
+          <tr data-name="semax 10mg xa10"><td class="code">XA10</td><td class="product">Semax</td><td class="dose">10mg</td><td class="price price-kit">₱3,100.00</td><td class="price price-piece">₱310.00</td></tr>
+          <tr data-name="semax selank 10mg+10mg xs20"><td class="code">XS20</td><td class="product">Semax 10mg + Selank 10mg</td><td class="dose">20mg</td><td class="price price-kit">₱5,100.00</td><td class="price price-piece">₱510.00</td></tr>
+          <tr data-name="sermorelin acetate 5mg smo5"><td class="code">SMO5</td><td class="product">Sermorelin Acetate</td><td class="dose">5mg</td><td class="price price-kit">₱3,906.00</td><td class="price price-piece">₱390.60</td></tr>
+          <tr data-name="sermorelin acetate 10mg smo10"><td class="code">SMO10</td><td class="product">Sermorelin Acetate</td><td class="dose">10mg</td><td class="price price-kit">₱6,076.00</td><td class="price price-piece">₱607.60</td></tr>
+          <tr data-name="slu-pp-322 5mg slu5"><td class="code">SLU5</td><td class="product">SLU-PP-322</td><td class="dose">5mg</td><td class="price price-kit">₱5,500.00</td><td class="price price-piece">₱550.00</td></tr>
+          <tr data-name="slu-pp-322 10mg slu1"><td class="code">SLU1</td><td class="product">SLU-PP-322</td><td class="dose">10mg</td><td class="price price-kit">₱7,300.00</td><td class="price price-piece">₱730.00</td></tr>
+          <tr data-name="snap-8 10mg np810"><td class="code">NP810</td><td class="product">Snap-8</td><td class="dose">10mg</td><td class="price price-kit">₱2,480.00</td><td class="price price-piece">₱248.00</td></tr>
+          <tr data-name="ss-31 10mg 2s10"><td class="code">2S10</td><td class="product">SS-31</td><td class="dose">10mg</td><td class="price price-kit">₱5,025.00</td><td class="price price-piece">₱502.50</td></tr>
+          <tr data-name="ss-31 50mg 2s50"><td class="code">2S50</td><td class="product">SS-31</td><td class="dose">50mg</td><td class="price price-kit">₱16,415.00</td><td class="price price-piece">₱1,641.50</td></tr>
+          <tr data-name="super human blend shb 10ml"><td class="code">SHB</td><td class="product">Super Human Blend</td><td class="dose">10mL</td><td class="price price-kit">₱7,400.00</td><td class="price price-piece">₱740.00</td></tr>
+          <tr data-name="super shred blend lc553 10ml"><td class="code">LC553</td><td class="product">Super Shred Blend</td><td class="dose">10mL</td><td class="price price-kit">₱6,400.00</td><td class="price price-piece">₱640.00</td></tr>
+          <tr data-name="survodutide 10mg ta10"><td class="code">TA10</td><td class="product">Survodutide</td><td class="dose">10mg</td><td class="price price-kit">₱13,000.00</td><td class="price price-piece">₱1,300.00</td></tr>
+          <tr data-name="tb500 thymosin b4 acetate 2mg bt2"><td class="code">BT2</td><td class="product">TB500 (Thymosin B4 Acetate)</td><td class="dose">2mg</td><td class="price price-kit">₱2,900.00</td><td class="price price-piece">₱290.00</td></tr>
+          <tr data-name="tb500 thymosin b4 acetate 5mg bt5"><td class="code">BT5</td><td class="product">TB500 (Thymosin B4 Acetate)</td><td class="dose">5mg</td><td class="price price-kit">₱4,300.00</td><td class="price price-piece">₱430.00</td></tr>
+          <tr data-name="tb500 thymosin b4 acetate 10mg bt10"><td class="code">BT10</td><td class="product">TB500 (Thymosin B4 Acetate)</td><td class="dose">10mg</td><td class="price price-kit">₱6,300.00</td><td class="price price-piece">₱630.00</td></tr>
+          <tr data-name="tb500 thymosin b4 acetate 20mg bt20"><td class="code">BT20</td><td class="product">TB500 (Thymosin B4 Acetate)</td><td class="dose">20mg</td><td class="price price-kit">₱12,300.00</td><td class="price price-piece">₱1,230.00</td></tr>
+          <tr data-name="teriparatide 10mg ter10"><td class="code">TER10</td><td class="product">Teriparatide</td><td class="dose">10mg</td><td class="price price-kit">₱10,000.00</td><td class="price price-piece">₱1,000.00</td></tr>
+          <tr data-name="tesamorelin 10mg tsm10"><td class="code">TSM10</td><td class="product">Tesamorelin</td><td class="dose">10mg</td><td class="price price-kit">₱9,715.00</td><td class="price price-piece">₱971.50</td></tr>
+          <tr data-name="tesamorelin 20mg tsm20"><td class="code">TSM20</td><td class="product">Tesamorelin</td><td class="dose">20mg</td><td class="price price-kit">₱19,095.00</td><td class="price price-piece">₱1,909.50</td></tr>
+          <tr data-name="tesamorelin 2mg tsm2"><td class="code">TSM2</td><td class="product">Tesamorelin</td><td class="dose">2mg</td><td class="price price-kit">₱4,757.00</td><td class="price price-piece">₱475.70</td></tr>
+          <tr data-name="tesamorelin 5mg tsm5"><td class="code">TSM5</td><td class="product">Tesamorelin</td><td class="dose">5mg</td><td class="price price-kit">₱5,695.00</td><td class="price price-piece">₱569.50</td></tr>
+          <tr data-name="testagen 20mg tg20"><td class="code">TG20</td><td class="product">Testagen</td><td class="dose">20mg</td><td class="price price-kit">₱7,035.00</td><td class="price price-piece">₱703.50</td></tr>
+          <tr data-name="thymakin 10mg ty10"><td class="code">TY10</td><td class="product">Thymakin</td><td class="dose">10mg</td><td class="price price-kit">₱4,824.00</td><td class="price price-piece">₱482.40</td></tr>
+          <tr data-name="thymosin alpha-1 5mg ta5"><td class="code">TA5</td><td class="product">Thymosin Alpha-1</td><td class="dose">5mg</td><td class="price price-kit">₱5,025.00</td><td class="price price-piece">₱502.50</td></tr>
+          <tr data-name="thymosin alpha-1 10mg ta10"><td class="code">TA10</td><td class="product">Thymosin Alpha-1</td><td class="dose">10mg</td><td class="price price-kit">₱9,045.00</td><td class="price price-piece">₱904.50</td></tr>
+          <tr data-name="tirzepatide 5mg tr5"><td class="code">TR5</td><td class="product">Tirzepatide</td><td class="dose">5mg</td><td class="price price-kit">₱2,542.00</td><td class="price price-piece">₱254.20</td></tr>
+          <tr data-name="tirzepatide 10mg tr10"><td class="code">TR10</td><td class="product">Tirzepatide</td><td class="dose">10mg</td><td class="price price-kit">₱3,162.00</td><td class="price price-piece">₱316.20</td></tr>
+          <tr data-name="tirzepatide 15mg tr15"><td class="code">TR15</td><td class="product">Tirzepatide</td><td class="dose">15mg</td><td class="price price-kit">₱4,087.00</td><td class="price price-piece">₱408.70</td></tr>
+          <tr data-name="tirzepatide 20mg tr20"><td class="code">TR20</td><td class="product">Tirzepatide</td><td class="dose">20mg</td><td class="price price-kit">₱4,891.00</td><td class="price price-piece">₱489.10</td></tr>
+          <tr data-name="tirzepatide 30mg tr30"><td class="code">TR30</td><td class="product">Tirzepatide</td><td class="dose">30mg</td><td class="price price-kit">₱6,097.00</td><td class="price price-piece">₱609.70</td></tr>
+          <tr data-name="tirzepatide 40mg tr40"><td class="code">TR40</td><td class="product">Tirzepatide</td><td class="dose">40mg</td><td class="price price-kit">₱7,303.00</td><td class="price price-piece">₱730.30</td></tr>
+          <tr data-name="tirzepatide 50mg tr50"><td class="code">TR50</td><td class="product">Tirzepatide</td><td class="dose">50mg</td><td class="price price-kit">₱8,643.00</td><td class="price price-piece">₱864.30</td></tr>
+          <tr data-name="tirzepatide 60mg tr60"><td class="code">TR60</td><td class="product">Tirzepatide</td><td class="dose">60mg</td><td class="price price-kit">₱9,983.00</td><td class="price price-piece">₱998.30</td></tr>
+          <tr data-name="tirzepatide 100mg tr100"><td class="code">TR100</td><td class="product">Tirzepatide</td><td class="dose">100mg</td><td class="price price-kit">₱14,070.00</td><td class="price price-piece">₱1,407.00</td></tr>
+          <tr data-name="tirzepatide 120mg tr120"><td class="code">TR120</td><td class="product">Tirzepatide</td><td class="dose">120mg</td><td class="price price-kit">₱15,075.00</td><td class="price price-piece">₱1,507.50</td></tr>
+          <tr data-name="vip 10mg vip10"><td class="code">VIP10</td><td class="product">VIP</td><td class="dose">10mg</td><td class="price price-kit">₱7,705.00</td><td class="price price-piece">₱770.50</td></tr>
+          <tr data-name="vip 5mg vip5"><td class="code">VIP5</td><td class="product">VIP</td><td class="dose">5mg</td><td class="price price-kit">₱4,355.00</td><td class="price price-piece">₱435.50</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="no-results" id="no-PEPTIDES">No matching products found.</div>
+  </section>
+
+  <!-- BIORHYTHM -->
+  <section class="section" data-cat="BIORHYTHM" id="sec-BIORHYTHM">
+    <div class="section-header">
+      <div class="section-dot"></div>
+      <span class="section-title">Biorhythm</span>
+      <span class="section-count" id="cnt-BIORHYTHM"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="tbl-BIORHYTHM">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Pack Size</th>
+            <th class="right">Price (PHP)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-name="lemon bottle branded"><td class="product">Lemon Bottle (Branded)</td><td class="dose">5 vials / Per Box</td><td class="price price-piece">₱3,200.00</td></tr>
+          <tr data-name="lipo vela"><td class="product">Lipo Vela</td><td class="dose">Per Box</td><td class="price price-piece">₱2,900.00</td></tr>
+          <tr data-name="lipo vela v-line"><td class="product">Lipo Vela V-Line</td><td class="dose">Per Box</td><td class="price price-piece">₱2,900.00</td></tr>
+          <tr data-name="lipo lab amber bottle"><td class="product">Lipo Lab Amber Bottle</td><td class="dose">10 vials / Per Box</td><td class="price price-piece">₱2,400.00</td></tr>
+          <tr data-name="lemon bottle 50ml"><td class="product">Lemon Bottle 50mL</td><td class="dose">Per Piece</td><td class="price price-piece">₱800.00</td></tr>
+          <tr data-name="aqualyx"><td class="product">Aqualyx</td><td class="dose">Per Box</td><td class="price price-piece">₱1,700.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="no-results" id="no-BIORHYTHM">No matching products found.</div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Prices based on supplier's current rates and may be adjusted to align with market conditions.<br>
+  All products come with <strong>authentic COAs</strong> and are sourced with a focus on quality and reliability.<br>
+  International shipping costs are <strong>shared among all buyers</strong> to keep prices accessible.</p>
+</footer>
+
+<script>
+  let activeCat = 'ALL';
+
+  function updateCounts() {
+    ['MIXING','PEPTIDES','BIORHYTHM'].forEach(cat => {
+      const rows = document.querySelectorAll('#tbl-' + cat + ' tbody tr');
+      const visible = Array.from(rows).filter(r => !r.classList.contains('hidden-row')).length;
+      document.getElementById('cnt-' + cat).textContent = visible + ' items';
+    });
+    const total = Array.from(document.querySelectorAll('tbody tr')).filter(r => !r.classList.contains('hidden-row')).length;
+    document.getElementById('resultCount').textContent = total + ' results';
+  }
+
+  function filterAll() {
+    const q = document.getElementById('searchInput').value.toLowerCase().trim();
+    ['MIXING','PEPTIDES','BIORHYTHM'].forEach(cat => {
+      const sec = document.getElementById('sec-' + cat);
+      if (activeCat !== 'ALL' && activeCat !== cat) { sec.style.display = 'none'; return; }
+      sec.style.display = 'block';
+      const rows = document.querySelectorAll('#tbl-' + cat + ' tbody tr');
+      let anyVisible = false;
+      rows.forEach(r => {
+        const name = (r.getAttribute('data-name') || '').toLowerCase();
+        const show = !q || name.includes(q);
+        r.classList.toggle('hidden-row', !show);
+        if (show) anyVisible = true;
+      });
+      document.getElementById('no-' + cat).classList.toggle('show', !anyVisible);
+    });
+    updateCounts();
+  }
+
+  function filterCat(cat, btn) {
+    activeCat = cat;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterAll();
+  }
+
+  updateCounts();
+</script>
+</body>
+</html>

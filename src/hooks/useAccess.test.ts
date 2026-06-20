@@ -97,4 +97,34 @@ describe('useAccess', () => {
     expect(result.current.isVerified).toBe(false);
     expect(localStorage.getItem('pp_access_email')).toBeNull();
   });
+
+  it('reports renew for a member approved on a prior batch but not the open one', async () => {
+    mockRpc.mockResolvedValue({ data: 'renew', error: null });
+
+    const { result } = renderHook(() => useAccess());
+    await waitFor(() => expect(result.current.checking).toBe(false));
+
+    let outcome: { ok: boolean; status: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.verifyEmail('member@example.com');
+    });
+
+    expect(outcome).toEqual({ ok: false, status: 'renew' });
+    expect(result.current.isVerified).toBe(false);
+    expect(result.current.needsRenewal).toBe(true);
+    expect(result.current.renewalEmail).toBe('member@example.com');
+  });
+
+  it('clears a stale cached email when a new batch needs renewal and surfaces it', async () => {
+    localStorage.setItem('pp_access_email', 'returning@example.com');
+    mockRpc.mockResolvedValue({ data: 'renew', error: null });
+
+    const { result } = renderHook(() => useAccess());
+    await waitFor(() => expect(result.current.checking).toBe(false));
+
+    expect(result.current.isVerified).toBe(false);
+    expect(localStorage.getItem('pp_access_email')).toBeNull();
+    expect(result.current.needsRenewal).toBe(true);
+    expect(result.current.renewalEmail).toBe('returning@example.com');
+  });
 });
