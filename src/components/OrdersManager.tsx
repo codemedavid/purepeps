@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Package, CheckCircle, XCircle, Clock, Truck, AlertCircle, Search, RefreshCw, Eye, MessageCircle, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle, XCircle, Clock, Truck, AlertCircle, Search, RefreshCw, Eye, MessageCircle, Image as ImageIcon, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useMenu } from '../hooks/useMenu';
 import { useCouriers } from '../hooks/useCouriers';
@@ -50,6 +50,21 @@ interface Order {
   group_buy_batch_id?: string | null;
 }
 
+// Minimal shape of a group-buy batch, used to label and filter batch orders.
+interface BatchSummary {
+  id: string;
+  batch_number: number;
+  name: string | null;
+  status: string;
+}
+
+const batchLabel = (batch: BatchSummary): string =>
+  `Batch #${batch.batch_number}${batch.name ? ` · ${batch.name}` : ''}`;
+
+// Sentinel filter values that sit alongside the per-batch ids.
+const BATCH_FILTER_ALL = 'all';
+const BATCH_FILTER_REGULAR = 'regular';
+
 interface OrdersManagerProps {
   onBack: () => void;
 }
@@ -59,6 +74,8 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [batchFilter, setBatchFilter] = useState<string>(BATCH_FILTER_ALL);
+  const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -66,7 +83,22 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
   useEffect(() => {
     loadOrders();
+    loadBatches();
   }, []);
+
+  const loadBatches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('group_buy_batches')
+        .select('id, batch_number, name, status')
+        .order('batch_number', { ascending: false });
+
+      if (error) throw error;
+      setBatches((data as BatchSummary[]) || []);
+    } catch (error) {
+      console.error('Error loading group-buy batches:', error);
+    }
+  };
 
   const loadOrders = async () => {
     try {
@@ -347,12 +379,23 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     }
   };
 
+  const batchById = useMemo(() => {
+    return new Map(batches.map((batch) => [batch.id, batch]));
+  }, [batches]);
+
   const filteredOrders = useMemo(() => {
     let filtered = orders;
 
     // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(o => o.order_status === statusFilter);
+    }
+
+    // Filter by group-buy batch
+    if (batchFilter === BATCH_FILTER_REGULAR) {
+      filtered = filtered.filter(o => !o.group_buy_batch_id);
+    } else if (batchFilter !== BATCH_FILTER_ALL) {
+      filtered = filtered.filter(o => o.group_buy_batch_id === batchFilter);
     }
 
     // Filter by search query
@@ -368,7 +411,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     }
 
     return filtered;
-  }, [orders, statusFilter, searchQuery]);
+  }, [orders, statusFilter, batchFilter, searchQuery]);
 
   const statusCounts = useMemo(() => {
     return {
@@ -427,6 +470,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     return (
       <OrderDetailsView
         order={selectedOrder}
+        batch={selectedOrder.group_buy_batch_id ? batchById.get(selectedOrder.group_buy_batch_id) : undefined}
         onBack={() => setSelectedOrder(null)}
         onConfirm={() => handleConfirmOrder(selectedOrder)}
         onUpdateStatus={handleUpdateOrderStatus}
@@ -540,6 +584,27 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 className="w-full pl-9 md:pl-10 pr-3 md:pr-4 py-2 text-sm md:text-base border-2 border-gray-200 rounded-lg focus:border-navy-900 focus:outline-none focus:ring-2 focus:ring-gold-500/20 transition-colors text-black"
               />
             </div>
+            <div className="relative md:w-72">
+              <Layers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5 pointer-events-none" />
+              <select
+                value={batchFilter}
+                onChange={(e) => setBatchFilter(e.target.value)}
+                className="w-full pl-9 md:pl-10 pr-3 md:pr-4 py-2 text-sm md:text-base border-2 border-gray-200 rounded-lg focus:border-navy-900 focus:outline-none focus:ring-2 focus:ring-gold-500/20 transition-colors text-black bg-white cursor-pointer appearance-none"
+              >
+                <option value={BATCH_FILTER_ALL}>All orders</option>
+                <option value={BATCH_FILTER_REGULAR}>Regular orders only</option>
+                {batches.length > 0 && (
+                  <optgroup label="Group Buy batches">
+                    {batches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>
+                        {batchLabel(batch)}
+                        {batch.status === 'open' ? ' (open)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -556,6 +621,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               <OrderCard
                 key={order.id}
                 order={order}
+                batch={order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined}
                 onView={() => setSelectedOrder(order)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
@@ -571,12 +637,13 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 // Order Card Component
 interface OrderCardProps {
   order: Order;
+  batch?: BatchSummary;
   onView: () => void;
   getStatusColor: (status: string) => string;
   getStatusIcon: (status: string) => React.ReactNode;
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order, onView, getStatusColor, getStatusIcon }) => {
+const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, getStatusColor, getStatusIcon }) => {
   const totalItems = order.order_items.reduce((sum, item) => sum + item.quantity, 0);
   const finalTotal = order.total_price + (order.shipping_fee || 0);
 
@@ -600,6 +667,12 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onView, getStatusColor, ge
               }`}>
               {order.payment_status === 'paid' ? '✓ Paid' : 'Pending'}
             </span>
+            {order.group_buy_batch_id && (
+              <span className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-brand-100 text-brand-700 border border-brand-300 flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                {batch ? batchLabel(batch) : 'Group Buy'}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-xs md:text-sm">
@@ -648,6 +721,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onView, getStatusColor, ge
 // Order Details View Component
 interface OrderDetailsViewProps {
   order: Order;
+  batch?: BatchSummary;
   onBack: () => void;
   onConfirm: () => void;
   onUpdateStatus: (orderId: string, status: string) => void;
@@ -657,6 +731,7 @@ interface OrderDetailsViewProps {
 
 const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
   order,
+  batch,
   onBack,
   onConfirm,
   onUpdateStatus,
@@ -706,6 +781,16 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
 
       <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6 lg:py-8">
         <div className="bg-white rounded-lg md:rounded-xl shadow-lg p-4 md:p-6 border border-navy-700/30 space-y-4 md:space-y-6">
+          {/* Group-buy batch banner */}
+          {order.group_buy_batch_id && (
+            <div className="flex items-center gap-2 bg-brand-50 border border-brand-200 rounded-lg p-3 text-brand-900">
+              <Layers className="w-4 h-4 md:w-5 md:h-5 text-brand-700" />
+              <span className="text-xs md:text-sm font-semibold">
+                Group Buy pre-order — {batch ? batchLabel(batch) : 'Group Buy batch'}
+              </span>
+            </div>
+          )}
+
           {/* Order Status */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 md:gap-4">
             <div>
