@@ -13,7 +13,6 @@ export interface SavedCheckoutInfo {
   zipCode: string;
   selectedCourierId: string;
   shippingLocation: string;
-  contactMethod: 'viber' | 'whatsapp' | '';
 }
 
 function readSavedInfo(): SavedCheckoutInfo | null {

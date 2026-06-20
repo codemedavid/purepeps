@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, FlaskConical, Package, CreditCard, Truck, ArrowLeft, MessageCircle, HelpCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlaskConical, Package, CreditCard, Truck, ArrowLeft, HelpCircle } from 'lucide-react';
 import { useFAQs } from '../hooks/useFAQs';
 
 const categoryIcons: { [key: string]: React.ReactElement } = {
@@ -36,9 +36,6 @@ const FAQ: React.FC = () => {
     const filteredFAQs = activeCategory
         ? faqs.filter(faq => faq.category === activeCategory)
         : faqs;
-
-    const viberUrl = 'viber://chat?number=%2B639496133242';
-    const whatsappUrl = 'https://wa.me/639496133242';
 
     if (loading) {
         return (
@@ -142,34 +139,6 @@ const FAQ: React.FC = () => {
                         </div>
                     </div>
                 ))}
-
-                {/* Contact CTA */}
-                <div className="mt-12 bg-white rounded-2xl border border-navy-900/30 p-6 md:p-8 text-center shadow-lg">
-                    <h3 className="text-lg md:text-xl font-bold text-black mb-2">
-                        Still have questions?
-                    </h3>
-                    <p className="text-black mb-6">
-                        We're here to help! Reach out to us via Viber or WhatsApp for quick assistance.
-                    </p>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <a
-                            href={viberUrl}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#7360f2] text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-all shadow-md hover:shadow-lg"
-                        >
-                            <MessageCircle className="w-5 h-5" />
-                            Message us on Viber
-                        </a>
-                        <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#25D366] text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-all shadow-md hover:shadow-lg"
-                        >
-                            <MessageCircle className="w-5 h-5" />
-                            Message us on WhatsApp
-                        </a>
-                    </div>
-                </div>
             </div>
         </div>
     );
