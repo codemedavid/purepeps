@@ -203,18 +203,21 @@ export function useBatchOrders(batchId: string | null) {
       if (orderIds.length === 0) return;
       try {
         const updatedAt = new Date().toISOString();
+        // Bulk-confirming must mirror the single-order confirm: mark paid too, so
+        // payment_status never drifts out of sync with order_status. Like
+        // confirmOrder, this is a pre-order against the cap — NO stock deduction.
+        const patch: Partial<BatchOrder> & { order_status: string; updated_at: string } =
+          status === 'confirmed'
+            ? { order_status: status, payment_status: 'paid', updated_at: updatedAt }
+            : { order_status: status, updated_at: updatedAt };
         const { error: updateError } = await supabase
           .from('orders')
-          .update({ order_status: status, updated_at: updatedAt })
+          .update(patch)
           .in('id', orderIds);
         if (updateError) throw updateError;
         const idSet = new Set(orderIds);
         setOrders((prev) =>
-          prev.map((order) =>
-            idSet.has(order.id)
-              ? { ...order, order_status: status, updated_at: updatedAt }
-              : order,
-          ),
+          prev.map((order) => (idSet.has(order.id) ? { ...order, ...patch } : order)),
         );
       } catch (err) {
         console.error('Error bulk updating batch order status:', err);

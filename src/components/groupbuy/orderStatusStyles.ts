@@ -30,12 +30,29 @@ export function batchStatusColor(status: string | null | undefined): string {
 export const peso = (value: number | null | undefined): string =>
   `₱${Number(value ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
+/**
+ * Short peso for dense KPI tiles: ₱126k, ₱1.5k, ₱999. Values ≥ 1,000 collapse to
+ * a `k` suffix with at most one decimal (trailing `.0` dropped); smaller values
+ * round to whole pesos. Use peso() when exact centavos matter.
+ */
+export const compactPeso = (value: number | null | undefined): string => {
+  const amount = Number(value ?? 0);
+  if (Math.abs(amount) >= 1000) {
+    const thousands = amount / 1000;
+    const rounded = Math.round(thousands * 10) / 10;
+    return `₱${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}k`;
+  }
+  return `₱${Math.round(amount)}`;
+};
+
 export const formatDateTime = (value: string | null | undefined): string =>
   value
     ? new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
     : '—';
 
-export function itemsSummary(items: { product_name?: string; variation_name?: string | null; quantity?: number }[]): string {
+export function itemsSummary(
+  items: { product_name?: string; variation_name?: string | null; quantity?: number }[] | null | undefined,
+): string {
   return (items || [])
     .map(
       (it) =>

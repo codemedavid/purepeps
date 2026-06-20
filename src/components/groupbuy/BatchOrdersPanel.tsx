@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ShoppingCart, RefreshCw, CheckSquare, Square, Tag, ChevronRight } from 'lucide-react';
+import {
+  ShoppingCart,
+  RefreshCw,
+  CheckSquare,
+  Square,
+  Tag,
+  ChevronRight,
+  Search,
+  X,
+} from 'lucide-react';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
+import { filterBatchOrders } from '../../utils/groupBuyOverview';
 import type { BatchOrder } from '../../types';
+import type { RequestConfirm } from './ConfirmDialog';
 import { batchStatusColor, peso, itemsSummary, formatDateTime } from './orderStatusStyles';
 
 interface BatchOrdersPanelProps {
@@ -9,6 +20,7 @@ interface BatchOrdersPanelProps {
   orders: BatchOrder[];
   loading: boolean;
   busy: boolean;
+  requestConfirm: RequestConfirm;
   onReload: () => void;
   onSelectOrder: (order: BatchOrder) => void;
   onBulkUpdateStatus: (orderIds: string[], status: string) => void;
@@ -40,11 +52,13 @@ export function BatchOrdersPanel({
   orders,
   loading,
   busy,
+  requestConfirm,
   onReload,
   onSelectOrder,
   onBulkUpdateStatus,
 }: BatchOrdersPanelProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [query, setQuery] = useState('');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTarget, setBulkTarget] = useState<string>('packing');
@@ -54,14 +68,22 @@ export function BatchOrdersPanel({
   useEffect(() => {
     setSelectedIds(new Set());
     setSelectMode(false);
+    setQuery('');
   }, [batchNumber]);
 
   const filtered = useMemo(
+    () => filterBatchOrders(orders, { query, status: statusFilter }),
+    [orders, query, statusFilter],
+  );
+
+  // Count once per orders change instead of re-scanning the array for every chip.
+  const countByStatus = useMemo(
     () =>
-      statusFilter === 'all'
-        ? orders
-        : orders.filter((order) => order.order_status === statusFilter),
-    [orders, statusFilter],
+      orders.reduce<Record<string, number>>((acc, order) => {
+        acc[order.order_status] = (acc[order.order_status] ?? 0) + 1;
+        return acc;
+      }, {}),
+    [orders],
   );
 
   const toggleSelect = (id: string) => {
@@ -90,15 +112,17 @@ export function BatchOrdersPanel({
   const handleBulkApply = () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (
-      !window.confirm(
-        `Mark ${ids.length} order${ids.length === 1 ? '' : 's'} → ${orderStatusLabel(bulkTarget)}?`,
-      )
-    ) {
-      return;
-    }
-    onBulkUpdateStatus(ids, bulkTarget);
-    exitSelectMode();
+    requestConfirm({
+      title: `Mark ${ids.length} order${ids.length === 1 ? '' : 's'} as ${orderStatusLabel(
+        bulkTarget,
+      )}?`,
+      message: 'Every selected order moves to this status. Customers see the change on tracking.',
+      confirmLabel: 'Apply to selected',
+      onConfirm: () => {
+        onBulkUpdateStatus(ids, bulkTarget);
+        exitSelectMode();
+      },
+    });
   };
 
   return (
@@ -133,18 +157,45 @@ export function BatchOrdersPanel({
         </div>
       </div>
 
+      {/* Search */}
+      <div className="px-4 py-2.5 border-b border-gray-100">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, order #, email, phone, or item…"
+            aria-label="Search orders"
+            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-9 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter chips */}
-      <div className="px-4 py-2 border-b border-gray-100 flex flex-wrap gap-1.5">
+      <div
+        role="group"
+        aria-label="Filter by status"
+        className="px-4 py-2 border-b border-gray-100 flex flex-wrap gap-1.5"
+      >
         {FILTER_CHIPS.map((chip) => {
-          const count =
-            chip.value === 'all'
-              ? orders.length
-              : orders.filter((o) => o.order_status === chip.value).length;
+          const count = chip.value === 'all' ? orders.length : countByStatus[chip.value] ?? 0;
           const isActive = statusFilter === chip.value;
           return (
             <button
               key={chip.value}
               type="button"
+              aria-pressed={isActive}
               onClick={() => setStatusFilter(chip.value)}
               className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                 isActive
@@ -179,6 +230,7 @@ export function BatchOrdersPanel({
           <select
             value={bulkTarget}
             onChange={(e) => setBulkTarget(e.target.value)}
+            aria-label="Set status for selected orders"
             className="px-2 py-1 border border-gray-300 rounded bg-white text-gray-900"
           >
             {BULK_TARGETS.map((target) => (
@@ -200,9 +252,23 @@ export function BatchOrdersPanel({
 
       <div className="divide-y divide-gray-100">
         {filtered.length === 0 ? (
-          <p className="px-4 py-6 text-center text-xs text-gray-400">
-            {loading ? 'Loading orders…' : 'No orders match this filter.'}
-          </p>
+          <div className="px-4 py-8 text-center">
+            <p className="text-xs text-gray-400">
+              {loading ? 'Loading orders…' : 'No orders match your search and filters.'}
+            </p>
+            {!loading && (query.trim() !== '' || statusFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('all');
+                }}
+                className="mt-2 text-xs font-medium text-brand-400 hover:text-brand-500"
+              >
+                Clear search and filters
+              </button>
+            )}
+          </div>
         ) : (
           filtered.map((order) => {
             const isSelected = selectedIds.has(order.id);

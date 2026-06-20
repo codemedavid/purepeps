@@ -10,6 +10,7 @@ import {
 import { useCouriers } from '../../hooks/useCouriers';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
 import type { BatchOrder, OrderLineItem, Product } from '../../types';
+import type { RequestConfirm } from './ConfirmDialog';
 import { OrderItemsEditor } from './OrderItemsEditor';
 import { batchStatusColor, peso, formatDateTime } from './orderStatusStyles';
 
@@ -23,6 +24,7 @@ interface BatchOrderDetailProps {
   order: BatchOrder;
   products: Product[];
   busy: boolean;
+  requestConfirm: RequestConfirm;
   onBack: () => void;
   onConfirm: (order: BatchOrder) => void;
   onUpdateStatus: (orderId: string, status: string) => void;
@@ -41,6 +43,7 @@ export function BatchOrderDetail({
   order,
   products,
   busy,
+  requestConfirm,
   onBack,
   onConfirm,
   onUpdateStatus,
@@ -71,7 +74,10 @@ export function BatchOrderDetail({
   const isNew = order.order_status === 'new';
 
   const handleStatusSelect = (value: string) => {
-    if (value === 'confirmed' && isNew) {
+    if (value === order.order_status) return;
+    // Always route confirmation through onConfirm so it marks paid consistently,
+    // however the order reached 'confirmed' (not just from the 'new' state).
+    if (value === 'confirmed') {
       onConfirm(order);
     } else if (value === 'cancelled') {
       handleCancel();
@@ -80,10 +86,14 @@ export function BatchOrderDetail({
     }
   };
 
-  const handleCancel = () => {
-    if (!window.confirm('Cancel this order? It frees any capped units back into the batch.')) return;
-    onCancel(order.id);
-  };
+  const handleCancel = () =>
+    requestConfirm({
+      title: 'Cancel this order?',
+      message: 'It frees any capped units back into the batch for others to claim.',
+      confirmLabel: 'Cancel order',
+      tone: 'danger',
+      onConfirm: () => onCancel(order.id),
+    });
 
   return (
     <div className="space-y-4">
@@ -139,7 +149,8 @@ export function BatchOrderDetail({
                 value={order.order_status}
                 onChange={(e) => handleStatusSelect(e.target.value)}
                 disabled={busy}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-xs md:text-sm font-medium bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 cursor-pointer"
+                aria-label="Order status"
+                className="px-3 py-2 border border-gray-300 rounded-lg text-xs md:text-sm font-medium bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 disabled:opacity-50 cursor-pointer"
               >
                 {!ORDER_STATUS_OPTIONS.some((o) => o.value === order.order_status) && (
                   <option value={order.order_status}>{orderStatusLabel(order.order_status)}</option>
@@ -246,6 +257,7 @@ export function BatchOrderDetail({
                 value={shippingProvider}
                 onChange={(e) => setShippingProvider(e.target.value)}
                 disabled={busy}
+                aria-label="Courier"
                 className="px-3 py-2 border border-gray-300 rounded-lg text-xs md:text-sm bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
               >
                 {/* Fallback so an unmatched/empty provider renders visibly instead of
@@ -271,6 +283,7 @@ export function BatchOrderDetail({
                 onChange={(e) => setTrackingNumber(e.target.value)}
                 placeholder="Enter tracking number"
                 disabled={busy}
+                aria-label="Tracking number"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs md:text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
               />
               {trackingUrl && (
@@ -291,6 +304,7 @@ export function BatchOrderDetail({
               onChange={(e) => setShippingNote(e.target.value)}
               placeholder="Shipping note (optional)"
               disabled={busy}
+              aria-label="Shipping note"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs md:text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
             />
             <button

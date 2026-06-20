@@ -7,11 +7,13 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { GroupBuyBatch, GroupBuyStatus } from '../../types';
+import type { RequestConfirm } from './ConfirmDialog';
 import { formatDateTime } from './orderStatusStyles';
 
 interface BatchLifecycleBarProps {
   batch: GroupBuyBatch | null;
   busy: boolean;
+  requestConfirm: RequestConfirm;
   onOpenBatch: () => void;
   onOpenNewBatch: () => void;
   onStartFinalizing: (batchId: string) => void;
@@ -37,6 +39,7 @@ const STATUS_PILL: Readonly<
 export function BatchLifecycleBar({
   batch,
   busy,
+  requestConfirm,
   onOpenBatch,
   onOpenNewBatch,
   onStartFinalizing,
@@ -69,45 +72,40 @@ export function BatchLifecycleBar({
   const pill = STATUS_PILL[batch.status];
   const status = batch.status;
 
-  const handleStartFinalizing = () => {
-    if (
-      !window.confirm(
-        'Start finalizing this batch? This closes the storefront ordering window — no new customer orders can be placed. You can still confirm and edit existing orders.',
-      )
-    ) {
-      return;
-    }
-    onStartFinalizing(batch.id);
-  };
+  const handleStartFinalizing = () =>
+    requestConfirm({
+      title: 'Start finalizing this batch?',
+      message:
+        'This closes the storefront ordering window — no new customer orders can be placed. You can still confirm and edit existing orders.',
+      confirmLabel: 'Start finalizing',
+      onConfirm: () => onStartFinalizing(batch.id),
+    });
 
-  const handleFinalize = () => {
-    if (
-      !window.confirm(
-        'Finalize this batch? Totals are locked and leftover claims close. Continue to delivery from here.',
-      )
-    ) {
-      return;
-    }
-    onFinalize(batch.id);
-  };
+  const handleFinalize = () =>
+    requestConfirm({
+      title: 'Finalize this batch?',
+      message: 'Totals are locked and leftover claims close. Continue to delivery from here.',
+      confirmLabel: 'Finalize',
+      onConfirm: () => onFinalize(batch.id),
+    });
 
-  const handleReopen = () => {
-    if (
-      !window.confirm(
-        'Reopen this batch back to OPEN? The storefront ordering window reopens and customers can place new orders again.',
-      )
-    ) {
-      return;
-    }
-    onReopen(batch.id);
-  };
+  const handleReopen = () =>
+    requestConfirm({
+      title: 'Reopen this batch?',
+      message:
+        'The storefront ordering window reopens and customers can place new orders against this batch again.',
+      confirmLabel: 'Reopen',
+      onConfirm: () => onReopen(batch.id),
+    });
 
-  const handleClose = () => {
-    if (!window.confirm('Close this batch? It will be archived as complete. This cannot be undone.')) {
-      return;
-    }
-    onClose(batch.id);
-  };
+  const handleClose = () =>
+    requestConfirm({
+      title: 'Close this batch?',
+      message: 'It will be archived as complete. This cannot be undone.',
+      confirmLabel: 'Close batch',
+      tone: 'danger',
+      onConfirm: () => onClose(batch.id),
+    });
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-5">
