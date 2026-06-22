@@ -1,6 +1,5 @@
 import React from 'react';
 import { HelpCircle, Truck, FlaskConical, Shield } from 'lucide-react';
-import BlossomLogo from './BlossomLogo';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -13,10 +12,11 @@ const Footer: React.FC = () => {
           {/* Brand Section */}
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-2.5">
-              <BlossomLogo size={28} />
-              <span className="text-white font-display font-extrabold text-xl tracking-[-0.03em]">
-                Pure Peps
-              </span>
+              <img
+                src="/logo.png"
+                alt="Pure Peps"
+                className="h-12 w-auto object-contain"
+              />
             </div>
             <p className="text-charcoal-400 text-sm max-w-xs text-center md:text-left">
               Research-grade peptide group buys. Lab-tested, member-priced, shipped cold-chain.

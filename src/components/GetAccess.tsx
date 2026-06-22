@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, Check, Clock, Copy, Lock, RefreshCw, ShieldCheck } from 'lucide-react';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useAccessRequests } from '../hooks/useAccessRequests';
@@ -8,7 +7,6 @@ import type { VerifyResult } from '../hooks/useAccess';
 import { ACCESS_FEE_PHP, isValidEmail } from '../utils/access';
 import { formatPrice } from '../utils/currency';
 import ImageUpload from './ImageUpload';
-import BlossomLogo from './BlossomLogo';
 
 interface GetAccessProps {
   onBack: () => void;
@@ -52,6 +50,12 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
 
   const selectedMethod =
     paymentMethods.find((m) => m.id === selectedMethodId) ?? paymentMethods[0] ?? null;
+
+  // Only treat an admin-uploaded image as a real QR — never auto-generate one,
+  // since a QR built from the account number/name isn't actually scannable to pay.
+  const hasRealQr = Boolean(
+    selectedMethod?.qr_code_url && !selectedMethod.qr_code_url.includes('pexels.com'),
+  );
 
   const handleCopy = (value: string) => {
     navigator.clipboard?.writeText(value).catch(() => undefined);
@@ -284,39 +288,36 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
           {selectedMethod && (
             <div className="mt-3.5 bg-white border border-sakura-ink/10 rounded-[18px] p-5">
               <div className="flex gap-5 items-center">
-                <div className="w-[148px] h-[148px] shrink-0 bg-white border border-sakura-ink/10 rounded-2xl p-2.5 flex items-center justify-center">
-                  {selectedMethod.qr_code_url && !selectedMethod.qr_code_url.includes('pexels.com') ? (
+                {hasRealQr && (
+                  <div className="w-[148px] h-[148px] shrink-0 bg-white border border-sakura-ink/10 rounded-2xl p-2.5 flex items-center justify-center">
                     <img
                       src={selectedMethod.qr_code_url}
                       alt={`${selectedMethod.name} QR`}
                       className="w-full h-full object-contain rounded-lg"
                     />
-                  ) : (
-                    <QRCodeSVG
-                      value={selectedMethod.account_number || selectedMethod.name}
-                      size={124}
-                      fgColor="#17100D"
-                      bgColor="#FFFFFF"
-                    />
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-mono text-[10px] font-semibold tracking-[0.08em] uppercase text-sakura-soft mb-1.5">
-                    Scan or copy
+                    {hasRealQr ? 'Scan or copy' : 'Send to'}
                   </div>
                   <div className="text-sm font-bold text-sakura-ink">{selectedMethod.name}</div>
                   {selectedMethod.account_name && (
                     <div className="text-[13px] text-sakura-muted mt-0.5">{selectedMethod.account_name}</div>
                   )}
-                  <div className="font-mono text-[12.5px] text-sakura-muted break-all mt-1">
-                    {selectedMethod.account_number}
-                  </div>
-                  <button
-                    onClick={() => handleCopy(selectedMethod.account_number)}
-                    className="inline-flex items-center gap-1.5 mt-3 font-mono text-xs font-semibold text-sakura-primary"
-                  >
-                    <Copy className="w-3 h-3" /> Copy
-                  </button>
+                  {selectedMethod.account_number && (
+                    <>
+                      <div className="font-mono text-[12.5px] text-sakura-muted break-all mt-1">
+                        {selectedMethod.account_number}
+                      </div>
+                      <button
+                        onClick={() => handleCopy(selectedMethod.account_number)}
+                        className="inline-flex items-center gap-1.5 mt-3 font-mono text-xs font-semibold text-sakura-primary"
+                      >
+                        <Copy className="w-3 h-3" /> Copy
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-baseline mt-4 pt-4 border-t border-sakura-ink/10">
@@ -371,9 +372,9 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
       </div>
 
       <div className="flex items-center justify-center gap-2 mt-12 opacity-60">
-        <BlossomLogo size={18} />
+        <img src="/logo.png" alt="Pure Peps" className="h-6 w-auto object-contain" />
         <span className="font-mono text-[11px] tracking-[0.06em] uppercase text-sakura-faint">
-          Pure Peps · members-only checkout
+          members-only checkout
         </span>
       </div>
     </div>

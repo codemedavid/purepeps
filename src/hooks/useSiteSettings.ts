@@ -24,7 +24,7 @@ export const useSiteSettings = () => {
       // Transform the data into a more usable format
       const settings: SiteSettings = {
         site_name: settingsData.find(s => s.id === 'site_name')?.value || 'RSPEPTIDE',
-        site_logo: settingsData.find(s => s.id === 'site_logo')?.value || '/logo.jpeg',
+        site_logo: settingsData.find(s => s.id === 'site_logo')?.value || '/logo.png',
         site_description: settingsData.find(s => s.id === 'site_description')?.value || '',
         currency: settingsData.find(s => s.id === 'currency')?.value || 'PHP',
         currency_code: settingsData.find(s => s.id === 'currency_code')?.value || 'PHP',

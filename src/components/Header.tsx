@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, Lock, Check } from 'lucide-react';
-import BlossomLogo from './BlossomLogo';
 
 interface HeaderProps {
   cartItemsCount: number;
@@ -23,7 +22,11 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
               onClick={() => { onMenuClick(); setMobileMenuOpen(false); }}
               className="flex items-center gap-2 hover:opacity-90 transition-opacity"
             >
-              <BlossomLogo size={26} />
+              <img
+                src="/logo.png"
+                alt="Pure Peps"
+                className="h-9 sm:h-10 w-auto object-contain"
+              />
               <span className="text-base sm:text-xl font-display font-extrabold text-sakura-ink tracking-[-0.03em]">
                 Pure Peps
               </span>
@@ -138,7 +141,7 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
             <div className="flex items-center justify-between p-5 border-b border-brand-100">
               <div className="flex items-center gap-3">
                 <img
-                  src="/logo.jpeg?v=2"
+                  src="/logo.png"
                   alt="Pure Peps"
                   className="h-8 w-auto object-contain rounded-md"
                 />

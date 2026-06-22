@@ -116,17 +116,14 @@ const Cart: React.FC<CartProps> = ({
                 <div className="flex gap-6">
                   {/* Product Image */}
                   <div className="w-20 h-20 md:w-24 md:h-24 bg-secondary-50 rounded flex-shrink-0 border border-gray-100 overflow-hidden">
-                    {item.product.image_url ? (
-                      <img
-                        src={item.product.image_url}
-                        alt={item.product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-charcoal-200 font-bold text-2xl bg-clinical-blue/30">
-                        {item.product.name.charAt(0)}
-                      </div>
-                    )}
+                    <img
+                      src={item.product.image_url || '/placeholder.png'}
+                      alt={item.product.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder.png';
+                      }}
+                    />
                   </div>
 
                   {/* Product Details */}

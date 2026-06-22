@@ -121,18 +121,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             <div className="space-y-3 sm:space-y-4 md:space-y-6">
               {/* Product Image */}
               <div className="relative h-40 sm:h-48 md:h-56 lg:h-64 bg-gray-50 rounded overflow-hidden border border-gray-100 shadow-inner">
-                {product.image_url && !imageError ? (
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 bg-brand-50/50">
-                    <Package className="w-16 h-16 sm:w-20 sm:h-20 opacity-50" />
-                  </div>
-                )}
+                <img
+                  src={product.image_url && !imageError ? product.image_url : '/placeholder.png'}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  onError={() => setImageError(true)}
+                />
               </div>
 
               {/* Description */}

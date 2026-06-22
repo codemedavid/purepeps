@@ -31,7 +31,7 @@ function AdminLogin({ onSignIn, error }: AdminLoginProps) {
         <div className="text-center mb-6">
           <div className="mx-auto mb-4">
             <img
-              src="/logo.jpeg?v=2"
+              src="/logo.png"
               alt="Pure Peps"
               className="h-14 w-auto mx-auto object-contain"
             />

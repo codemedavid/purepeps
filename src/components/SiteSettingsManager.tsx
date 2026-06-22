@@ -128,7 +128,7 @@ const SiteSettingsManager: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Site Logo</label>
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
-                  <img src={logoPreview || '/logo.jpeg?v=2'} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={logoPreview || '/logo.png'} alt="Logo" className="w-full h-full object-cover" />
                 </div>
                 <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
                   Change

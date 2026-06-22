@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Lock } from 'lucide-react';
 import BlossomLogo from './BlossomLogo';
-import { formatDateRange, getCountdown } from '../utils/groupBuySchedule';
+import { formatDateRange, getCountdownParts } from '../utils/groupBuySchedule';
 
 interface HeroProps {
   onShopAll: () => void;
@@ -18,12 +18,46 @@ interface HeroProps {
 
 const TRUST = ['≥99% HPLC', '3rd-party CoA', 'Cold-chain shipped', 'Research use only'];
 
-// Tick the countdown once a minute — minute precision is plenty for a "2d 14h"
-// style label and avoids a per-second re-render.
-const COUNTDOWN_TICK_MS = 60 * 1000;
+// Tick every second so the big hero countdown stays live down to the seconds.
+const COUNTDOWN_TICK_MS = 1000;
 
 const formatBatchLabel = (batchNumber?: number | null): string =>
   batchNumber != null ? `№${String(batchNumber).padStart(3, '0')}` : '';
+
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+interface CountdownUnitProps {
+  value: number;
+  label: string;
+  testId: string;
+}
+
+function CountdownUnit({ value, label, testId }: CountdownUnitProps) {
+  return (
+    <div className="flex w-[68px] flex-col items-center justify-center rounded-2xl border border-sakura-edge bg-white px-2 py-3 shadow-luxury sm:w-[88px] sm:py-4">
+      <span
+        data-testid={testId}
+        className="font-display text-3xl font-extrabold leading-none tabular-nums tracking-[-0.02em] text-sakura-ink sm:text-5xl"
+      >
+        {pad(value)}
+      </span>
+      <span className="mt-2 font-mono text-[9px] tracking-[0.2em] uppercase text-sakura-faint sm:text-[10px]">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function CountdownSeparator() {
+  return (
+    <span
+      aria-hidden="true"
+      className="self-start pt-3 font-display text-2xl font-bold text-sakura-primary/50 sm:pt-5 sm:text-4xl"
+    >
+      :
+    </span>
+  );
+}
 
 function Hero({ onShopAll, onGetAccess, batchNumber, startsAt, endsAt, isBatchOpen = true }: HeroProps) {
   const [isVisible, setIsVisible] = useState(false);
@@ -33,7 +67,8 @@ function Hero({ onShopAll, onGetAccess, batchNumber, startsAt, endsAt, isBatchOp
     setIsVisible(true);
   }, []);
 
-  // Keep the live countdown current without a heavy per-second loop.
+  // Keep the live countdown current. Only run the interval when there's a
+  // deadline to count toward; clean up on unmount or when the date changes.
   useEffect(() => {
     if (!endsAt) return;
     const id = setInterval(() => setNow(new Date()), COUNTDOWN_TICK_MS);
@@ -42,13 +77,9 @@ function Hero({ onShopAll, onGetAccess, batchNumber, startsAt, endsAt, isBatchOp
 
   const batchLabel = formatBatchLabel(batchNumber);
   const dateRange = formatDateRange(startsAt, endsAt);
-  const countdown = getCountdown(endsAt, now);
-  const countdownLabel = countdown
-    ? countdown.expired
-      ? 'closed'
-      : `closes in ${countdown.label}`
-    : null;
-  const statusLabel = isBatchOpen && !countdown?.expired ? 'open now' : 'closed';
+  const countdown = getCountdownParts(endsAt, now);
+  const isLive = countdown != null && !countdown.expired;
+  const statusLabel = isBatchOpen && isLive ? 'open now' : 'closed';
 
   return (
     <div className="bg-sakura-canvas font-display">
@@ -100,16 +131,61 @@ function Hero({ onShopAll, onGetAccess, batchNumber, startsAt, endsAt, isBatchOp
             </button>
           </div>
 
-          {(batchLabel || dateRange || countdownLabel) && (
-            <div className="flex flex-wrap justify-center items-center gap-3.5 mt-9 font-mono text-xs tracking-[0.05em] uppercase text-sakura-faint">
-              {batchLabel && <span className="text-sakura-deep font-semibold">{batchLabel}</span>}
-              {batchLabel && dateRange && <span className="w-1 h-1 rounded-full bg-sakura-primary" />}
-              {dateRange && <span>{dateRange}</span>}
-              {(batchLabel || dateRange) && countdownLabel && (
-                <span className="w-1 h-1 rounded-full bg-sakura-primary" />
-              )}
-              {countdownLabel && <span>{countdownLabel}</span>}
-            </div>
+          {countdown && (
+            <section
+              aria-label="Group buy countdown"
+              className="relative mt-12 w-full max-w-xl overflow-hidden rounded-[28px] border border-sakura-edge bg-gradient-to-b from-sakura-blush-soft to-white px-6 py-8 shadow-luxury sm:px-10"
+            >
+              {/* faint blossom accent echoing the hero watermark */}
+              <BlossomLogo
+                monochrome="#F4DCE4"
+                className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 opacity-40"
+              />
+
+              <div className="relative flex flex-col items-center">
+                {/* live / closed pill */}
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase ${
+                    isLive ? 'bg-sakura-blush text-sakura-deep' : 'bg-sakura-mist text-sakura-muted'
+                  }`}
+                >
+                  {isLive && (
+                    <span className="relative inline-flex">
+                      <span className="h-[7px] w-[7px] rounded-full bg-sakura-primary" />
+                      <span className="absolute inset-0 rounded-full bg-sakura-primary animate-pp-pulse" />
+                    </span>
+                  )}
+                  {batchLabel ? `Group Buy ${batchLabel}` : 'Group Buy'}
+                </span>
+
+                {isLive ? (
+                  <>
+                    <p className="mt-4 font-display text-sm font-medium tracking-[0.02em] text-sakura-muted">
+                      Closing in
+                    </p>
+                    <div className="mt-3 flex items-start justify-center gap-1.5 sm:gap-3">
+                      <CountdownUnit value={countdown.days} label="Days" testId="countdown-days" />
+                      <CountdownSeparator />
+                      <CountdownUnit value={countdown.hours} label="Hrs" testId="countdown-hours" />
+                      <CountdownSeparator />
+                      <CountdownUnit value={countdown.minutes} label="Min" testId="countdown-minutes" />
+                      <CountdownSeparator />
+                      <CountdownUnit value={countdown.seconds} label="Sec" testId="countdown-seconds" />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-4 font-display text-lg font-semibold text-sakura-ink">
+                    This group buy has closed
+                  </p>
+                )}
+
+                {dateRange && (
+                  <p className="mt-6 font-mono text-[11px] tracking-[0.14em] uppercase text-sakura-faint">
+                    {isLive ? `Window · ${dateRange}` : dateRange}
+                  </p>
+                )}
+              </div>
+            </section>
           )}
         </div>
       </div>

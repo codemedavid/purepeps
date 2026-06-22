@@ -12,21 +12,30 @@ describe('Hero', () => {
     vi.useRealTimers();
   });
 
-  it('renders the announced window and a live countdown from the finish date', () => {
+  it('renders the announced window and a big live countdown from the finish date', () => {
     render(
       <Hero
         onShopAll={vi.fn()}
         onGetAccess={vi.fn()}
         batchNumber={42}
         startsAt="2026-06-22T00:00:00Z"
-        endsAt="2026-06-24T14:00:00Z"
+        endsAt="2026-06-24T14:09:30Z"
         isBatchOpen
       />,
     );
 
-    expect(screen.getAllByText('№042').length).toBeGreaterThan(0);
-    expect(screen.getByText('Jun 22 – 24')).toBeInTheDocument();
-    expect(screen.getByText(/closes in 2d 14h/i)).toBeInTheDocument();
+    // Batch label + announced window are featured.
+    expect(screen.getAllByText(/№042/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Jun 22 – 24/)).toBeInTheDocument();
+
+    // Big countdown shows each unit (2d 14h 09m 30s) with labels.
+    expect(screen.getByText('Days')).toBeInTheDocument();
+    expect(screen.getByText('Hrs')).toBeInTheDocument();
+    expect(screen.getByText('Min')).toBeInTheDocument();
+    expect(screen.getByText('Sec')).toBeInTheDocument();
+    expect(screen.getByTestId('countdown-days')).toHaveTextContent('02');
+    expect(screen.getByTestId('countdown-hours')).toHaveTextContent('14');
+    expect(screen.getByTestId('countdown-seconds')).toHaveTextContent('30');
   });
 
   it('shows a closed state once the finish date has passed', () => {
@@ -41,13 +50,14 @@ describe('Hero', () => {
       />,
     );
 
-    expect(screen.getAllByText(/closed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/group buy has closed/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('countdown-days')).not.toBeInTheDocument();
   });
 
-  it('omits the window and countdown when no dates are set', () => {
+  it('omits the countdown panel when no dates are set', () => {
     render(<Hero onShopAll={vi.fn()} onGetAccess={vi.fn()} batchNumber={42} isBatchOpen />);
 
-    expect(screen.queryByText(/closes in/i)).not.toBeInTheDocument();
-    expect(screen.queryByText('–', { exact: false })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('countdown-days')).not.toBeInTheDocument();
+    expect(screen.queryByText('Days')).not.toBeInTheDocument();
   });
 });

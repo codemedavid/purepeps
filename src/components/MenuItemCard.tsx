@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ImageIcon, Lock, ShoppingBag } from 'lucide-react';
+import { Lock, ShoppingBag } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { formatPrice } from '../utils/currency';
 import { isSoldOut as isCapSoldOut } from '../utils/groupBuy';
@@ -69,19 +69,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     >
       {/* Image */}
       <div className="relative h-44 sm:h-[238px] bg-sakura-blush-soft border-b border-sakura-edge overflow-hidden">
-        {product.image_url && !imageError ? (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-sakura-soft gap-2">
-            <ImageIcon className="w-8 h-8" />
-            <span className="text-xs">Add product photo</span>
-          </div>
-        )}
+        <img
+          src={product.image_url && !imageError ? product.image_url : '/placeholder.png'}
+          alt={product.name}
+          className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+          onError={() => setImageError(true)}
+        />
 
         {(product.featured || hasDiscount) && (
           <span className="absolute top-4 left-4 z-20 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase text-white bg-sakura-primary rounded-full px-2.5 py-1 whitespace-nowrap">
