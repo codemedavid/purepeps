@@ -16,9 +16,11 @@ export const useGroupBuyProgress = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProgress = useCallback(async () => {
+  // `silent` skips the loading flip so realtime refetches don't flash the UI;
+  // the visible counts only swap once fresh data resolves.
+  const fetchProgress = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data, error: rpcError } = await supabase.rpc('get_group_buy_progress');
       if (rpcError) throw rpcError;
 
@@ -33,12 +35,26 @@ export const useGroupBuyProgress = () => {
       setError(err instanceof Error ? err.message : 'Failed to fetch group buy progress');
       setProgress(EMPTY_PROGRESS);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchProgress();
+
+    // Counts come from a SECURITY DEFINER aggregate RPC (orders rows are private,
+    // so postgres_changes can't stream them to shoppers). Refetch whenever the tab
+    // regains focus so every open page shows current per-item totals on return.
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') fetchProgress(true);
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, [fetchProgress]);
 
   return {

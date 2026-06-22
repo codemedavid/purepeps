@@ -2,8 +2,21 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BatchOverviewTab } from './BatchOverviewTab';
-import type { BatchOrder, GroupBuyBatch } from '../../types';
+import type { BatchOrder, GroupBuyBatch, GroupBuyProgressItem } from '../../types';
 import type { CapFillSummary } from '../../utils/groupBuyOverview';
+
+function progressItem(overrides: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem {
+  return {
+    product_id: 'p1',
+    product_name: 'BPC-157 5mg',
+    total_quantity: 0,
+    confirmed_quantity: 0,
+    order_count: 0,
+    cancelled_quantity: 0,
+    cap_quantity: null,
+    ...overrides,
+  };
+}
 
 function batch(overrides: Partial<GroupBuyBatch> = {}): GroupBuyBatch {
   return {
@@ -120,5 +133,65 @@ describe('BatchOverviewTab', () => {
       />,
     );
     expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('shows per-item demand with a confirmed vs pending split', () => {
+    render(
+      <BatchOverviewTab
+        batch={batch()}
+        capSummary={capSummary}
+        items={[
+          progressItem({
+            product_name: 'BPC-157 5mg',
+            total_quantity: 18,
+            confirmed_quantity: 12,
+            cap_quantity: 20,
+          }),
+        ]}
+        needsAction={[]}
+        onViewOrder={vi.fn()}
+        {...lifecycleProps()}
+      />,
+    );
+    expect(screen.getByText('Demand by item')).toBeInTheDocument();
+    expect(screen.getByText('12 confirmed')).toBeInTheDocument();
+    expect(screen.getByText('6 pending')).toBeInTheDocument();
+    expect(screen.getByText('18 / 20')).toBeInTheDocument();
+  });
+
+  it('shows the resale panel only while finalizing, with freed as a subset', () => {
+    const items = [
+      progressItem({
+        product_name: 'TB-500 10mg',
+        total_quantity: 17,
+        confirmed_quantity: 17,
+        cancelled_quantity: 3,
+        cap_quantity: 20,
+      }),
+    ];
+    const { rerender } = render(
+      <BatchOverviewTab
+        batch={batch({ status: 'open' })}
+        capSummary={capSummary}
+        items={items}
+        needsAction={[]}
+        onViewOrder={vi.fn()}
+        {...lifecycleProps()}
+      />,
+    );
+    expect(screen.queryByText('Available to resell')).not.toBeInTheDocument();
+
+    rerender(
+      <BatchOverviewTab
+        batch={batch({ status: 'finalizing' })}
+        capSummary={capSummary}
+        items={items}
+        needsAction={[]}
+        onViewOrder={vi.fn()}
+        {...lifecycleProps()}
+      />,
+    );
+    expect(screen.getByText('Available to resell')).toBeInTheDocument();
+    expect(screen.getByText(/3 freed by cancellations/)).toBeInTheDocument();
   });
 });

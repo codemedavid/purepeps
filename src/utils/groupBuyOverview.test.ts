@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeBatchKpis,
   summarizeCapFill,
+  summarizeResale,
   ordersNeedingAction,
   filterBatchOrders,
 } from './groupBuyOverview';
@@ -66,6 +67,7 @@ function capItem(overrides: Partial<GroupBuyProgressItem> = {}): GroupBuyProgres
     product_id: 'p1',
     product_name: 'BPC-157 5mg',
     total_quantity: 0,
+    confirmed_quantity: 0,
     order_count: 0,
     cancelled_quantity: 0,
     cap_quantity: null,
@@ -194,6 +196,55 @@ describe('summarizeCapFill', () => {
       capItem({ product_id: 'p1', cap_quantity: 10, total_quantity: 14 }),
     ]);
     expect(summary.fillPct).toBe(100);
+  });
+});
+
+// --- summarizeResale ------------------------------------------------------
+
+describe('summarizeResale', () => {
+  it('ignores uncapped products (nothing to resell against)', () => {
+    const summary = summarizeResale([capItem({ cap_quantity: null, total_quantity: 40 })]);
+    expect(summary.itemsToResell).toEqual([]);
+    expect(summary.totalResellable).toBe(0);
+    expect(summary.totalFreed).toBe(0);
+  });
+
+  it('omits capped products that are still full', () => {
+    const summary = summarizeResale([capItem({ cap_quantity: 20, total_quantity: 20 })]);
+    expect(summary.itemsToResell).toEqual([]);
+  });
+
+  it('reports resellable units with freed as an included subset, not additive', () => {
+    // 20 cap, 17 active after 3 cancelled → 3 resellable, all of which are freed.
+    const summary = summarizeResale([
+      capItem({ product_id: 'p1', cap_quantity: 20, total_quantity: 17, cancelled_quantity: 3 }),
+    ]);
+    expect(summary.itemsToResell).toEqual([
+      { product_id: 'p1', product_name: 'BPC-157 5mg', resellable: 3, freed: 3 },
+    ]);
+    expect(summary.totalResellable).toBe(3);
+    expect(summary.totalFreed).toBe(3);
+  });
+
+  it('caps the freed subset at the resellable amount', () => {
+    // Never-filled headroom (cap 20, only 5 ordered then all cancelled): 15 resellable,
+    // but freed is clamped to the 15 actually available, not the raw cancelled count.
+    const summary = summarizeResale([
+      capItem({ product_id: 'p1', cap_quantity: 20, total_quantity: 5, cancelled_quantity: 99 }),
+    ]);
+    expect(summary.itemsToResell[0].resellable).toBe(15);
+    expect(summary.itemsToResell[0].freed).toBe(15);
+  });
+
+  it('aggregates across multiple capped products', () => {
+    const summary = summarizeResale([
+      capItem({ product_id: 'p1', cap_quantity: 20, total_quantity: 18, cancelled_quantity: 2 }),
+      capItem({ product_id: 'p2', cap_quantity: 10, total_quantity: 9, cancelled_quantity: 0 }),
+      capItem({ product_id: 'p3', cap_quantity: 5, total_quantity: 5, cancelled_quantity: 0 }), // full
+    ]);
+    expect(summary.itemsToResell).toHaveLength(2);
+    expect(summary.totalResellable).toBe(3); // 2 + 1
+    expect(summary.totalFreed).toBe(2);
   });
 });
 

@@ -1,5 +1,11 @@
 import { Save, Trash2 } from 'lucide-react';
-import { findProgressItem, remainingForProduct, freedUnits } from '../../utils/groupBuy';
+import {
+  findProgressItem,
+  remainingForProduct,
+  freedUnits,
+  confirmedUnits,
+  pendingUnits,
+} from '../../utils/groupBuy';
 import type { GroupBuyProgressItem } from '../../types';
 
 interface ProductRow {
@@ -50,6 +56,8 @@ export function CapsProgressTable({
             <tr>
               <th className="px-4 py-2 text-left text-xs font-bold text-gray-700">Product</th>
               <th className="px-4 py-2 text-right text-xs font-bold text-gray-700">Total Qty</th>
+              <th className="px-4 py-2 text-right text-xs font-bold text-gray-700">Confirmed</th>
+              <th className="px-4 py-2 text-right text-xs font-bold text-gray-700">Pending</th>
               <th className="px-4 py-2 text-right text-xs font-bold text-gray-700">Orders</th>
               <th className="px-4 py-2 text-right text-xs font-bold text-gray-700">Cancelled</th>
               <th className="px-4 py-2 text-left text-xs font-bold text-gray-700">Cap (optional)</th>
@@ -60,6 +68,8 @@ export function CapsProgressTable({
             {rows.map((product) => {
               const item = findProgressItem(items, product.id);
               const total = item?.total_quantity ?? 0;
+              const confirmed = item ? confirmedUnits(item) : 0;
+              const pending = item ? pendingUnits(item) : 0;
               const orderCount = item?.order_count ?? 0;
               const cancelled = item ? freedUnits(item) : 0;
               const remaining = remainingForProduct(item);
@@ -68,6 +78,16 @@ export function CapsProgressTable({
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2 text-xs font-semibold text-gray-900">{product.name}</td>
                   <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">{total}</td>
+                  <td className="px-4 py-2 text-right text-xs font-semibold text-emerald-700">
+                    {confirmed}
+                  </td>
+                  <td className="px-4 py-2 text-right text-xs">
+                    {pending > 0 ? (
+                      <span className="font-semibold text-amber-600">{pending}</span>
+                    ) : (
+                      <span className="text-gray-300">0</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-right text-xs text-gray-600">{orderCount}</td>
                   <td className="px-4 py-2 text-right text-xs">
                     {cancelled > 0 ? (
@@ -134,7 +154,7 @@ export function CapsProgressTable({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-xs text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-xs text-gray-400">
                   No products found.
                 </td>
               </tr>

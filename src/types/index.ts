@@ -183,6 +183,8 @@ export interface GroupBuyProgressItem {
   product_id: string;
   product_name: string | null;
   total_quantity: number;
+  /** Non-cancelled units whose order has moved past `new` (admin-confirmed). */
+  confirmed_quantity: number;
   order_count: number;
   cancelled_quantity: number;
   cap_quantity: number | null;

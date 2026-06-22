@@ -6,6 +6,9 @@ import {
   isSoldOut,
   claimableRemaining,
   freedUnits,
+  confirmedUnits,
+  pendingUnits,
+  resellableUnits,
 } from './groupBuy';
 import type { GroupBuyProgressItem } from '../types';
 
@@ -13,6 +16,7 @@ const item = (over: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem =>
   product_id: 'p1',
   product_name: 'Tirzepatide',
   total_quantity: 0,
+  confirmed_quantity: 0,
   order_count: 0,
   cancelled_quantity: 0,
   cap_quantity: null,
@@ -121,6 +125,48 @@ describe('freedUnits', () => {
   it('defaults to zero when cancelled_quantity is missing', () => {
     const withoutCancelled = { ...item(), cancelled_quantity: undefined } as unknown as GroupBuyProgressItem;
     expect(freedUnits(withoutCancelled)).toBe(0);
+  });
+});
+
+describe('confirmedUnits / pendingUnits', () => {
+  it('reports confirmed units straight from the aggregate', () => {
+    expect(confirmedUnits(item({ total_quantity: 18, confirmed_quantity: 12 }))).toBe(12);
+  });
+
+  it('derives pending as total minus confirmed', () => {
+    expect(pendingUnits(item({ total_quantity: 18, confirmed_quantity: 12 }))).toBe(6);
+  });
+
+  it('confirmed and pending add back up to the total', () => {
+    const i = item({ total_quantity: 25, confirmed_quantity: 20 });
+    expect(confirmedUnits(i) + pendingUnits(i)).toBe(i.total_quantity);
+  });
+
+  it('never returns negative pending when confirmed somehow exceeds total', () => {
+    expect(pendingUnits(item({ total_quantity: 5, confirmed_quantity: 9 }))).toBe(0);
+  });
+
+  it('treats a missing confirmed_quantity as zero', () => {
+    const missing = { ...item({ total_quantity: 4 }), confirmed_quantity: undefined } as unknown as GroupBuyProgressItem;
+    expect(confirmedUnits(missing)).toBe(0);
+    expect(pendingUnits(missing)).toBe(4);
+  });
+});
+
+describe('resellableUnits', () => {
+  it('returns null when the product is uncapped', () => {
+    expect(resellableUnits(item({ cap_quantity: null }))).toBeNull();
+  });
+
+  it('equals the cap headroom and already absorbs freed units (no double count)', () => {
+    // 20 cap, 17 active after 3 were cancelled → 3 available to resell, all freed.
+    const i = item({ cap_quantity: 20, total_quantity: 17, cancelled_quantity: 3 });
+    expect(resellableUnits(i)).toBe(3);
+    expect(resellableUnits(i)).toBe(remainingForProduct(i));
+  });
+
+  it('is zero when a capped product is still full', () => {
+    expect(resellableUnits(item({ cap_quantity: 20, total_quantity: 20 }))).toBe(0);
   });
 });
 

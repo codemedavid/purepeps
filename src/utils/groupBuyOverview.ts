@@ -1,4 +1,5 @@
 import type { BatchOrder, GroupBuyProgressItem } from '../types';
+import { resellableUnits, freedUnits } from './groupBuy';
 
 /**
  * Pure, side-effect-free selectors that power the Group Buy admin command center
@@ -98,6 +99,52 @@ export function summarizeCapFill(items: GroupBuyProgressItem[]): CapFillSummary 
     totalReserved,
     fillPct,
     fullProducts,
+  };
+}
+
+export interface ResellItem {
+  product_id: string;
+  product_name: string | null;
+  /** Units this capped product can still sell (cap − non-cancelled reserved). */
+  resellable: number;
+  /** Of `resellable`, how many were freed by cancellations (a subset, not additive). */
+  freed: number;
+}
+
+export interface ResaleSummary {
+  /** Capped products that currently have at least one unit available to resell. */
+  itemsToResell: ResellItem[];
+  /** Total units available to resell across all capped products. */
+  totalResellable: number;
+  /** Total units freed by cancellations (a subset of totalResellable). */
+  totalFreed: number;
+}
+
+/**
+ * Roll capped products up into the "available to resell" view shown while a batch
+ * is finalizing. Only capped products can be resold (uncapped products have no
+ * ceiling to sell against). `resellable` already includes units freed by
+ * cancellations, so `freed` is reported as a subset for context — never added on
+ * top of `resellable`.
+ */
+export function summarizeResale(items: GroupBuyProgressItem[]): ResaleSummary {
+  const itemsToResell = items.reduce<ResellItem[]>((acc, item) => {
+    const resellable = resellableUnits(item);
+    if (resellable == null || resellable <= 0) return acc;
+    return [
+      ...acc,
+      {
+        product_id: item.product_id,
+        product_name: item.product_name,
+        resellable,
+        freed: Math.min(freedUnits(item), resellable),
+      },
+    ];
+  }, []);
+  return {
+    itemsToResell,
+    totalResellable: itemsToResell.reduce((sum, item) => sum + item.resellable, 0),
+    totalFreed: itemsToResell.reduce((sum, item) => sum + item.freed, 0),
   };
 }
 

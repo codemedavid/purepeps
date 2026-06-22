@@ -316,6 +316,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
           <BatchOverviewTab
             batch={null}
             capSummary={capSummary}
+            items={[]}
             needsAction={[]}
             busy={busy}
             onViewOrder={handleViewOrder}
@@ -338,6 +339,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
               <BatchOverviewTab
                 batch={selectedBatch}
                 capSummary={capSummary}
+                items={capsApplyToSelected ? progress.items : []}
                 needsAction={needsAction}
                 busy={busy}
                 onViewOrder={handleViewOrder}

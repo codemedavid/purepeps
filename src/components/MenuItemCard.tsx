@@ -52,6 +52,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   // Group-buy cap (per product, across the whole batch). cap_quantity null = no cap.
   const capQuantity = groupBuyItem?.cap_quantity ?? null;
   const capReserved = groupBuyItem?.total_quantity ?? 0;
+  const orderCount = groupBuyItem?.order_count ?? 0;
   const capReached = isCapSoldOut(groupBuyItem);
   const canAdd = !soldOut && !capReached && isBatchOpen;
   const ctaLabel = !isBatchOpen
@@ -178,6 +179,16 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
                 style={{ width: `${Math.min(100, Math.round((capReserved / capQuantity) * 100))}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Uncapped items still surface live demand so shoppers see what's been ordered. */}
+        {capQuantity == null && capReserved > 0 && (
+          <div className="mt-3 flex items-center justify-between text-[11px] font-mono">
+            <span className="text-sakura-soft uppercase tracking-[0.06em]">Group orders</span>
+            <span className="text-sakura-muted">
+              {capReserved} reserved · {orderCount} {orderCount === 1 ? 'order' : 'orders'}
+            </span>
           </div>
         )}
 

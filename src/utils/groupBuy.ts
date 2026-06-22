@@ -57,3 +57,26 @@ export function claimableRemaining(item: GroupBuyProgressItem): number | null {
 export function freedUnits(item: GroupBuyProgressItem): number {
   return item.cancelled_quantity ?? 0;
 }
+
+/** Non-cancelled units whose order has been admin-confirmed (moved past `new`). */
+export function confirmedUnits(item: GroupBuyProgressItem): number {
+  return Math.max(0, item.confirmed_quantity ?? 0);
+}
+
+/**
+ * Non-cancelled units still awaiting confirmation. Derived from the totals so the
+ * confirmed + pending parts always add back up to total_quantity. Never negative.
+ */
+export function pendingUnits(item: GroupBuyProgressItem): number {
+  return Math.max(0, (item.total_quantity ?? 0) - confirmedUnits(item));
+}
+
+/**
+ * Units a capped product can still sell during finalizing — the single honest
+ * "available to resell" figure. Because total_quantity already excludes cancelled
+ * orders, freed units are baked into this number (see freedUnits for the subset
+ * that came from cancellations). Returns `null` when the product is uncapped.
+ */
+export function resellableUnits(item: GroupBuyProgressItem): number | null {
+  return remainingForProduct(item);
+}
