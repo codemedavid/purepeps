@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BatchOverviewTab } from './BatchOverviewTab';
 import type { BatchOrder, GroupBuyBatch, GroupBuyProgressItem } from '../../types';
-import type { CapFillSummary } from '../../utils/groupBuyOverview';
+import type { CapFillSummary, ItemRevenueSummary } from '../../utils/groupBuyOverview';
 
 function progressItem(overrides: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem {
   return {
@@ -76,6 +76,29 @@ const capSummary: CapFillSummary = {
   fullProducts: 1,
 };
 
+function itemRevenue(overrides: Partial<ItemRevenueSummary> = {}): ItemRevenueSummary {
+  return {
+    rows: [
+      {
+        product_id: 'p1',
+        product_name: 'BPC-157 5mg',
+        orderCount: 2,
+        unitsOrdered: 3,
+        unitsConfirmed: 2,
+        unitsPending: 1,
+        grossRevenue: 3000,
+        collectedRevenue: 2000,
+      },
+    ],
+    totalUnitsOrdered: 3,
+    totalUnitsConfirmed: 2,
+    totalUnitsPending: 1,
+    totalGrossRevenue: 3000,
+    totalCollectedRevenue: 2000,
+    ...overrides,
+  };
+}
+
 function lifecycleProps() {
   return {
     busy: false,
@@ -135,10 +158,10 @@ describe('BatchOverviewTab', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
   });
 
-  it('shows per-item demand with a confirmed vs pending split', () => {
+  it('shows the product status board with a confirmed/pending split and a phase headline', () => {
     render(
       <BatchOverviewTab
-        batch={batch()}
+        batch={batch({ status: 'open' })}
         capSummary={capSummary}
         items={[
           progressItem({
@@ -153,13 +176,15 @@ describe('BatchOverviewTab', () => {
         {...lifecycleProps()}
       />,
     );
-    expect(screen.getByText('Demand by item')).toBeInTheDocument();
-    expect(screen.getByText('12 confirmed')).toBeInTheDocument();
-    expect(screen.getByText('6 pending')).toBeInTheDocument();
-    expect(screen.getByText('18 / 20')).toBeInTheDocument();
+    expect(screen.getByText('Product status board')).toBeInTheDocument();
+    // While open, the headline column is "Left" (cap headroom = 20 − 18 = 2).
+    expect(screen.getByRole('columnheader', { name: 'Left' })).toBeInTheDocument();
+    expect(screen.getByText('BPC-157 5mg')).toBeInTheDocument();
+    // Confirmed 12 shows on the row (and again in the footer total).
+    expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows the resale panel only while finalizing, with freed as a subset', () => {
+  it('switches the headline to "To take over" with freed units while finalizing', () => {
     const items = [
       progressItem({
         product_name: 'TB-500 10mg',
@@ -179,7 +204,7 @@ describe('BatchOverviewTab', () => {
         {...lifecycleProps()}
       />,
     );
-    expect(screen.queryByText('Available to resell')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'To take over' })).not.toBeInTheDocument();
 
     rerender(
       <BatchOverviewTab
@@ -191,7 +216,39 @@ describe('BatchOverviewTab', () => {
         {...lifecycleProps()}
       />,
     );
-    expect(screen.getByText('Available to resell')).toBeInTheDocument();
-    expect(screen.getByText(/3 freed by cancellations/)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'To take over' })).toBeInTheDocument();
+    expect(screen.getByText(/3 freed/)).toBeInTheDocument();
+  });
+
+  it('hides the closeout panel while the batch is still open', () => {
+    render(
+      <BatchOverviewTab
+        batch={batch({ status: 'open' })}
+        capSummary={capSummary}
+        orders={[order('1', 'Maria Santos')]}
+        itemRevenue={itemRevenue()}
+        needsAction={[]}
+        onViewOrder={vi.fn()}
+        {...lifecycleProps()}
+      />,
+    );
+    expect(screen.queryByText('Group buy closeout')).not.toBeInTheDocument();
+  });
+
+  it('shows the closeout panel with revenue per item once the batch is closed', () => {
+    render(
+      <BatchOverviewTab
+        batch={batch({ status: 'closed', fulfillment_stage: 'arrived_ph' })}
+        capSummary={capSummary}
+        orders={[order('1', 'Maria Santos')]}
+        itemRevenue={itemRevenue()}
+        needsAction={[]}
+        onViewOrder={vi.fn()}
+        {...lifecycleProps()}
+      />,
+    );
+    expect(screen.getByText('Group buy closeout')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Collected' })).toBeInTheDocument();
+    expect(screen.getByText('Arrived in PH')).toBeInTheDocument();
   });
 });

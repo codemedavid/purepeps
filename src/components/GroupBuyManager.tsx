@@ -7,6 +7,7 @@ import { FULFILLMENT_STAGES, fulfillmentStageLabel } from '../utils/orderTrackin
 import {
   computeBatchKpis,
   summarizeCapFill,
+  summarizeItemRevenue,
   ordersNeedingAction,
 } from '../utils/groupBuyOverview';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
@@ -19,6 +20,7 @@ import { BatchOrdersPanel } from './groupbuy/BatchOrdersPanel';
 import { BatchOrderDetail } from './groupbuy/BatchOrderDetail';
 import { BatchLeftoverPanel } from './groupbuy/BatchLeftoverPanel';
 import { CapsProgressTable } from './groupbuy/CapsProgressTable';
+import { BatchCloseoutPanel } from './groupbuy/BatchCloseoutPanel';
 import { OpenBatchModal } from './groupbuy/OpenBatchModal';
 import type { OpenBatchValues } from './groupbuy/OpenBatchModal';
 import { ConfirmDialog } from './groupbuy/ConfirmDialog';
@@ -97,6 +99,9 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
 
   const kpis = useMemo(() => computeBatchKpis(orders), [orders]);
   const needsAction = useMemo(() => ordersNeedingAction(orders), [orders]);
+  // Per-item closeout (orders, units, gross vs collected revenue) derived from the
+  // batch's own orders, so it stays correct once a batch is finalized/closed.
+  const itemRevenue = useMemo(() => summarizeItemRevenue(orders), [orders]);
 
   // Live progress is only fetched for the open/finalizing batch, so on a
   // closed/finalized batch `progress.items` still holds the previous batch's
@@ -340,6 +345,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 batch={selectedBatch}
                 capSummary={capSummary}
                 items={capsApplyToSelected ? progress.items : []}
+                orders={orders}
+                itemRevenue={itemRevenue}
                 needsAction={needsAction}
                 busy={busy}
                 onViewOrder={handleViewOrder}
@@ -373,12 +380,21 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                   onRemoveCap={handleRemoveCap}
                   readOnly={!isOpenBatchSelected}
                 />
+              ) : itemRevenue.rows.length > 0 ? (
+                // Closed/finalized: live caps are gone, but the per-product closeout
+                // (final units + revenue, with CSV export) is what the admin needs to
+                // order from the supplier. Same panel as the Overview tab.
+                <BatchCloseoutPanel
+                  summary={itemRevenue}
+                  orders={orders}
+                  fulfillmentStage={selectedBatch.fulfillment_stage ?? null}
+                />
               ) : (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center">
-                  <p className="text-sm font-semibold text-gray-900">Per-product totals are paused</p>
+                  <p className="text-sm font-semibold text-gray-900">No per-product totals yet</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    Caps and live totals show while a batch is open or finalizing. Batch #
-                    {selectedBatch.batch_number} is {selectedBatch.status}.
+                    This batch has no orders to total. Batch #{selectedBatch.batch_number} is{' '}
+                    {selectedBatch.status}.
                   </p>
                 </div>
               ))}

@@ -9,6 +9,7 @@ import {
   confirmedUnits,
   pendingUnits,
   resellableUnits,
+  productDemandState,
 } from './groupBuy';
 import type { GroupBuyProgressItem } from '../types';
 
@@ -167,6 +168,49 @@ describe('resellableUnits', () => {
 
   it('is zero when a capped product is still full', () => {
     expect(resellableUnits(item({ cap_quantity: 20, total_quantity: 20 }))).toBe(0);
+  });
+});
+
+describe('productDemandState', () => {
+  it('headlines cap headroom labelled "Left" while open', () => {
+    const state = productDemandState(
+      item({ total_quantity: 18, confirmed_quantity: 12, cap_quantity: 20 }),
+      'open',
+    );
+    expect(state.highlightLabel).toBe('Left');
+    expect(state.highlight).toBe(2);
+    expect(state.ordered).toBe(18);
+    expect(state.confirmed).toBe(12);
+    expect(state.pending).toBe(6);
+  });
+
+  it('headlines resellable units labelled "To take over" while finalizing', () => {
+    const state = productDemandState(
+      item({ total_quantity: 17, confirmed_quantity: 17, cancelled_quantity: 3, cap_quantity: 20 }),
+      'finalizing',
+    );
+    expect(state.highlightLabel).toBe('To take over');
+    expect(state.highlight).toBe(3);
+    expect(state.freed).toBe(3);
+  });
+
+  it('headlines confirmed units once finalized or closed', () => {
+    const base = item({ total_quantity: 18, confirmed_quantity: 12, cap_quantity: 20 });
+    expect(productDemandState(base, 'finalized').highlight).toBe(12);
+    expect(productDemandState(base, 'finalized').highlightLabel).toBe('Confirmed');
+    expect(productDemandState(base, 'closed').highlight).toBe(12);
+  });
+
+  it('reports a null highlight for uncapped products while open or finalizing', () => {
+    const uncapped = item({ total_quantity: 9, cap_quantity: null });
+    expect(productDemandState(uncapped, 'open').highlight).toBeNull();
+    expect(productDemandState(uncapped, 'finalizing').highlight).toBeNull();
+  });
+
+  it('flags products ordered beyond their cap', () => {
+    const state = productDemandState(item({ total_quantity: 25, cap_quantity: 20 }), 'open');
+    expect(state.overCap).toBe(true);
+    expect(state.highlight).toBe(0);
   });
 });
 

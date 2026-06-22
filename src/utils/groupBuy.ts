@@ -80,3 +80,69 @@ export function pendingUnits(item: GroupBuyProgressItem): number {
 export function resellableUnits(item: GroupBuyProgressItem): number | null {
   return remainingForProduct(item);
 }
+
+/** Group-buy lifecycle phase that drives which headline number the board shows. */
+export type BatchPhase = 'open' | 'finalizing' | 'finalized' | 'closed';
+
+/**
+ * A single product's demand, shaped for the phase-aware status board. Every count
+ * is non-negative; `cap`/`remaining`/`highlight` are `null` when the product is
+ * uncapped (unlimited). `highlight` + `highlightLabel` carry the one number the
+ * admin scans fastest in the current phase:
+ *   - open       → units still orderable under the cap ("Left")
+ *   - finalizing → units freed/available to hand to other buyers ("To take over")
+ *   - finalized/closed → confirmed units locked in ("Confirmed")
+ */
+export interface ProductDemandState {
+  product_id: string;
+  product_name: string | null;
+  /** Non-cancelled units ordered for this product. */
+  ordered: number;
+  confirmed: number;
+  pending: number;
+  cap: number | null;
+  /** Cap headroom (cap − ordered), or `null` when uncapped. Never negative. */
+  remaining: number | null;
+  /** Units freed by cancellations — a subset already inside `remaining`. */
+  freed: number;
+  /** Phase-relevant headline count; `null` when uncapped. */
+  highlight: number | null;
+  highlightLabel: string;
+  /** True when a capped product has been ordered beyond its cap. */
+  overCap: boolean;
+}
+
+function highlightLabelFor(phase: BatchPhase): string {
+  if (phase === 'open') return 'Left';
+  if (phase === 'finalizing') return 'To take over';
+  return 'Confirmed';
+}
+
+/**
+ * Collapse a raw progress item into the phase-aware view the status board needs.
+ * Pure: no dependency on React or the fetch layer, so the board math is unit
+ * testable in isolation.
+ */
+export function productDemandState(
+  item: GroupBuyProgressItem,
+  phase: BatchPhase,
+): ProductDemandState {
+  const ordered = Math.max(0, item.total_quantity ?? 0);
+  const confirmed = confirmedUnits(item);
+  const remaining = remainingForProduct(item);
+  const highlight =
+    phase === 'finalized' || phase === 'closed' ? confirmed : remaining;
+  return {
+    product_id: item.product_id,
+    product_name: item.product_name,
+    ordered,
+    confirmed,
+    pending: pendingUnits(item),
+    cap: item.cap_quantity ?? null,
+    remaining,
+    freed: freedUnits(item),
+    highlight,
+    highlightLabel: highlightLabelFor(phase),
+    overCap: item.cap_quantity != null && ordered > item.cap_quantity,
+  };
+}

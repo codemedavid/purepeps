@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeBatchKpis,
+  summarizeItemRevenue,
   summarizeCapFill,
   summarizeResale,
+  summarizeDemand,
   ordersNeedingAction,
   filterBatchOrders,
 } from './groupBuyOverview';
@@ -157,6 +159,101 @@ describe('computeBatchKpis', () => {
   });
 });
 
+// --- summarizeItemRevenue -------------------------------------------------
+
+describe('summarizeItemRevenue', () => {
+  it('returns an empty summary for no orders', () => {
+    expect(summarizeItemRevenue([])).toEqual({
+      rows: [],
+      totalUnitsOrdered: 0,
+      totalUnitsConfirmed: 0,
+      totalUnitsPending: 0,
+      totalGrossRevenue: 0,
+      totalCollectedRevenue: 0,
+    });
+  });
+
+  it('groups units and revenue per product across orders', () => {
+    const rows = summarizeItemRevenue([
+      order({
+        order_status: 'confirmed',
+        payment_status: 'paid',
+        order_items: [lineItem({ product_id: 'p1', quantity: 2, total: 2000 })],
+      }),
+      order({
+        order_status: 'new',
+        payment_status: 'pending',
+        order_items: [lineItem({ product_id: 'p1', quantity: 1, total: 1000 })],
+      }),
+    ]).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      product_id: 'p1',
+      orderCount: 2,
+      unitsOrdered: 3,
+      unitsConfirmed: 2,
+      unitsPending: 1,
+      grossRevenue: 3000,
+      collectedRevenue: 2000,
+    });
+  });
+
+  it('excludes cancelled orders entirely', () => {
+    const summary = summarizeItemRevenue([
+      order({ order_status: 'cancelled', payment_status: 'paid', order_items: [lineItem({ quantity: 5, total: 5000 })] }),
+    ]);
+    expect(summary.rows).toEqual([]);
+    expect(summary.totalGrossRevenue).toBe(0);
+  });
+
+  it('counts confirmed vs pending units by order status', () => {
+    const summary = summarizeItemRevenue([
+      order({ order_status: 'delivered', order_items: [lineItem({ product_id: 'p1', quantity: 4, total: 4000 })] }),
+      order({ order_status: 'new', order_items: [lineItem({ product_id: 'p1', quantity: 3, total: 3000 })] }),
+    ]);
+    expect(summary.rows[0].unitsConfirmed).toBe(4);
+    expect(summary.rows[0].unitsPending).toBe(3);
+  });
+
+  it('only counts paid orders toward collected revenue', () => {
+    const summary = summarizeItemRevenue([
+      order({ payment_status: 'paid', order_status: 'confirmed', order_items: [lineItem({ total: 1500 })] }),
+      order({ payment_status: 'pending', order_status: 'new', order_items: [lineItem({ total: 500 })] }),
+    ]);
+    expect(summary.totalGrossRevenue).toBe(2000);
+    expect(summary.totalCollectedRevenue).toBe(1500);
+  });
+
+  it('falls back to price × quantity when a line total is missing', () => {
+    const summary = summarizeItemRevenue([
+      order({ order_items: [lineItem({ quantity: 3, price: 250, total: null as unknown as number })] }),
+    ]);
+    expect(summary.rows[0].grossRevenue).toBe(750);
+  });
+
+  it('counts an order once per product even if the product has multiple lines', () => {
+    const summary = summarizeItemRevenue([
+      order({
+        order_items: [
+          lineItem({ product_id: 'p1', variation_id: 'v1', quantity: 1, total: 1000 }),
+          lineItem({ product_id: 'p1', variation_id: 'v2', quantity: 2, total: 2000 }),
+        ],
+      }),
+    ]);
+    expect(summary.rows[0].orderCount).toBe(1);
+    expect(summary.rows[0].unitsOrdered).toBe(3);
+    expect(summary.rows[0].grossRevenue).toBe(3000);
+  });
+
+  it('sorts product rows by name', () => {
+    const summary = summarizeItemRevenue([
+      order({ order_items: [lineItem({ product_id: 'p2', product_name: 'Zinc' })] }),
+      order({ order_items: [lineItem({ product_id: 'p1', product_name: 'Acet' })] }),
+    ]);
+    expect(summary.rows.map((r) => r.product_name)).toEqual(['Acet', 'Zinc']);
+  });
+});
+
 // --- summarizeCapFill -----------------------------------------------------
 
 describe('summarizeCapFill', () => {
@@ -245,6 +342,46 @@ describe('summarizeResale', () => {
     expect(summary.itemsToResell).toHaveLength(2);
     expect(summary.totalResellable).toBe(3); // 2 + 1
     expect(summary.totalFreed).toBe(2);
+  });
+});
+
+// --- summarizeDemand ------------------------------------------------------
+
+describe('summarizeDemand', () => {
+  it('includes only products with demand or a cap, sorted by name', () => {
+    const summary = summarizeDemand(
+      [
+        capItem({ product_id: 'p1', product_name: 'Zinc', total_quantity: 4, cap_quantity: null }),
+        capItem({ product_id: 'p2', product_name: 'Acet', total_quantity: 0, cap_quantity: 10 }),
+        capItem({ product_id: 'p3', product_name: 'Idle', total_quantity: 0, cap_quantity: null }),
+      ],
+      'open',
+    );
+    expect(summary.rows.map((r) => r.product_name)).toEqual(['Acet', 'Zinc']);
+  });
+
+  it('rolls up totals and uses the open-phase "Left" headline', () => {
+    const summary = summarizeDemand(
+      [
+        capItem({ product_id: 'p1', total_quantity: 18, confirmed_quantity: 12, cap_quantity: 20 }),
+        capItem({ product_id: 'p2', total_quantity: 5, confirmed_quantity: 5, cap_quantity: 10 }),
+      ],
+      'open',
+    );
+    expect(summary.highlightLabel).toBe('Left');
+    expect(summary.totalOrdered).toBe(23);
+    expect(summary.totalConfirmed).toBe(17);
+    expect(summary.totalPending).toBe(6);
+    expect(summary.totalHighlight).toBe(7); // (20-18) + (10-5)
+  });
+
+  it('excludes uncapped products from the headline total', () => {
+    const summary = summarizeDemand(
+      [capItem({ product_id: 'p1', total_quantity: 9, cap_quantity: null })],
+      'open',
+    );
+    expect(summary.totalHighlight).toBe(0);
+    expect(summary.rows[0].highlight).toBeNull();
   });
 });
 
