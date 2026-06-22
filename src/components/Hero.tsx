@@ -1,20 +1,54 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Lock } from 'lucide-react';
 import BlossomLogo from './BlossomLogo';
+import { formatDateRange, getCountdown } from '../utils/groupBuySchedule';
 
 interface HeroProps {
   onShopAll: () => void;
   onGetAccess: () => void;
+  /** Open batch number for the badge (e.g. 42 → "№042"). */
+  batchNumber?: number | null;
+  /** Announced start of the group-buy window (TIMESTAMPTZ string). */
+  startsAt?: string | null;
+  /** Announced finish/deadline of the group-buy window (TIMESTAMPTZ string). */
+  endsAt?: string | null;
+  /** Whether a batch is currently accepting orders. */
+  isBatchOpen?: boolean;
 }
 
 const TRUST = ['≥99% HPLC', '3rd-party CoA', 'Cold-chain shipped', 'Research use only'];
 
-function Hero({ onShopAll, onGetAccess }: HeroProps) {
+// Tick the countdown once a minute — minute precision is plenty for a "2d 14h"
+// style label and avoids a per-second re-render.
+const COUNTDOWN_TICK_MS = 60 * 1000;
+
+const formatBatchLabel = (batchNumber?: number | null): string =>
+  batchNumber != null ? `№${String(batchNumber).padStart(3, '0')}` : '';
+
+function Hero({ onShopAll, onGetAccess, batchNumber, startsAt, endsAt, isBatchOpen = true }: HeroProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     setIsVisible(true);
   }, []);
+
+  // Keep the live countdown current without a heavy per-second loop.
+  useEffect(() => {
+    if (!endsAt) return;
+    const id = setInterval(() => setNow(new Date()), COUNTDOWN_TICK_MS);
+    return () => clearInterval(id);
+  }, [endsAt]);
+
+  const batchLabel = formatBatchLabel(batchNumber);
+  const dateRange = formatDateRange(startsAt, endsAt);
+  const countdown = getCountdown(endsAt, now);
+  const countdownLabel = countdown
+    ? countdown.expired
+      ? 'closed'
+      : `closes in ${countdown.label}`
+    : null;
+  const statusLabel = isBatchOpen && !countdown?.expired ? 'open now' : 'closed';
 
   return (
     <div className="bg-sakura-canvas font-display">
@@ -36,7 +70,7 @@ function Hero({ onShopAll, onGetAccess }: HeroProps) {
               <span className="w-[7px] h-[7px] rounded-full bg-sakura-primary" />
               <span className="absolute inset-0 rounded-full bg-sakura-primary animate-pp-pulse" />
             </span>
-            Group Buy №042 · open now
+            {batchLabel ? `Group Buy ${batchLabel} · ${statusLabel}` : `Group Buy · ${statusLabel}`}
           </div>
 
           <h1 className="m-0 text-5xl md:text-7xl font-extrabold tracking-[-0.045em] text-sakura-ink leading-[0.97]">
@@ -66,13 +100,17 @@ function Hero({ onShopAll, onGetAccess }: HeroProps) {
             </button>
           </div>
 
-          <div className="flex flex-wrap justify-center items-center gap-3.5 mt-9 font-mono text-xs tracking-[0.05em] uppercase text-sakura-faint">
-            <span className="text-sakura-deep font-semibold">№042</span>
-            <span className="w-1 h-1 rounded-full bg-sakura-primary" />
-            <span>38/50 claimed</span>
-            <span className="w-1 h-1 rounded-full bg-sakura-primary" />
-            <span>closes 2d 14h</span>
-          </div>
+          {(batchLabel || dateRange || countdownLabel) && (
+            <div className="flex flex-wrap justify-center items-center gap-3.5 mt-9 font-mono text-xs tracking-[0.05em] uppercase text-sakura-faint">
+              {batchLabel && <span className="text-sakura-deep font-semibold">{batchLabel}</span>}
+              {batchLabel && dateRange && <span className="w-1 h-1 rounded-full bg-sakura-primary" />}
+              {dateRange && <span>{dateRange}</span>}
+              {(batchLabel || dateRange) && countdownLabel && (
+                <span className="w-1 h-1 rounded-full bg-sakura-primary" />
+              )}
+              {countdownLabel && <span>{countdownLabel}</span>}
+            </div>
+          )}
         </div>
       </div>
 

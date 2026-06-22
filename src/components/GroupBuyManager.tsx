@@ -157,9 +157,9 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   // ---- Open-batch modal ----
   const handleOpenBatch = () => setOpenModal({ open: true, closesCurrent: false });
   const handleOpenNewBatch = () => setOpenModal({ open: true, closesCurrent: true });
-  const submitOpenBatch = ({ name, accessFee }: OpenBatchValues) => {
+  const submitOpenBatch = ({ name, accessFee, startsAt, endsAt }: OpenBatchValues) => {
     setOpenModal((prev) => ({ ...prev, open: false }));
-    void runAction(() => openBatch(name ?? undefined, accessFee));
+    void runAction(() => openBatch(name ?? undefined, accessFee, startsAt, endsAt));
   };
 
   // ---- Lifecycle handlers (confirmation lives in the lifecycle bar) ----

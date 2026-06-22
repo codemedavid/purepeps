@@ -79,6 +79,9 @@ function MainApp() {
                         onGetAccess={() => handleViewChange('access')}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
+                        batchNumber={groupBuy.batch?.batch_number ?? null}
+                        batchStartsAt={groupBuy.batch?.starts_at ?? null}
+                        batchEndsAt={groupBuy.batch?.ends_at ?? null}
                     />
                 )}
 

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Gift, Upload, Check, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { uploadToImageKit } from '../../lib/imagekit';
 import { useGroupBuyClaims } from '../../hooks/useGroupBuyClaims';
 import type { GroupBuyRemainingItem } from '../../types';
 
-const PROOF_BUCKET = 'payment-proofs';
+const PROOF_FOLDER = 'payment-proofs';
 
 // Allowlisted image MIME types and the canonical extension we store for each.
 // The extension is derived from the validated MIME type, never the caller-controlled
@@ -109,17 +109,19 @@ export function LeftoverClaimPanel({ batchId, orderNumber, onClaimed }: Leftover
       throw new Error('Payment proof must be 10 MB or smaller.');
     }
 
-    const path = `claims/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(PROOF_BUCKET)
-      .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-    if (uploadError) {
-      throw new Error(`Failed to upload payment proof: ${uploadError.message}`);
+    try {
+      const { url } = await uploadToImageKit({
+        file,
+        fileName,
+        folder: `${PROOF_FOLDER}/claims`,
+      });
+      return url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      throw new Error(`Failed to upload payment proof: ${message}`);
     }
-
-    const { data } = supabase.storage.from(PROOF_BUCKET).getPublicUrl(path);
-    return data.publicUrl;
   }, []);
 
   const handleSubmit = useCallback(async () => {

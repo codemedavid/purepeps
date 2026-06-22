@@ -7,6 +7,10 @@ export interface OpenBatchValues {
   name: string | null;
   /** Access fee in PHP (≥ 0), or null to fall back to the server default. */
   accessFee: number | null;
+  /** Announced start date ('YYYY-MM-DD'), or null for an open-ended start. */
+  startsAt: string | null;
+  /** Announced finish date ('YYYY-MM-DD'), or null for no deadline. */
+  endsAt: string | null;
 }
 
 interface OpenBatchModalProps {
@@ -37,6 +41,8 @@ export function OpenBatchModal({
   const containerRef = useDialogA11y<HTMLDivElement>(open, onCancel);
   const [name, setName] = useState('');
   const [fee, setFee] = useState(String(defaultAccessFee));
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Reset the form ONLY when the modal opens — never on an unrelated parent
@@ -46,6 +52,8 @@ export function OpenBatchModal({
     if (!open) return;
     setName('');
     setFee(String(defaultAccessFee));
+    setStartsAt('');
+    setEndsAt('');
     setError(null);
   }, [open, defaultAccessFee]);
 
@@ -62,7 +70,20 @@ export function OpenBatchModal({
       }
       accessFee = value;
     }
-    onSubmit({ name: name.trim() ? name.trim() : null, accessFee });
+
+    const start = startsAt.trim() ? startsAt.trim() : null;
+    const end = endsAt.trim() ? endsAt.trim() : null;
+    if (start && end && end <= start) {
+      setError('Finish date must be after the start date.');
+      return;
+    }
+
+    onSubmit({
+      name: name.trim() ? name.trim() : null,
+      accessFee,
+      startsAt: start,
+      endsAt: end,
+    });
   };
 
   return (
@@ -141,8 +162,53 @@ export function OpenBatchModal({
               Members pay this once to unlock checkout for this batch. Leave blank to use the
               server default.
             </p>
-            {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor={`${titleId}-starts`}
+                className="block text-xs font-semibold text-gray-700 mb-1"
+              >
+                Start date <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                id={`${titleId}-starts`}
+                type="date"
+                value={startsAt}
+                onChange={(e) => {
+                  setStartsAt(e.target.value);
+                  setError(null);
+                }}
+                disabled={busy}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${titleId}-ends`}
+                className="block text-xs font-semibold text-gray-700 mb-1"
+              >
+                Finish date <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                id={`${titleId}-ends`}
+                type="date"
+                value={endsAt}
+                onChange={(e) => {
+                  setEndsAt(e.target.value);
+                  setError(null);
+                }}
+                disabled={busy}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-300 disabled:opacity-50"
+              />
+            </div>
+            <p className="col-span-2 -mt-1 text-[11px] text-gray-500">
+              Shown to members in the storefront hero as the group-buy window and live countdown.
+            </p>
+          </div>
+
+          {error && <p className="text-xs font-medium text-red-600">{error}</p>}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button

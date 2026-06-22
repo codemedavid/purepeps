@@ -162,6 +162,10 @@ export interface GroupBuyBatch {
   fulfillment_stage: FulfillmentStage | null;
   /** Admin-set paid access fee for this batch (PHP). Members pay this per batch. */
   access_fee?: number;
+  /** Admin-announced start of the group buy window (TIMESTAMPTZ). Display-only. */
+  starts_at?: string | null;
+  /** Admin-announced finish/deadline of the group buy window (TIMESTAMPTZ). Display-only. */
+  ends_at?: string | null;
 }
 
 export interface GroupBuyCap {
@@ -187,7 +191,16 @@ export interface GroupBuyProgressItem {
 export interface GroupBuyProgress {
   batch: Pick<
     GroupBuyBatch,
-    'id' | 'batch_number' | 'name' | 'status' | 'opened_at' | 'closed_at' | 'finalized_at' | 'fulfillment_stage'
+    | 'id'
+    | 'batch_number'
+    | 'name'
+    | 'status'
+    | 'opened_at'
+    | 'closed_at'
+    | 'finalized_at'
+    | 'fulfillment_stage'
+    | 'starts_at'
+    | 'ends_at'
   > | null;
   items: GroupBuyProgressItem[];
 }

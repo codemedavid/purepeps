@@ -15,6 +15,9 @@ interface MenuProps {
   onGetAccess: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
+  batchNumber?: number | null;
+  batchStartsAt?: string | null;
+  batchEndsAt?: string | null;
 }
 
 const Menu: React.FC<MenuProps> = ({
@@ -25,6 +28,9 @@ const Menu: React.FC<MenuProps> = ({
   onGetAccess,
   groupBuyItems = [],
   isBatchOpen = true,
+  batchNumber = null,
+  batchStartsAt = null,
+  batchEndsAt = null,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -66,7 +72,14 @@ const Menu: React.FC<MenuProps> = ({
       )}
 
       <div className="min-h-screen bg-sakura-canvas font-display">
-        <Hero onShopAll={scrollToProducts} onGetAccess={onGetAccess} />
+        <Hero
+          onShopAll={scrollToProducts}
+          onGetAccess={onGetAccess}
+          batchNumber={batchNumber}
+          startsAt={batchStartsAt}
+          endsAt={batchEndsAt}
+          isBatchOpen={isBatchOpen}
+        />
 
         <div className="max-w-[1180px] mx-auto px-6 pb-10" ref={productsRef}>
           {/* Access bar — shown until the member is verified */}

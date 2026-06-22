@@ -96,10 +96,32 @@ export const useGroupBuy = () => {
   }, [refresh]);
 
   const openBatch = useCallback(
-    async (name?: string, accessFee?: number | null) => {
+    async (
+      name?: string,
+      accessFee?: number | null,
+      startsAt?: string | null,
+      endsAt?: string | null,
+    ) => {
       const { error: rpcError } = await supabase.rpc('open_group_buy_batch', {
         p_name: name?.trim() ? name.trim() : null,
         p_access_fee: accessFee ?? null,
+        p_starts_at: startsAt ?? null,
+        p_ends_at: endsAt ?? null,
+      });
+      if (rpcError) throw rpcError;
+      await refresh();
+    },
+    [refresh],
+  );
+
+  // Edit the announced window (starts_at / ends_at) on an existing batch.
+  // Either bound may be null (open-ended start, or no deadline).
+  const setSchedule = useCallback(
+    async (batchId: string, startsAt: string | null, endsAt: string | null) => {
+      const { error: rpcError } = await supabase.rpc('set_group_buy_schedule', {
+        p_id: batchId,
+        p_starts_at: startsAt,
+        p_ends_at: endsAt,
       });
       if (rpcError) throw rpcError;
       await refresh();
@@ -226,6 +248,7 @@ export const useGroupBuy = () => {
     error,
     refresh,
     openBatch,
+    setSchedule,
     closeBatch,
     startFinalizing,
     finalizeBatch,
