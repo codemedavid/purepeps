@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Award, CheckCircle, X, ExternalLink, Download, Sparkles, ArrowLeft, Copy, Check } from 'lucide-react';
+import { Shield, Award, CheckCircle, X, ExternalLink, Download, Sparkles, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCOAPageSetting } from '../hooks/useCOAPageSetting';
 
@@ -16,6 +16,9 @@ interface COAReport {
   featured: boolean;
   laboratory: string;
 }
+
+const isPdf = (url?: string | null): boolean =>
+  !!url && url.split('?')[0].toLowerCase().endsWith('.pdf');
 
 const COA: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -147,15 +150,23 @@ const COA: React.FC = () => {
                   className="relative cursor-pointer group"
                   onClick={() => setSelectedImage(report.image_url)}
                 >
-                  <img
-                    src={report.image_url}
-                    alt={`${report.product_name} Certificate of Analysis`}
-                    className="w-full h-48 sm:h-56 md:h-64 lg:h-80 object-cover object-top"
-                    onError={(e) => {
-                      // Fallback if image doesn't exist
-                      (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23f0f9ff" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" fill="%230ea5e9" font-size="20" font-family="Arial"%3ECOA Image Coming Soon%3C/text%3E%3C/svg%3E';
-                    }}
-                  />
+                  {isPdf(report.image_url) ? (
+                    <div className="w-full h-48 sm:h-56 md:h-64 lg:h-80 bg-gradient-to-br from-sky-50 to-blue-50 flex flex-col items-center justify-center gap-2">
+                      <FileText className="w-16 h-16 md:w-20 md:h-20 text-sky-400" />
+                      <p className="text-sm md:text-base font-bold text-sky-600">PDF Lab Report</p>
+                      <p className="text-xs text-gray-500">Tap to view full report</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={report.image_url}
+                      alt={`${report.product_name} Certificate of Analysis`}
+                      className="w-full h-48 sm:h-56 md:h-64 lg:h-80 object-cover object-top"
+                      onError={(e) => {
+                        // Fallback if image doesn't exist
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23f0f9ff" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" fill="%230ea5e9" font-size="20" font-family="Arial"%3ECOA Image Coming Soon%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                  )}
                   <div className="absolute inset-0 bg-sky-600/0 group-hover:bg-sky-600/10 transition-all duration-300 flex items-center justify-center">
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 backdrop-blur-sm px-3 py-1.5 md:px-4 md:py-2 rounded-xl md:rounded-2xl shadow-lg">
                       <p className="text-xs md:text-sm font-bold text-sky-600 flex items-center gap-1.5 md:gap-2">
@@ -229,22 +240,20 @@ const COA: React.FC = () => {
                   <div className="space-y-2 md:space-y-3">
                     {(() => {
                       const isJanoshik = !report.laboratory || report.laboratory.toLowerCase().includes('janoshik');
-                      const verificationUrl = isJanoshik
-                        ? `https://www.janoshik.com/verify/?key=${report.verification_key}`
-                        : 'https://chromate.org';
+
+                      // Only Janoshik reports get a verify button; the Chromate
+                      // verify button has been removed.
+                      if (!isJanoshik) return null;
 
                       return (
                         <a
-                          href={verificationUrl}
+                          href={`https://www.janoshik.com/verify/?key=${report.verification_key}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`w-full flex items-center justify-center gap-1.5 md:gap-2 text-white px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl text-sm md:text-base font-medium transition-all duration-300 shadow-lg hover:shadow-xl ${isJanoshik
-                            ? 'bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600'
-                            : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-                            }`}
+                          className="w-full flex items-center justify-center gap-1.5 md:gap-2 text-white px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl text-sm md:text-base font-medium transition-all duration-300 shadow-lg hover:shadow-xl bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600"
                         >
                           <Shield className="w-4 h-4 md:w-5 md:h-5" />
-                          {isJanoshik ? 'Verify on Janoshik' : 'Verify on Chromate'}
+                          Verify on Janoshik
                         </a>
                       );
                     })()}
@@ -317,12 +326,31 @@ const COA: React.FC = () => {
             >
               <X className="w-5 h-5 md:w-6 md:h-6" />
             </button>
-            <img
-              src={selectedImage}
-              alt="Certificate of Analysis"
-              className="w-full h-auto rounded-2xl md:rounded-3xl shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
+            {isPdf(selectedImage) ? (
+              <div className="bg-white rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <iframe
+                  src={selectedImage}
+                  title="Certificate of Analysis"
+                  className="w-full h-[70vh] md:h-[80vh]"
+                />
+                <a
+                  href={selectedImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-4 py-3 text-sm md:text-base font-medium text-sky-600 hover:text-sky-700 hover:bg-sky-50 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4 md:w-5 md:h-5" />
+                  Open PDF in new tab
+                </a>
+              </div>
+            ) : (
+              <img
+                src={selectedImage}
+                alt="Certificate of Analysis"
+                className="w-full h-auto rounded-2xl md:rounded-3xl shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
           </div>
         </div>
       )}

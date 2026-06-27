@@ -18,6 +18,7 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
   heif: 'image/heif',
   ico: 'image/x-icon',
   avif: 'image/avif',
+  pdf: 'application/pdf',
 };
 
 const VALID_EXTENSIONS = Object.keys(EXTENSION_MIME_MAP);
@@ -44,11 +45,11 @@ export const useImageUpload = (folder: string = 'menu-images') => {
       // files often have an empty MIME type, so the extension is the primary check.
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       const hasValidExtension = !!fileExtension && VALID_EXTENSIONS.includes(fileExtension);
-      const hasValidMimeType = !file.type || file.type.startsWith('image/');
+      const hasValidMimeType = !file.type || file.type.startsWith('image/') || file.type === 'application/pdf';
 
       if (!hasValidExtension && !hasValidMimeType) {
         throw new Error(
-          `Please upload a valid image file. Supported formats: JPG, PNG, WebP, GIF, BMP, TIFF, SVG, HEIC, and more. File type: ${file.type || 'unknown'}, Extension: ${fileExtension || 'none'}`,
+          `Please upload a valid image or PDF file. Supported formats: JPG, PNG, WebP, GIF, BMP, TIFF, SVG, HEIC, PDF, and more. File type: ${file.type || 'unknown'}, Extension: ${fileExtension || 'none'}`,
         );
       }
 
