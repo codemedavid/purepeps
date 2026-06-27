@@ -401,12 +401,13 @@ const COAManager: React.FC<COAManagerProps> = ({ onBack }) => {
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  COA Report Image *
+                  COA Report Image or PDF *
                 </label>
                 <ImageUpload
                   currentImage={formData.image_url}
                   onImageChange={(url) => setFormData({ ...formData, image_url: url || '' })}
                   folder="coa-images"
+                  allowPdf
                 />
               </div>
 

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, FileText, ExternalLink } from 'lucide-react';
 import { useImageUpload } from '../hooks/useImageUpload';
 
 interface ImageUploadProps {
@@ -7,16 +7,22 @@ interface ImageUploadProps {
   onImageChange: (imageUrl: string | undefined) => void;
   className?: string;
   folder?: string;
+  allowPdf?: boolean;
 }
+
+const isPdfUrl = (url?: string | null): boolean =>
+  !!url && url.split('?')[0].toLowerCase().endsWith('.pdf');
 
 const ImageUpload: React.FC<ImageUploadProps> = ({
   currentImage,
   onImageChange,
   className = '',
-  folder = 'menu-images'
+  folder = 'menu-images',
+  allowPdf = false
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadImage, deleteImage, uploading, uploadProgress } = useImageUpload(folder);
+  const currentIsPdf = isPdfUrl(currentImage);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -56,20 +62,36 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     <div className={`space-y-4 ${className}`}>
       {currentImage ? (
         <div className="relative">
-          <img
-            src={currentImage}
-            alt="Preview"
-            className="w-full max-w-2xl object-contain rounded-2xl border-2 border-sky-200 shadow-lg hover:shadow-xl transition-all"
-            loading="lazy"
-            decoding="async"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-            onLoad={(e) => {
-              e.currentTarget.style.opacity = '1';
-            }}
-            style={{ opacity: 0 }}
-          />
+          {currentIsPdf ? (
+            <div className="w-full max-w-2xl rounded-2xl border-2 border-sky-200 shadow-lg bg-sky-50/50 p-6 flex flex-col items-center justify-center gap-3">
+              <FileText className="h-16 w-16 text-sky-400" />
+              <p className="text-sm font-medium text-gray-700">PDF document uploaded</p>
+              <a
+                href={currentImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-700"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open PDF
+              </a>
+            </div>
+          ) : (
+            <img
+              src={currentImage}
+              alt="Preview"
+              className="w-full max-w-2xl object-contain rounded-2xl border-2 border-sky-200 shadow-lg hover:shadow-xl transition-all"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+              onLoad={(e) => {
+                e.currentTarget.style.opacity = '1';
+              }}
+              style={{ opacity: 0 }}
+            />
+          )}
           <button
             type="button"
             onClick={handleRemoveImage}
@@ -98,9 +120,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
           ) : (
             <>
               <ImageIcon className="h-16 w-16 text-sky-400 mb-4" />
-              <p className="text-lg font-medium text-gray-700 mb-2">Click to upload product image</p>
+              <p className="text-lg font-medium text-gray-700 mb-2">
+                {allowPdf ? 'Click to upload image or PDF' : 'Click to upload product image'}
+              </p>
               <p className="text-sm text-gray-500 mb-1">or drag and drop</p>
-              <p className="text-xs text-gray-400">All image formats (JPG, PNG, WebP, GIF, BMP, TIFF, SVG, HEIC) - max 10MB</p>
+              <p className="text-xs text-gray-400">
+                {allowPdf
+                  ? 'Images (JPG, PNG, WebP, ...) or PDF - max 10MB'
+                  : 'All image formats (JPG, PNG, WebP, GIF, BMP, TIFF, SVG, HEIC) - max 10MB'}
+              </p>
             </>
           )}
         </div>
@@ -109,7 +137,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={allowPdf ? 'image/*,application/pdf' : 'image/*'}
         onChange={handleFileSelect}
         className="hidden"
         disabled={uploading}
