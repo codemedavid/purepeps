@@ -11,6 +11,7 @@ import GetAccess from './components/GetAccess';
 import FloatingCartButton from './components/FloatingCartButton';
 import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useAccess } from './hooks/useAccess';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
 
@@ -166,17 +167,19 @@ function App() {
     return (
         <Router>
             <PostHogPageviewTracker />
-            <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                    <Route path="/" element={<MainApp />} />
-                    <Route path="/coa" element={<COA />} />
-                    <Route path="/faq" element={<FAQ />} />
-                    <Route path="/calculator" element={<PeptideCalculator />} />
-                    <Route path="/track-order" element={<OrderTracking />} />
-                    <Route path="/protocols" element={<ProtocolGuide />} />
-                    <Route path="/admin" element={<AdminDashboard />} />
-                </Routes>
-            </Suspense>
+            <ErrorBoundary>
+                <Suspense fallback={<LoadingSpinner />}>
+                    <Routes>
+                        <Route path="/" element={<MainApp />} />
+                        <Route path="/coa" element={<COA />} />
+                        <Route path="/faq" element={<FAQ />} />
+                        <Route path="/calculator" element={<PeptideCalculator />} />
+                        <Route path="/track-order" element={<OrderTracking />} />
+                        <Route path="/protocols" element={<ProtocolGuide />} />
+                        <Route path="/admin" element={<AdminDashboard />} />
+                    </Routes>
+                </Suspense>
+            </ErrorBoundary>
         </Router>
     );
 }
