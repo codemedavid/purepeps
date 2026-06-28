@@ -5,6 +5,8 @@ import ProductDetailModal from './ProductDetailModal';
 import type { Product, ProductVariation, CartItem, GroupBuyProgressItem } from '../types';
 import { Search, Lock, ShieldCheck } from 'lucide-react';
 import { findProgressItem } from '../utils/groupBuy';
+import { groupProductsIntoSections } from '../utils/catalogSections';
+import { useCategories } from '../hooks/useCategories';
 
 interface MenuProps {
   menuItems: Product[];
@@ -39,6 +41,7 @@ const Menu: React.FC<MenuProps> = ({
   batchStartsAt = null,
   batchEndsAt = null,
 }) => {
+  const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const productsRef = useRef<HTMLDivElement | null>(null);
@@ -49,16 +52,30 @@ const Menu: React.FC<MenuProps> = ({
       product.description.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (a.featured && !b.featured) return -1;
-    if (!a.featured && b.featured) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  // Split the catalog into headed sections by category so each group reads as its
+  // own block. Sorting (featured-first, then alphabetical) happens per section.
+  const sections = groupProductsIntoSections(filteredProducts, categories);
+  const visibleCount = sections.reduce((sum, section) => sum + section.products.length, 0);
 
   const getCartQuantity = (productId: string) =>
     cartItems
       .filter((item) => item.product.id === productId)
       .reduce((sum, item) => sum + item.quantity, 0);
+
+  const renderProductCard = (product: Product) => (
+    <MenuItemCard
+      key={product.id}
+      product={product}
+      cartQuantity={getCartQuantity(product.id)}
+      onProductClick={setSelectedProduct}
+      onAddToCart={addToCart}
+      isVerified={isVerified}
+      canCheckout={canAccessCategory ? canAccessCategory(product.category) : isVerified}
+      onGetAccess={onGetAccess}
+      groupBuyItem={findProgressItem(groupBuyItems, product.id)}
+      isBatchOpen={isBatchOpen}
+    />
+  );
 
   const scrollToProducts = () =>
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -134,8 +151,8 @@ const Menu: React.FC<MenuProps> = ({
             </div>
           </div>
 
-          {/* Grid */}
-          {isLoading && sortedProducts.length === 0 ? (
+          {/* Sectioned grid — one headed block per category */}
+          {isLoading && visibleCount === 0 ? (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5" aria-busy="true">
               {Array.from({ length: 6 }).map((_, index) => (
                 <div
@@ -144,25 +161,28 @@ const Menu: React.FC<MenuProps> = ({
                 />
               ))}
             </div>
-          ) : sortedProducts.length === 0 ? (
+          ) : visibleCount === 0 ? (
             <div className="text-center py-20 text-sakura-faint">
               No products match {searchQuery ? `"${searchQuery}"` : 'your search'}.
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              {sortedProducts.map((product) => (
-                <MenuItemCard
-                  key={product.id}
-                  product={product}
-                  cartQuantity={getCartQuantity(product.id)}
-                  onProductClick={setSelectedProduct}
-                  onAddToCart={addToCart}
-                  isVerified={isVerified}
-                  canCheckout={canAccessCategory ? canAccessCategory(product.category) : isVerified}
-                  onGetAccess={onGetAccess}
-                  groupBuyItem={findProgressItem(groupBuyItems, product.id)}
-                  isBatchOpen={isBatchOpen}
-                />
+            <div className="space-y-12">
+              {sections.map((section) => (
+                <section key={section.id} aria-label={section.headline}>
+                  {/* Section headline with a divider rule and product count */}
+                  <div className="flex items-center gap-4 mb-5">
+                    <h3 className="m-0 text-xl sm:text-2xl font-extrabold tracking-[-0.03em] text-sakura-ink whitespace-nowrap">
+                      {section.headline}
+                    </h3>
+                    <span className="flex-1 h-px bg-sakura-ink/10" aria-hidden="true" />
+                    <span className="font-mono text-[11px] tracking-[0.03em] text-sakura-soft">
+                      {section.products.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                    {section.products.map(renderProductCard)}
+                  </div>
+                </section>
               ))}
             </div>
           )}
