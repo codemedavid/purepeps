@@ -8,6 +8,8 @@ import { findProgressItem } from '../utils/groupBuy';
 
 interface MenuProps {
   menuItems: Product[];
+  /** True while the catalog is still being fetched, so we show a loader instead of an empty state. */
+  isLoading?: boolean;
   addToCart: (product: Product, variation?: ProductVariation, quantity?: number) => void;
   cartItems: CartItem[];
   updateQuantity: (index: number, quantity: number) => void;
@@ -25,6 +27,7 @@ interface MenuProps {
 
 const Menu: React.FC<MenuProps> = ({
   menuItems,
+  isLoading = false,
   addToCart,
   cartItems,
   isVerified,
@@ -132,7 +135,16 @@ const Menu: React.FC<MenuProps> = ({
           </div>
 
           {/* Grid */}
-          {sortedProducts.length === 0 ? (
+          {isLoading && sortedProducts.length === 0 ? (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="rounded-[18px] bg-sakura-ink/5 animate-pulse aspect-[3/4]"
+                />
+              ))}
+            </div>
+          ) : sortedProducts.length === 0 ? (
             <div className="text-center py-20 text-sakura-faint">
               No products match {searchQuery ? `"${searchQuery}"` : 'your search'}.
             </div>

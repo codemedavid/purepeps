@@ -28,7 +28,7 @@ import { useMenu } from './hooks/useMenu';
 
 function MainApp() {
     const cart = useCart();
-    const { menuItems } = useMenu();
+    const { menuItems, loading: menuLoading } = useMenu();
     const access = useAccess();
     const groupBuy = useGroupBuyProgress();
     // While progress is still loading we don't yet know if a batch is open; assume
@@ -78,6 +78,7 @@ function MainApp() {
                 {currentView === 'menu' && (
                     <Menu
                         menuItems={filteredProducts}
+                        isLoading={menuLoading}
                         addToCart={cart.addToCart}
                         cartItems={cart.cartItems}
                         updateQuantity={cart.updateQuantity}
