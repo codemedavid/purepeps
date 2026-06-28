@@ -10,6 +10,17 @@ export const ACCESS_FEE_PHP = 250;
 /** localStorage key holding the verified member email (set after admin approval). */
 export const ACCESS_EMAIL_KEY = 'pp_access_email';
 
+/**
+ * localStorage key holding an email that has PAID but is still awaiting approval.
+ * Set when a member submits an access request so the storefront can auto-resolve
+ * it to 'approved' in the background (mount + focus + poll) and unlock checkout
+ * immediately, without the member manually re-entering their email to verify.
+ */
+export const PENDING_ACCESS_EMAIL_KEY = 'pp_pending_email';
+
+/** How often to re-check a pending email's approval status while it's unresolved. */
+export const ACCESS_POLL_INTERVAL_MS = 10_000;
+
 /** Persisted status of an individual access request row. */
 export type AccessStatus = 'pending' | 'approved' | 'rejected';
 
@@ -81,4 +92,26 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmail(email: string): boolean {
   return EMAIL_RE.test(email.trim());
+}
+
+/**
+ * What to do with a remembered pending email after re-checking its grant status:
+ *   promote — now approved: cache it as the verified member, stop watching
+ *   keep    — still awaiting admin review: keep watching
+ *   renew   — approved on a prior batch only: hand off to the renewal prompt
+ *   clear   — rejected or unknown: forget it, stop watching
+ */
+export type PendingResolution = 'promote' | 'keep' | 'renew' | 'clear';
+
+export function resolvePendingStatus(status: AccessGateStatus): PendingResolution {
+  switch (status) {
+    case 'approved':
+      return 'promote';
+    case 'pending':
+      return 'keep';
+    case 'renew':
+      return 'renew';
+    default:
+      return 'clear';
+  }
 }

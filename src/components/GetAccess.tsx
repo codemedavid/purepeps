@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Clock, Copy, Lock, RefreshCw, ShieldCheck } from 'lucide-react';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useAccessRequests } from '../hooks/useAccessRequests';
@@ -15,13 +15,24 @@ interface GetAccessProps {
   onVerified: () => void;
   /** Lifted from MainApp's single useAccess() instance so verifying here unlocks the gated UI in-session. */
   verifyEmail: (candidate: string) => Promise<VerifyResult>;
+  /** Remember a just-paid email so its approval auto-unlocks checkout without a manual re-verify. */
+  watchPendingEmail: (candidate: string) => void;
+  /** True once the member's access is approved — drives auto-advance from the pending screen. */
+  isVerified: boolean;
   /** Set when a returning member was approved on a prior batch but not the open one. */
   renewalEmail?: string | null;
 }
 
 const LABEL = 'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-sakura-soft';
 
-function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessProps) {
+function GetAccess({
+  onBack,
+  onVerified,
+  verifyEmail,
+  watchPendingEmail,
+  isVerified,
+  renewalEmail,
+}: GetAccessProps) {
   const { paymentMethods, loading: methodsLoading } = usePaymentMethods();
   const { submitRequest } = useAccessRequests();
   const { info: accessInfo } = useActiveAccess();
@@ -112,12 +123,21 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
     setSubmitting(false);
 
     if (result.success) {
+      // Remember the paid email so approval auto-unlocks checkout in the
+      // background — the member never has to come back and re-verify by hand.
+      watchPendingEmail(email);
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setFormError(result.error ?? 'Something went wrong. Please try again.');
     }
   };
+
+  // The moment access is approved while the member sits on the pending screen,
+  // jump them straight to checkout — the goal is to order immediately.
+  useEffect(() => {
+    if (submitted && isVerified) onVerified();
+  }, [submitted, isVerified, onVerified]);
 
   // ---- PENDING STATE ----------------------------------------------------
   if (submitted) {
@@ -130,8 +150,9 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
           Payment submitted
         </h1>
         <p className="mt-4 text-[17px] leading-relaxed text-sakura-muted">
-          Thanks — your payment is now pending admin review. Once an admin approves it, come back
-          here and tap "Verify email" to unlock checkout — usually within a few hours.
+          Thanks — your payment is now pending admin review, usually within a few hours. You can keep
+          this page open or come back later; checkout unlocks automatically the moment it’s approved,
+          and we’ll take you straight there.
         </p>
         <div className="inline-flex items-center gap-2.5 mt-7 bg-sakura-blush-soft border border-sakura-edge rounded-full px-[18px] py-2.5 font-mono text-xs font-semibold tracking-[0.06em] uppercase text-sakura-deep">
           <span className="relative inline-flex">

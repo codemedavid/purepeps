@@ -99,6 +99,8 @@ function MainApp() {
                         onBack={() => handleViewChange('menu')}
                         onVerified={() => handleViewChange('cart')}
                         verifyEmail={access.verifyEmail}
+                        watchPendingEmail={access.watchPendingEmail}
+                        isVerified={access.isVerified}
                         renewalEmail={access.renewalEmail}
                     />
                 )}
