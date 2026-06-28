@@ -162,9 +162,11 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   // ---- Open-batch modal ----
   const handleOpenBatch = () => setOpenModal({ open: true, closesCurrent: false });
   const handleOpenNewBatch = () => setOpenModal({ open: true, closesCurrent: true });
-  const submitOpenBatch = ({ name, accessFee, startsAt, endsAt }: OpenBatchValues) => {
+  const submitOpenBatch = ({ name, tierIds, startsAt, endsAt }: OpenBatchValues) => {
     setOpenModal((prev) => ({ ...prev, open: false }));
-    void runAction(() => openBatch(name ?? undefined, accessFee, startsAt, endsAt));
+    // Pricing comes from the selected access tiers, so the legacy per-batch access
+    // fee is left null (the server default still backs the fallback path).
+    void runAction(() => openBatch(name ?? undefined, null, startsAt, endsAt, tierIds));
   };
 
   // ---- Lifecycle handlers (confirmation lives in the lifecycle bar) ----

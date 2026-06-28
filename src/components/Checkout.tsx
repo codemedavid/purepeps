@@ -10,6 +10,7 @@ import { useImageUpload } from '../hooks/useImageUpload';
 import { useCheckoutInfo } from '../hooks/useCheckoutInfo';
 import { useOrderHistory } from '../hooks/useOrderHistory';
 import posthog, { identifyUser } from '../lib/posthog';
+import UpgradeTierModal from './UpgradeTierModal';
 
 interface CheckoutProps {
     cartItems: CartItem[];
@@ -56,6 +57,8 @@ const Checkout: React.FC<CheckoutProps> = ({
         ? cartItems.filter((item) => !canAccessCategory(item.product.category))
         : [];
     const hasLockedItems = lockedItems.length > 0;
+    // Self-serve tier upgrade — only verified members (locked email) can upgrade.
+    const [showUpgrade, setShowUpgrade] = useState(false);
     const [phone, setPhone] = useState(savedInfo?.phone ?? '');
 
     // Shipping Details
@@ -1074,8 +1077,26 @@ Please confirm this order. Thank you!
                             <span className="font-semibold">
                                 {lockedItems.map((i) => i.product.name).join(', ')}
                             </span>
-                            . Remove them or upgrade your tier to continue.
+                            . Remove them{lockEmail && email ? ' or ' : ' or upgrade your tier to continue.'}
+                            {lockEmail && email && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUpgrade(true)}
+                                    className="font-semibold underline hover:text-red-900"
+                                >
+                                    upgrade your tier
+                                </button>
+                            )}
+                            {lockEmail && email && ' to continue.'}
                         </div>
+                    )}
+
+                    {lockEmail && email && (
+                        <UpgradeTierModal
+                            open={showUpgrade}
+                            memberEmail={email}
+                            onClose={() => setShowUpgrade(false)}
+                        />
                     )}
 
                     <button

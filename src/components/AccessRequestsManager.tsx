@@ -40,6 +40,25 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
     [requests, filter],
   );
 
+  // A request is an "upgrade" when the same member already has an EARLIER request
+  // on the same batch — i.e. it's not their first paid request for that group buy.
+  // Lets the admin tell a tier upgrade apart from a first-time access purchase.
+  const upgradeIds = useMemo(() => {
+    const earliestByKey = new Map<string, number>();
+    for (const r of requests) {
+      const key = `${r.email}::${r.group_buy_batch_id ?? ''}`;
+      const ts = new Date(r.created_at).getTime();
+      const current = earliestByKey.get(key);
+      if (current == null || ts < current) earliestByKey.set(key, ts);
+    }
+    const ids = new Set<string>();
+    for (const r of requests) {
+      const key = `${r.email}::${r.group_buy_batch_id ?? ''}`;
+      if (new Date(r.created_at).getTime() > (earliestByKey.get(key) ?? 0)) ids.add(r.id);
+    }
+    return ids;
+  }, [requests]);
+
   const handleUpdate = async (id: string, status: AccessStatus) => {
     setBusyId(id);
     setActionError(null);
@@ -114,14 +133,27 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-charcoal-900 text-sm truncate">{req.email}</span>
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${STATUS_STYLES[req.status]}`}
-                  >
-                    {req.status}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {upgradeIds.has(req.id) && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border bg-sky-50 text-sky-700 border-sky-200">
+                        Upgrade
+                      </span>
+                    )}
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${STATUS_STYLES[req.status]}`}
+                    >
+                      {req.status}
+                    </span>
+                  </div>
                 </div>
                 <div className="font-mono text-xs text-charcoal-500 mt-1">
+                  {upgradeIds.has(req.id) ? '+' : ''}
                   {formatPrice(Number(req.amount))} · {req.payment_method_name ?? 'Payment'}
+                  {req.tier_name && (
+                    <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-charcoal-50 text-charcoal-600 border border-charcoal-200">
+                      {upgradeIds.has(req.id) ? '→ ' : ''}{req.tier_name}
+                    </span>
+                  )}
                   {req.batch_number != null && (
                     <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-sakura-blush-soft text-sakura-deep border border-sakura-edge">
                       Batch #{req.batch_number}

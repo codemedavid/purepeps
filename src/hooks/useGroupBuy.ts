@@ -101,12 +101,14 @@ export const useGroupBuy = () => {
       accessFee?: number | null,
       startsAt?: string | null,
       endsAt?: string | null,
+      tierIds?: string[] | null,
     ) => {
       const { error: rpcError } = await supabase.rpc('open_group_buy_batch', {
         p_name: name?.trim() ? name.trim() : null,
         p_access_fee: accessFee ?? null,
         p_starts_at: startsAt ?? null,
         p_ends_at: endsAt ?? null,
+        p_tier_ids: tierIds && tierIds.length > 0 ? tierIds : null,
       });
       if (rpcError) throw rpcError;
       await refresh();
