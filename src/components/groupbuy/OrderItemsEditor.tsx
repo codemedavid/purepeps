@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Save, X } from 'lucide-react';
-import type { OrderLineItem, Product } from '../../types';
+import type { OrderLineItem, Product, ProductVariation } from '../../types';
 
 interface OrderItemsEditorProps {
   items: OrderLineItem[];
@@ -19,6 +19,13 @@ function effectivePrice(product: Product): number {
     : product.base_price;
 }
 
+/** Effective unit price for a variation: discounted when active, else base. */
+function effectiveVariationPrice(variation: ProductVariation): number {
+  return variation.discount_active && variation.discount_price
+    ? variation.discount_price
+    : variation.price;
+}
+
 function lineTotal(price: number, quantity: number): number {
   return Math.round(price * quantity * 100) / 100;
 }
@@ -32,7 +39,15 @@ function lineTotal(price: number, quantity: number): number {
 export function OrderItemsEditor({ items, products, busy = false, onSave }: OrderItemsEditorProps) {
   const [draft, setDraft] = useState<OrderLineItem[]>(items);
   const [addProductId, setAddProductId] = useState<string>('');
+  const [addVariationId, setAddVariationId] = useState<string>('');
   const [addQty, setAddQty] = useState<string>('1');
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === addProductId),
+    [products, addProductId],
+  );
+  const selectedVariations = selectedProduct?.variations ?? [];
+  const hasVariations = selectedVariations.length > 0;
 
   const subtotal = useMemo(
     () => draft.reduce((sum, item) => sum + (item.total ?? 0), 0),
@@ -54,16 +69,34 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
     setDraft((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Switch the product to add, defaulting the variation to the first in-stock
+   * one. Leaves the variation empty when none are in stock so the admin must
+   * make an explicit choice (and "Add" stays disabled).
+   */
+  const handleProductChange = (productId: string) => {
+    setAddProductId(productId);
+    const variations = products.find((p) => p.id === productId)?.variations ?? [];
+    const firstInStock = variations.find((v) => v.stock_quantity > 0);
+    setAddVariationId(firstInStock?.id ?? '');
+  };
+
   const handleAdd = () => {
     const product = products.find((p) => p.id === addProductId);
     if (!product) return;
+    const variations = product.variations ?? [];
+    // Products with variations require one before a line can be added.
+    const variation = variations.length > 0
+      ? variations.find((v) => v.id === addVariationId)
+      : undefined;
+    if (variations.length > 0 && !variation) return;
     const quantity = Math.max(1, Math.floor(Number(addQty) || 1));
-    const price = effectivePrice(product);
+    const price = variation ? effectiveVariationPrice(variation) : effectivePrice(product);
     const newLine: OrderLineItem = {
       product_id: product.id,
       product_name: product.name,
-      variation_id: null,
-      variation_name: null,
+      variation_id: variation?.id ?? null,
+      variation_name: variation?.name ?? null,
       quantity,
       price,
       total: lineTotal(price, quantity),
@@ -71,6 +104,7 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
     };
     setDraft((prev) => [...prev, newLine]);
     setAddProductId('');
+    setAddVariationId('');
     setAddQty('1');
   };
 
@@ -122,7 +156,7 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
       <div className="flex flex-col sm:flex-row gap-2 bg-indigo-50/60 border border-indigo-100 rounded-lg p-3">
         <select
           value={addProductId}
-          onChange={(e) => setAddProductId(e.target.value)}
+          onChange={(e) => handleProductChange(e.target.value)}
           disabled={busy}
           className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
         >
@@ -133,6 +167,27 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
             </option>
           ))}
         </select>
+        {hasVariations && (
+          <select
+            value={addVariationId}
+            onChange={(e) => setAddVariationId(e.target.value)}
+            disabled={busy}
+            aria-label="Variation"
+            className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            <option value="">Select variation…</option>
+            {selectedVariations.map((variation) => (
+              <option
+                key={variation.id}
+                value={variation.id}
+                disabled={variation.stock_quantity <= 0}
+              >
+                {variation.name} — {peso(effectiveVariationPrice(variation))}
+                {variation.stock_quantity <= 0 ? ' (Out of stock)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <input
           type="number"
           min={1}
@@ -145,7 +200,7 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
         <button
           type="button"
           onClick={handleAdd}
-          disabled={busy || !addProductId}
+          disabled={busy || !addProductId || (hasVariations && !addVariationId)}
           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium flex items-center justify-center gap-1 disabled:opacity-50"
         >
           <Plus className="h-3.5 w-3.5" />
