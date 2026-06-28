@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { createSharedResource } from '../lib/sharedResource';
+import { useSharedResource } from './useSharedResource';
 
 export interface Category {
   id: string;
@@ -11,162 +12,139 @@ export interface Category {
   updated_at: string;
 }
 
-export const useCategories = () => {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const ALL_CATEGORY: Category = {
+  id: 'all',
+  name: 'All Peptides',
+  icon: 'Grid',
+  sort_order: 0,
+  active: true,
+  created_at: '1970-01-01T00:00:00.000Z',
+  updated_at: '1970-01-01T00:00:00.000Z',
+};
 
-  const fetchCategories = async () => {
-    try {
-      setLoading(true);
+async function fetchCategories(): Promise<Category[]> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('active', true)
+    .order('sort_order', { ascending: true });
 
-      const { data, error: fetchError } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('active', true)
-        .order('sort_order', { ascending: true });
+  if (error) throw error;
 
-      if (fetchError) throw fetchError;
+  const rows = data ?? [];
+  // Storefront always offers an "All" pseudo-category; synthesize it if the DB
+  // doesn't already define one so filtering by "all" works everywhere.
+  return rows.some((cat) => cat.id === 'all') ? rows : [ALL_CATEGORY, ...rows];
+}
 
-      const hasAllCategory = data?.some(cat => cat.id === 'all');
-
-      let finalCategories = data || [];
-
-      if (!hasAllCategory) {
-        const allCategory: Category = {
-          id: 'all',
-          name: 'All Peptides',
-          icon: 'Grid',
-          sort_order: 0,
-          active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        finalCategories = [allCategory, ...finalCategories];
-      }
-
-      setCategories(finalCategories);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch categories');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addCategory = async (category: Omit<Category, 'created_at' | 'updated_at'>) => {
-    try {
-      const { data, error: insertError } = await supabase
-        .from('categories')
-        .insert({
-          id: category.id,
-          name: category.name,
-          icon: category.icon,
-          sort_order: category.sort_order,
-          active: category.active
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      await fetchCategories();
-      return data;
-    } catch (err) {
-      console.error('Error adding category:', err);
-      throw err;
-    }
-  };
-
-  const updateCategory = async (id: string, updates: Partial<Category>) => {
-    try {
-      const { error: updateError } = await supabase
-        .from('categories')
-        .update({
-          name: updates.name,
-          icon: updates.icon,
-          sort_order: updates.sort_order,
-          active: updates.active
-        })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
-
-      await fetchCategories();
-    } catch (err) {
-      console.error('Error updating category:', err);
-      throw err;
-    }
-  };
-
-  const deleteCategory = async (id: string) => {
-    try {
-      // Check if category has products
-      const { data: products, error: checkError } = await supabase
-        .from('products')
-        .select('id')
-        .eq('category', id)
-        .limit(1);
-
-      if (checkError) throw checkError;
-
-      if (products && products.length > 0) {
-        throw new Error('Cannot delete category that contains products. Please move or delete the products first.');
-      }
-
-      const { error: deleteError } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', id);
-
-      if (deleteError) throw deleteError;
-
-      await fetchCategories();
-    } catch (err) {
-      console.error('Error deleting category:', err);
-      throw err;
-    }
-  };
-
-  const reorderCategories = async (reorderedCategories: Category[]) => {
-    try {
-      const updates = reorderedCategories.map((cat, index) => ({
-        id: cat.id,
-        sort_order: index + 1
-      }));
-
-      for (const update of updates) {
-        await supabase
-          .from('categories')
-          .update({ sort_order: update.sort_order })
-          .eq('id', update.id);
-      }
-
-      await fetchCategories();
-    } catch (err) {
-      console.error('Error reordering categories:', err);
-      throw err;
-    }
-  };
-
-  useEffect(() => {
-    fetchCategories();
-
-    // Real-time subscription handles live updates — no need for focus refetch
-    const categoriesChannel = supabase
+// One module-level cache shared by every useCategories consumer (SubNav, Menu,
+// GetAccess, admin). Previously each instance fetched independently and opened
+// its own realtime channel; now there is a single fetch and a single channel.
+const categoriesResource = createSharedResource<Category[]>({
+  fetcher: fetchCategories,
+  initial: [],
+  onActive: (refresh) => {
+    const channel = supabase
       .channel('categories-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories' },
-        () => fetchCategories()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => refresh())
       .subscribe();
-
     return () => {
-      supabase.removeChannel(categoriesChannel);
+      supabase.removeChannel(channel);
     };
-  }, []);
+  },
+});
+
+const addCategory = async (category: Omit<Category, 'created_at' | 'updated_at'>) => {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({
+      id: category.id,
+      name: category.name,
+      icon: category.icon,
+      sort_order: category.sort_order,
+      active: category.active,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding category:', error);
+    throw error;
+  }
+
+  await categoriesResource.refresh();
+  return data;
+};
+
+const updateCategory = async (id: string, updates: Partial<Category>) => {
+  const { error } = await supabase
+    .from('categories')
+    .update({
+      name: updates.name,
+      icon: updates.icon,
+      sort_order: updates.sort_order,
+      active: updates.active,
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating category:', error);
+    throw error;
+  }
+
+  await categoriesResource.refresh();
+};
+
+const deleteCategory = async (id: string) => {
+  // Block deletion of a category that still has products attached.
+  const { data: products, error: checkError } = await supabase
+    .from('products')
+    .select('id')
+    .eq('category', id)
+    .limit(1);
+
+  if (checkError) {
+    console.error('Error deleting category:', checkError);
+    throw checkError;
+  }
+
+  if (products && products.length > 0) {
+    throw new Error(
+      'Cannot delete category that contains products. Please move or delete the products first.',
+    );
+  }
+
+  const { error: deleteError } = await supabase.from('categories').delete().eq('id', id);
+
+  if (deleteError) {
+    console.error('Error deleting category:', deleteError);
+    throw deleteError;
+  }
+
+  await categoriesResource.refresh();
+};
+
+const reorderCategories = async (reorderedCategories: Category[]) => {
+  const updates = reorderedCategories.map((cat, index) => ({
+    id: cat.id,
+    sort_order: index + 1,
+  }));
+
+  try {
+    await Promise.all(
+      updates.map((update) =>
+        supabase.from('categories').update({ sort_order: update.sort_order }).eq('id', update.id),
+      ),
+    );
+    await categoriesResource.refresh();
+  } catch (err) {
+    console.error('Error reordering categories:', err);
+    throw err;
+  }
+};
+
+export const useCategories = () => {
+  const { data: categories, loading, error } = useSharedResource(categoriesResource);
 
   return {
     categories,
@@ -176,6 +154,6 @@ export const useCategories = () => {
     updateCategory,
     deleteCategory,
     reorderCategories,
-    refetch: fetchCategories
+    refetch: categoriesResource.refresh,
   };
 };

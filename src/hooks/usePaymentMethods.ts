@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { createSharedResource } from '../lib/sharedResource';
+import { useSharedResource } from './useSharedResource';
 
 export interface PaymentMethod {
   id: string;
@@ -13,37 +15,50 @@ export interface PaymentMethod {
   updated_at: string;
 }
 
+async function fetchActivePaymentMethods(): Promise<PaymentMethod[]> {
+  const { data, error } = await supabase
+    .from('payment_methods')
+    .select('*')
+    .eq('active', true)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+// Shared cache for the storefront's active payment methods (GetAccess, Checkout).
+// Fetched once and reused, so the picker no longer flashes a loading state on
+// every visit. The admin manager works on the *full* list (incl. inactive) and
+// keeps it in instance-local state instead, so it never pollutes this cache.
+const activeMethodsResource = createSharedResource<PaymentMethod[]>({
+  fetcher: fetchActivePaymentMethods,
+  initial: [],
+});
+
 export const usePaymentMethods = () => {
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const shared = useSharedResource(activeMethodsResource);
 
-  const fetchPaymentMethods = async () => {
-    try {
-      setLoading(true);
-      
-      const { data, error: fetchError } = await supabase
-        .from('payment_methods')
-        .select('*')
-        .eq('active', true)
-        .order('sort_order', { ascending: true });
+  // Admin override: when refetchAll() loads inactive methods too, hold them here
+  // so the shared storefront cache stays active-only. null => use the cache.
+  const [adminMethods, setAdminMethods] = useState<PaymentMethod[] | null>(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
-      if (fetchError) throw fetchError;
+  const isAdminMode = adminMethods !== null;
+  const paymentMethods = adminMethods ?? shared.data;
+  const loading = isAdminMode ? adminLoading : shared.loading;
+  const error = isAdminMode ? adminError : shared.error;
 
-      setPaymentMethods(data || []);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching payment methods:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch payment methods');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const setPaymentMethods = setAdminMethods;
+  const setLoading = setAdminLoading;
+  const setError = setAdminError;
+
+  const fetchPaymentMethods = () => activeMethodsResource.refresh();
 
   const fetchAllPaymentMethods = async () => {
     try {
       setLoading(true);
-      
+
       const { data, error: fetchError } = await supabase
         .from('payment_methods')
         .select('*')
@@ -117,7 +132,9 @@ export const usePaymentMethods = () => {
         qr_code_url: data?.qr_code_url 
       });
 
-      await fetchAllPaymentMethods();
+      // Refresh the admin view and invalidate the storefront cache (active-status
+      // or QR edits must reach GetAccess/Checkout).
+      await Promise.all([fetchAllPaymentMethods(), activeMethodsResource.refresh()]);
       return data;
     } catch (err) {
       console.error('❌ Error adding payment method:', err);
@@ -203,7 +220,9 @@ export const usePaymentMethods = () => {
         console.log('✅ QR code URL verified - matches what was sent');
       }
 
-      await fetchAllPaymentMethods();
+      // Refresh the admin view and invalidate the storefront cache (active-status
+      // or QR edits must reach GetAccess/Checkout).
+      await Promise.all([fetchAllPaymentMethods(), activeMethodsResource.refresh()]);
       return data;
     } catch (err) {
       console.error('❌ Error updating payment method:', err);
@@ -220,7 +239,9 @@ export const usePaymentMethods = () => {
 
       if (deleteError) throw deleteError;
 
-      await fetchAllPaymentMethods();
+      // Refresh the admin view and invalidate the storefront cache (active-status
+      // or QR edits must reach GetAccess/Checkout).
+      await Promise.all([fetchAllPaymentMethods(), activeMethodsResource.refresh()]);
     } catch (err) {
       console.error('Error deleting payment method:', err);
       throw err;
@@ -241,16 +262,14 @@ export const usePaymentMethods = () => {
           .eq('id', update.id);
       }
 
-      await fetchAllPaymentMethods();
+      // Refresh the admin view and invalidate the storefront cache (active-status
+      // or QR edits must reach GetAccess/Checkout).
+      await Promise.all([fetchAllPaymentMethods(), activeMethodsResource.refresh()]);
     } catch (err) {
       console.error('Error reordering payment methods:', err);
       throw err;
     }
   };
-
-  useEffect(() => {
-    fetchPaymentMethods();
-  }, []);
 
   return {
     paymentMethods,

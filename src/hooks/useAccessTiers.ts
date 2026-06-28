@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { createSharedResource } from '../lib/sharedResource';
+import { useSharedResource } from './useSharedResource';
 import type { Tier } from '../utils/access';
 
 interface RawTier {
@@ -23,38 +24,20 @@ function normalizeTier(raw: RawTier): Tier {
   };
 }
 
-/**
- * Active purchasable access tiers for the storefront Get Access picker, via the
- * PII-free get_access_tiers RPC. Each tier carries its price and the category
- * ids it unlocks (null for an all-access tier). Re-fetches on tier changes.
- */
-export function useAccessTiers() {
-  const [tiers, setTiers] = useState<Tier[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+async function fetchTiers(): Promise<Tier[]> {
+  const { data, error } = await supabase.rpc('get_access_tiers');
+  if (error) throw error;
+  return ((data ?? []) as RawTier[]).map(normalizeTier);
+}
 
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data, error: rpcError } = await supabase.rpc('get_access_tiers');
-      if (rpcError) throw rpcError;
-
-      const raw = (data ?? []) as RawTier[];
-      setTiers(raw.map(normalizeTier));
-      setError(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load access tiers';
-      console.error('Error loading access tiers:', err);
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-
-    // Live-update the picker when an admin edits tiers or their categories.
+// Module-level cache shared by every Get Access picker instance: the tiers RPC
+// runs once, and the result is reused on subsequent mounts (no loading flash).
+// While active, one realtime subscription live-updates the picker when an admin
+// edits tiers or their categories.
+const tiersResource = createSharedResource<Tier[]>({
+  fetcher: fetchTiers,
+  initial: [],
+  onActive: (refresh) => {
     const channel = supabase
       .channel('tiers-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tiers' }, () => refresh())
@@ -62,11 +45,19 @@ export function useAccessTiers() {
         refresh(),
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [refresh]);
+  },
+});
 
-  return { tiers, loading, error, refresh };
+/**
+ * Active purchasable access tiers for the storefront Get Access picker, via the
+ * PII-free get_access_tiers RPC. Each tier carries its price and the category
+ * ids it unlocks (null for an all-access tier). Backed by a shared cache so the
+ * picker is instant after the first load.
+ */
+export function useAccessTiers() {
+  const { data: tiers, loading, error } = useSharedResource(tiersResource);
+  return { tiers, loading, error, refresh: tiersResource.refresh };
 }

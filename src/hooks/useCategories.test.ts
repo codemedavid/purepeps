@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCategories } from './useCategories';
+import { resetAllSharedResources } from '../lib/sharedResource';
 
 // Build mock chain: supabase.from('categories').select('*').eq('active', true).order(...)
 const mockOrder = vi.fn();
@@ -41,6 +42,7 @@ vi.mock('../lib/supabase', () => ({
 describe('useCategories', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAllSharedResources(); // clear the module-level cache between tests
     mockSelect.mockReturnValue({ eq: mockEq });
     mockEq.mockReturnValue({ order: mockOrder, limit: mockLimit });
     mockOrder.mockResolvedValue({ data: mockCategories, error: null });
