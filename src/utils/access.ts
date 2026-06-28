@@ -30,6 +30,33 @@ export interface ActiveAccessInfo {
   name: string | null;
 }
 
+/**
+ * A purchasable access tier. Members pick ONE tier per batch; it grants the
+ * categories in `categoryIds` at `price`. `isAllAccess` tiers grant every
+ * category and carry `categoryIds: null` (so new categories are auto-included).
+ */
+export interface Tier {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  isAllAccess: boolean;
+  /** null = all categories (all-access tier); otherwise the unlocked category ids. */
+  categoryIds: string[] | null;
+}
+
+/**
+ * Resolved access grant for a member on the OPEN batch (get_access_grant RPC):
+ * the gate status plus which categories the member's approved tier unlocks.
+ */
+export interface AccessGrant {
+  status: AccessGateStatus;
+  tierName: string | null;
+  isAllAccess: boolean;
+  /** Categories the member may check out. Empty unless status === 'approved'. */
+  categoryIds: string[];
+}
+
 export interface AccessRequest {
   id: string;
   email: string;
@@ -40,6 +67,10 @@ export interface AccessRequest {
   status: AccessStatus;
   notes: string | null;
   group_buy_batch_id: string | null;
+  /** The tier this paid request buys. */
+  tier_id: string | null;
+  /** Tier name — populated by the admin fetch join, not a column. */
+  tier_name?: string | null;
   /** Batch number for the request's batch — populated by the admin fetch join, not a column. */
   batch_number?: number | null;
   created_at: string;

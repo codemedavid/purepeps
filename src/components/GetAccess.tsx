@@ -3,6 +3,8 @@ import { ArrowLeft, Check, Clock, Copy, Lock, RefreshCw, ShieldCheck } from 'luc
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useAccessRequests } from '../hooks/useAccessRequests';
 import { useActiveAccess } from '../hooks/useActiveAccess';
+import { useAccessTiers } from '../hooks/useAccessTiers';
+import { useCategories } from '../hooks/useCategories';
 import type { VerifyResult } from '../hooks/useAccess';
 import { ACCESS_FEE_PHP, isValidEmail } from '../utils/access';
 import { formatPrice } from '../utils/currency';
@@ -17,24 +19,28 @@ interface GetAccessProps {
   renewalEmail?: string | null;
 }
 
-const PERKS = [
-  'Checkout on this live group buy',
-  'Member pricing on all vials',
-  'Early access to this batch’s drops',
-];
-
 const LABEL = 'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-sakura-soft';
 
 function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessProps) {
   const { paymentMethods, loading: methodsLoading } = usePaymentMethods();
   const { submitRequest } = useAccessRequests();
   const { info: accessInfo } = useActiveAccess();
+  const { tiers, loading: tiersLoading } = useAccessTiers();
+  const { categories } = useCategories();
 
-  // Per-batch fee: the open batch's admin-set fee, falling back to the constant
-  // until it loads / if no batch is open.
-  const accessFee = accessInfo.accessFee ?? ACCESS_FEE_PHP;
   const batchNumber = accessInfo.batchNumber;
   const isRenewal = Boolean(renewalEmail);
+
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
+  const selectedTier =
+    tiers.find((t) => t.id === selectedTierId) ?? tiers[0] ?? null;
+
+  // The amount to pay = the chosen tier's price, falling back to the batch fee /
+  // constant while tiers load or if none are configured.
+  const accessFee = selectedTier?.price ?? accessInfo.accessFee ?? ACCESS_FEE_PHP;
+
+  // Map a tier's category ids to display names (all-access => null => "Everything").
+  const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? id;
 
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [email, setEmail] = useState(renewalEmail ?? '');
@@ -89,6 +95,10 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
       setFormError('Please attach a screenshot of your payment.');
       return;
     }
+    if (!selectedTier) {
+      setFormError('Please choose an access tier.');
+      return;
+    }
 
     setSubmitting(true);
     const result = await submitRequest({
@@ -97,6 +107,7 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
       payment_method_name: selectedMethod?.name ?? null,
       payment_proof_url: proofUrl,
       amount: accessFee,
+      tier_id: selectedTier.id,
     });
     setSubmitting(false);
 
@@ -237,27 +248,63 @@ function GetAccess({ onBack, onVerified, verifyEmail, renewalEmail }: GetAccessP
       )}
 
       <div className="grid md:grid-cols-2 gap-9 mt-10 items-start">
-        {/* LEFT: plan + payment */}
+        {/* LEFT: tier choice + payment */}
         <div>
-          <div className="bg-sakura-blush rounded-[18px] p-6">
-            <div className="font-mono text-[11px] font-semibold tracking-[0.08em] uppercase text-sakura-deep">
-              {batchNumber ? `Batch #${batchNumber} access` : 'Group buy access'}
+          <div className={`${LABEL} mb-2.5`}>Choose your tier</div>
+          {tiersLoading ? (
+            <div className="text-sm text-sakura-faint">Loading tiers…</div>
+          ) : tiers.length === 0 ? (
+            <div className="text-sm text-sakura-faint">No access tiers configured yet.</div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {tiers.map((tier) => {
+                const active = selectedTier?.id === tier.id;
+                const unlocks = tier.isAllAccess
+                  ? ['Every category — full catalog']
+                  : (tier.categoryIds ?? []).map(categoryName);
+                return (
+                  <button
+                    key={tier.id}
+                    onClick={() => setSelectedTierId(tier.id)}
+                    className={`text-left rounded-[18px] p-5 border-[1.5px] transition-colors ${
+                      active
+                        ? 'bg-sakura-blush border-sakura-primary'
+                        : 'bg-white border-sakura-ink/10 hover:border-sakura-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-lg font-extrabold tracking-[-0.02em] text-sakura-ink">
+                        {tier.name}
+                      </span>
+                      <span className="text-2xl font-extrabold tracking-[-0.02em] text-sakura-primary">
+                        {formatPrice(tier.price)}
+                      </span>
+                    </div>
+                    {tier.description && (
+                      <p className="mt-1 text-[13.5px] leading-relaxed text-sakura-muted">
+                        {tier.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {unlocks.map((label) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center gap-1 font-mono text-[10.5px] text-sakura-deep bg-white/70 border border-sakura-edge rounded-md px-2 py-1"
+                        >
+                          <Check className="w-3 h-3 text-sakura-primary shrink-0" strokeWidth={2.6} />
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+              <p className="text-[12.5px] text-sakura-faint mt-0.5">
+                Access is per batch{batchNumber ? ` · batch #${batchNumber}` : ''}. Categories outside
+                your tier stay view-only.
+              </p>
             </div>
-            <div className="flex items-baseline gap-2.5 mt-1.5">
-              <span className="text-[44px] font-extrabold tracking-[-0.03em] text-sakura-ink">
-                {formatPrice(accessFee)}
-              </span>
-              <span className="text-[15px] text-sakura-deep/80">per batch</span>
-            </div>
-            <div className="flex flex-col gap-2.5 mt-4 text-[14.5px] text-sakura-muted">
-              {PERKS.map((perk) => (
-                <span key={perk} className="flex items-center gap-2.5">
-                  <Check className="w-[15px] h-[15px] text-sakura-primary shrink-0" strokeWidth={2.6} />
-                  {perk}
-                </span>
-              ))}
-            </div>
-          </div>
+          )}
 
           <div className={`${LABEL} mb-2.5 mt-6`}>Pay with</div>
           {methodsLoading ? (

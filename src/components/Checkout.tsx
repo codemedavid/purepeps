@@ -16,6 +16,10 @@ interface CheckoutProps {
     totalPrice: number;
     onBack: () => void;
     defaultEmail?: string;
+    /** When true, the email is the verified member identity and cannot be edited. */
+    lockEmail?: boolean;
+    /** Whether the member's tier unlocks checkout for a given category. */
+    canAccessCategory?: (categoryId: string | null | undefined) => boolean;
     isBatchOpen?: boolean;
     batchId?: string | null;
     groupBuyItems?: GroupBuyProgressItem[];
@@ -27,6 +31,8 @@ const Checkout: React.FC<CheckoutProps> = ({
     totalPrice,
     onBack,
     defaultEmail = '',
+    lockEmail = false,
+    canAccessCategory,
     isBatchOpen = true,
     batchId = null,
     groupBuyItems = [],
@@ -41,7 +47,15 @@ const Checkout: React.FC<CheckoutProps> = ({
 
     // Customer Details — prefilled from the last order saved on this device.
     const [fullName, setFullName] = useState(savedInfo?.fullName ?? '');
-    const [email, setEmail] = useState(savedInfo?.email || defaultEmail);
+    // When locked, the email is the verified member identity — never the saved
+    // device value (a mismatch would be rejected by the server tier gate).
+    const [email, setEmail] = useState(lockEmail ? defaultEmail : savedInfo?.email || defaultEmail);
+
+    // Cart items whose category is outside the member's tier (server will reject).
+    const lockedItems = canAccessCategory
+        ? cartItems.filter((item) => !canAccessCategory(item.product.category))
+        : [];
+    const hasLockedItems = lockedItems.length > 0;
     const [phone, setPhone] = useState(savedInfo?.phone ?? '');
 
     // Shipping Details
@@ -183,7 +197,8 @@ const Checkout: React.FC<CheckoutProps> = ({
         state.trim() !== '' &&
         zipCode.trim() !== '' &&
         selectedCourierId !== '' &&
-        shippingLocation !== '';
+        shippingLocation !== '' &&
+        !hasLockedItems;
 
     const handleProceedToPayment = () => {
         if (isDetailsValid) {
@@ -877,10 +892,16 @@ Please confirm this order. Thank you!
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="input-field"
+                                        readOnly={lockEmail}
+                                        className={`input-field ${lockEmail ? 'bg-gray-50 cursor-not-allowed text-gray-500' : ''}`}
                                         placeholder="juan@example.com"
                                         required
                                     />
+                                    {lockEmail && (
+                                        <p className="mt-1 text-[11px] text-gray-500">
+                                            Verified member email — used to confirm your access tier.
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-brand-700 uppercase tracking-wide mb-2">
@@ -1046,6 +1067,16 @@ Please confirm this order. Thank you!
                                 ))}
                         </div>
                     </div>
+
+                    {hasLockedItems && (
+                        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            Some items are outside your access tier and can't be ordered:{' '}
+                            <span className="font-semibold">
+                                {lockedItems.map((i) => i.product.name).join(', ')}
+                            </span>
+                            . Remove them or upgrade your tier to continue.
+                        </div>
+                    )}
 
                     <button
                         onClick={handleProceedToPayment}

@@ -11,6 +11,8 @@ interface MenuItemCardProps {
   onUpdateQuantity?: (index: number, quantity: number) => void;
   onProductClick?: (product: Product) => void;
   isVerified?: boolean;
+  /** Whether the member's tier unlocks checkout for this product's category. */
+  canCheckout?: boolean;
   onGetAccess?: () => void;
   groupBuyItem?: GroupBuyProgressItem;
   isBatchOpen?: boolean;
@@ -22,6 +24,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   cartQuantity = 0,
   onProductClick,
   isVerified = false,
+  canCheckout = true,
   onGetAccess,
   groupBuyItem,
   isBatchOpen = true,
@@ -192,8 +195,18 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </div>
         )}
 
-        {/* CTA — gated on access */}
-        {isVerified ? (
+        {/* CTA — gated on access. Verified-but-out-of-tier = browse only. */}
+        {isVerified && !canCheckout ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onGetAccess?.();
+            }}
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold bg-[#F2EFED] text-[#A89098] hover:text-sakura-deep transition-colors"
+          >
+            <Lock className="w-4 h-4" /> Not in your tier
+          </button>
+        ) : isVerified ? (
           <button
             onClick={(e) => {
               e.stopPropagation();

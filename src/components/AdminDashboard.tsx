@@ -12,6 +12,7 @@ import { useAccessRequests } from '../hooks/useAccessRequests';
 import { generateProtocolFromTemplate } from '../lib/protocolTemplates';
 import ImageUpload from './ImageUpload';
 import CategoryManager from './CategoryManager';
+import TierManager from './TierManager';
 import PaymentMethodManager from './PaymentMethodManager';
 import VariationManager from './VariationManager';
 import COAManager from './COAManager';
@@ -30,7 +31,7 @@ const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'protocols' | 'access-requests' | 'group-buy'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
@@ -1154,6 +1155,14 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  if (currentView === 'tiers') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TierManager onBack={() => setCurrentView('dashboard')} />
+      </div>
+    );
+  }
+
   // Payment Methods View
   if (currentView === 'payments') {
     return (
@@ -1506,6 +1515,18 @@ const AdminDashboard: React.FC = () => {
                       {pendingAccessCount}
                     </span>
                   )}
+                </button>
+                <button
+                  onClick={() => setCurrentView('tiers')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-sakura-blush flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Layers size={20} className="text-sakura-primary" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-sakura-primary transition-colors">Access Tiers</span>
+                    <span className="text-xs text-gray-500">Category pricing</span>
+                  </div>
                 </button>
                 <button
                   onClick={() => setCurrentView('inventory')}

@@ -8,6 +8,8 @@ interface ProductDetailModalProps {
   onClose: () => void;
   onAddToCart: (product: Product, variation: ProductVariation | undefined, quantity: number) => void;
   isVerified?: boolean;
+  /** Whether the member's tier unlocks checkout for this product's category. */
+  canCheckout?: boolean;
   onGetAccess?: () => void;
   groupBuyItem?: GroupBuyProgressItem;
   cartQuantity?: number;
@@ -19,6 +21,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   onAddToCart,
   isVerified = false,
+  canCheckout = true,
   onGetAccess,
   groupBuyItem,
   cartQuantity = 0,
@@ -331,8 +334,16 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Add to Cart Button — gated on members-only access */}
-                {isVerified ? (
+                {/* Add to Cart Button — gated on members-only + per-tier access */}
+                {isVerified && !canCheckout ? (
+                  <button
+                    onClick={() => { onClose(); onGetAccess?.(); }}
+                    className="w-full btn-primary py-3 md:py-4 text-sm md:text-base flex items-center justify-center gap-2"
+                  >
+                    <Lock className="w-5 h-5" />
+                    Not in your tier — view only
+                  </button>
+                ) : isVerified ? (
                   <button
                     onClick={handleAddToCart}
                     disabled={!product.available || !hasAnyStock || (selectedVariation && selectedVariation.stock_quantity === 0) || (!selectedVariation && product.stock_quantity === 0) || !isBatchOpen || capReached || overCap}

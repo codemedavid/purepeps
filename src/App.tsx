@@ -65,7 +65,12 @@ function MainApp() {
             />
 
             {currentView === 'menu' && (
-                <SubNav selectedCategory={selectedCategory} onCategoryClick={handleCategoryClick} />
+                <SubNav
+                    selectedCategory={selectedCategory}
+                    onCategoryClick={handleCategoryClick}
+                    isVerified={access.isVerified}
+                    canAccessCategory={access.canAccessCategory}
+                />
             )}
 
             <main className="flex-grow">
@@ -76,6 +81,8 @@ function MainApp() {
                         cartItems={cart.cartItems}
                         updateQuantity={cart.updateQuantity}
                         isVerified={access.isVerified}
+                        canAccessCategory={access.canAccessCategory}
+                        tierName={access.tierName}
                         onGetAccess={() => handleViewChange('access')}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
@@ -114,6 +121,8 @@ function MainApp() {
                         totalPrice={cart.getTotalPrice()}
                         onBack={() => handleViewChange('cart')}
                         defaultEmail={access.email ?? ''}
+                        lockEmail={Boolean(access.email)}
+                        canAccessCategory={access.canAccessCategory}
                         isBatchOpen={isBatchOpen}
                         batchId={groupBuy.batch?.id ?? null}
                         groupBuyItems={groupBuy.items}

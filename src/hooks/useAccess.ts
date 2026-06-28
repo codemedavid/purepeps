@@ -1,46 +1,75 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ACCESS_EMAIL_KEY, isValidEmail, type AccessGateStatus } from '../utils/access';
+import {
+  ACCESS_EMAIL_KEY,
+  isValidEmail,
+  type AccessGateStatus,
+  type AccessGrant,
+} from '../utils/access';
 
 export interface VerifyResult {
   ok: boolean;
   status: AccessGateStatus;
+  grant: AccessGrant;
+}
+
+const EMPTY_GRANT: AccessGrant = {
+  status: 'none',
+  tierName: null,
+  isAllAccess: false,
+  categoryIds: [],
+};
+
+interface RawGrant {
+  status: AccessGateStatus;
+  tier_name: string | null;
+  is_all_access: boolean;
+  category_ids: string[] | null;
+}
+
+function normalizeGrant(raw: RawGrant | null): AccessGrant {
+  if (!raw) return EMPTY_GRANT;
+  return {
+    status: raw.status,
+    tierName: raw.tier_name,
+    isAllAccess: Boolean(raw.is_all_access),
+    categoryIds: raw.category_ids ?? [],
+  };
 }
 
 /**
- * Group-buy access gate. Access is per-batch: a member is "verified" only while
- * an admin-approved request exists for the CURRENTLY-OPEN batch. The verified
- * email is cached in localStorage so checkout stays unlocked across visits, but
- * verification is always re-checked against Supabase — so when a new batch opens
- * the cached email resolves to 'renew' and the stale cache is cleared
- * automatically (no client-side batch tracking needed).
+ * Group-buy access gate. Access is per-batch AND per-tier: a member is "verified"
+ * only while an admin-approved request exists for the CURRENTLY-OPEN batch, and
+ * that approval grants a TIER — the set of categories the member may check out.
+ * The verified email is cached in localStorage so checkout stays unlocked across
+ * visits, but verification is always re-checked against Supabase via the
+ * get_access_grant RPC (so a new batch resolves a cached email to 'renew' and
+ * clears the stale cache, and a tier's categories stay authoritative).
  */
 export function useAccess() {
   const [email, setEmail] = useState<string | null>(null);
-  const [isVerified, setIsVerified] = useState(false);
+  const [grant, setGrant] = useState<AccessGrant>(EMPTY_GRANT);
   const [checking, setChecking] = useState(true);
   // Email approved on a prior batch but not the open one — drives the renewal prompt.
   const [renewalEmail, setRenewalEmail] = useState<string | null>(null);
 
+  const isVerified = grant.status === 'approved';
+
   const lookup = useCallback(async (candidate: string): Promise<VerifyResult> => {
     const normalized = candidate.trim().toLowerCase();
-    if (!isValidEmail(normalized)) return { ok: false, status: 'none' };
+    if (!isValidEmail(normalized)) return { ok: false, status: 'none', grant: EMPTY_GRANT };
 
-    // Privacy-preserving: the anon role can no longer SELECT access_requests
-    // (that leaked every member's email + payment proof). get_access_status is a
-    // SECURITY DEFINER RPC that returns only this email's decisive status for the
-    // open batch: 'approved' | 'pending' | 'renew' | 'none'.
-    const { data, error } = await supabase.rpc('get_access_status', { p_email: normalized });
+    // get_access_grant is a SECURITY DEFINER RPC returning this email's decisive
+    // status for the open batch plus the categories its approved tier unlocks.
+    const { data, error } = await supabase.rpc('get_access_grant', { p_email: normalized });
 
     if (error) {
       console.error('Error checking access:', error);
-      return { ok: false, status: 'none' };
+      return { ok: false, status: 'none', grant: EMPTY_GRANT };
     }
 
-    if (data === 'approved') return { ok: true, status: 'approved' };
-    if (data === 'pending') return { ok: false, status: 'pending' };
-    if (data === 'renew') return { ok: false, status: 'renew' };
-    return { ok: false, status: 'none' };
+    const resolved = normalizeGrant((data ?? null) as RawGrant | null);
+    return { ok: resolved.status === 'approved', status: resolved.status, grant: resolved };
   }, []);
 
   // Re-validate any cached email on mount.
@@ -56,7 +85,7 @@ export function useAccess() {
       if (!active) return;
       if (result.ok) {
         setEmail(cached);
-        setIsVerified(true);
+        setGrant(result.grant);
       } else {
         // Cached email no longer unlocks the open batch. If it was approved on a
         // prior batch, remember it so the storefront can offer a renewal.
@@ -79,7 +108,7 @@ export function useAccess() {
       if (result.ok) {
         localStorage.setItem(ACCESS_EMAIL_KEY, normalized);
         setEmail(normalized);
-        setIsVerified(true);
+        setGrant(result.grant);
         setRenewalEmail(null);
       } else if (result.status === 'renew') {
         setRenewalEmail(normalized);
@@ -92,9 +121,31 @@ export function useAccess() {
   const signOut = useCallback(() => {
     localStorage.removeItem(ACCESS_EMAIL_KEY);
     setEmail(null);
-    setIsVerified(false);
+    setGrant(EMPTY_GRANT);
     setRenewalEmail(null);
   }, []);
+
+  // Stable lookup set for per-category gating.
+  const accessibleCategoryIds = useMemo(
+    () => new Set(grant.categoryIds),
+    [grant.categoryIds],
+  );
+
+  const hasAllAccess = isVerified && grant.isAllAccess;
+
+  /**
+   * Whether the verified member may check out products in this category.
+   * Unverified members can never check out; all-access members always can.
+   */
+  const canAccessCategory = useCallback(
+    (categoryId: string | null | undefined): boolean => {
+      if (!isVerified) return false;
+      if (grant.isAllAccess) return true;
+      if (!categoryId) return false;
+      return accessibleCategoryIds.has(categoryId);
+    },
+    [isVerified, grant.isAllAccess, accessibleCategoryIds],
+  );
 
   return {
     email,
@@ -102,6 +153,14 @@ export function useAccess() {
     checking,
     verifyEmail,
     signOut,
+    /** The resolved access grant (status + tier + categories). */
+    grant,
+    /** Tier name the member holds for the open batch, if approved. */
+    tierName: grant.tierName,
+    hasAllAccess,
+    /** Category ids the member may check out (empty if all-access or unverified). */
+    accessibleCategoryIds,
+    canAccessCategory,
     /** Set when a returning member is approved on a prior batch but not the open one. */
     needsRenewal: renewalEmail !== null,
     renewalEmail,

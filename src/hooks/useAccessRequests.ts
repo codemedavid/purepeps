@@ -8,6 +8,8 @@ export interface SubmitAccessInput {
   payment_method_name: string | null;
   payment_proof_url: string | null;
   amount?: number;
+  /** The tier the member is paying for. */
+  tier_id?: string | null;
 }
 
 interface MutationResult {
@@ -33,15 +35,17 @@ export function useAccessRequests() {
       // group buy each paid request unlocks.
       const { data, error: fetchError } = await supabase
         .from('access_requests')
-        .select('*, group_buy_batches ( batch_number )')
+        .select('*, group_buy_batches ( batch_number ), tiers ( name )')
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
       const rows = ((data ?? []) as (AccessRequest & {
         group_buy_batches?: { batch_number: number } | null;
+        tiers?: { name: string } | null;
       })[]).map((row) => ({
         ...row,
         batch_number: row.group_buy_batches?.batch_number ?? null,
+        tier_name: row.tiers?.name ?? null,
       }));
       setRequests(rows);
       setError(null);
@@ -62,6 +66,7 @@ export function useAccessRequests() {
         payment_method_name: input.payment_method_name,
         payment_proof_url: input.payment_proof_url,
         amount: input.amount ?? ACCESS_FEE_PHP,
+        tier_id: input.tier_id ?? null,
         status: 'pending' as AccessStatus,
       };
 

@@ -12,6 +12,9 @@ interface MenuProps {
   cartItems: CartItem[];
   updateQuantity: (index: number, quantity: number) => void;
   isVerified: boolean;
+  /** Whether the verified member's tier unlocks checkout for a given category. */
+  canAccessCategory?: (categoryId: string | null | undefined) => boolean;
+  tierName?: string | null;
   onGetAccess: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
@@ -25,6 +28,7 @@ const Menu: React.FC<MenuProps> = ({
   addToCart,
   cartItems,
   isVerified,
+  canAccessCategory,
   onGetAccess,
   groupBuyItems = [],
   isBatchOpen = true,
@@ -64,6 +68,9 @@ const Menu: React.FC<MenuProps> = ({
           onClose={() => setSelectedProduct(null)}
           onAddToCart={(product, variation, quantity) => addToCart(product, variation, quantity)}
           isVerified={isVerified}
+          canCheckout={
+            canAccessCategory ? canAccessCategory(selectedProduct.category) : isVerified
+          }
           onGetAccess={onGetAccess}
           groupBuyItem={findProgressItem(groupBuyItems, selectedProduct.id)}
           cartQuantity={getCartQuantity(selectedProduct.id)}
@@ -139,6 +146,7 @@ const Menu: React.FC<MenuProps> = ({
                   onProductClick={setSelectedProduct}
                   onAddToCart={addToCart}
                   isVerified={isVerified}
+                  canCheckout={canAccessCategory ? canAccessCategory(product.category) : isVerified}
                   onGetAccess={onGetAccess}
                   groupBuyItem={findProgressItem(groupBuyItems, product.id)}
                   isBatchOpen={isBatchOpen}

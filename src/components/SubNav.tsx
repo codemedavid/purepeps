@@ -1,12 +1,21 @@
 import React from 'react';
+import { Lock } from 'lucide-react';
 import { useCategories } from '../hooks/useCategories';
 
 interface SubNavProps {
     selectedCategory: string;
     onCategoryClick: (categoryId: string) => void;
+    isVerified?: boolean;
+    /** Whether the verified member's tier unlocks checkout for a given category. */
+    canAccessCategory?: (categoryId: string | null | undefined) => boolean;
 }
 
-const SubNav: React.FC<SubNavProps> = ({ selectedCategory, onCategoryClick }) => {
+const SubNav: React.FC<SubNavProps> = ({
+    selectedCategory,
+    onCategoryClick,
+    isVerified = false,
+    canAccessCategory,
+}) => {
     const { categories, loading } = useCategories();
 
     if (loading) {
@@ -29,6 +38,13 @@ const SubNav: React.FC<SubNavProps> = ({ selectedCategory, onCategoryClick }) =>
                 <div className="flex items-center gap-2 py-3 sm:py-4 overflow-x-auto scrollbar-hide -mx-4 px-4 pr-8 sm:mx-0 sm:px-0 sm:pr-0 snap-x snap-mandatory">
                     {categories.map((category) => {
                         const isSelected = selectedCategory === category.id;
+                        // Lock badge only for verified members whose tier excludes this
+                        // real category ('all' is a synthetic view-all chip, never locked).
+                        const isLocked =
+                            isVerified &&
+                            category.id !== 'all' &&
+                            Boolean(canAccessCategory) &&
+                            !canAccessCategory!(category.id);
 
                         return (
                             <button
@@ -42,7 +58,9 @@ const SubNav: React.FC<SubNavProps> = ({ selectedCategory, onCategoryClick }) =>
                                         : 'bg-white text-charcoal-500 hover:text-brand-600 hover:bg-brand-50 border border-brand-100'
                                     }
                 `}
+                                title={isLocked ? 'View only — not in your tier' : undefined}
                             >
+                                {isLocked && <Lock className="w-3 h-3 opacity-70" />}
                                 <span>{category.name}</span>
                             </button>
                         );
