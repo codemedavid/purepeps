@@ -5,6 +5,8 @@ import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useShippingLocations } from '../hooks/useShippingLocations';
 import { useCouriers } from '../hooks/useCouriers';
+import { useStickers } from '../hooks/useStickers';
+import { StickerPicker } from './StickerPicker';
 import { supabase } from '../lib/supabase';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { useCheckoutInfo } from '../hooks/useCheckoutInfo';
@@ -42,6 +44,7 @@ const Checkout: React.FC<CheckoutProps> = ({
     const { paymentMethods } = usePaymentMethods();
     const { locations: shippingLocations } = useShippingLocations();
     const { couriers } = useCouriers();
+    const { stickers } = useStickers();
     const { savedInfo, saveInfo, clearInfo } = useCheckoutInfo();
     const { addOrder } = useOrderHistory();
     const [step, setStep] = useState<'details' | 'payment' | 'confirmation'>('details');
@@ -60,6 +63,13 @@ const Checkout: React.FC<CheckoutProps> = ({
     // Self-serve tier upgrade — only verified members (locked email) can upgrade.
     const [showUpgrade, setShowUpgrade] = useState(false);
     const [phone, setPhone] = useState(savedInfo?.phone ?? '');
+    // FB profile link or WhatsApp number we can reach the customer on. Optional.
+    const [contactMethod, setContactMethod] = useState(savedInfo?.contactMethod ?? '');
+
+    // Optional free sticker the customer chose to include. null => none.
+    const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null);
+    const activeStickers = stickers.filter((s) => s.is_active);
+    const selectedSticker = activeStickers.find((s) => s.id === selectedStickerId) ?? null;
 
     // Shipping Details
     const [address, setAddress] = useState(savedInfo?.address ?? '');
@@ -301,6 +311,9 @@ const Checkout: React.FC<CheckoutProps> = ({
                     customer_name: fullName,
                     customer_email: email,
                     customer_phone: phone,
+                    contact_method: contactMethod.trim() || null,
+                    selected_sticker_id: selectedSticker?.id || null,
+                    selected_sticker_name: selectedSticker?.name || null,
                     shipping_address: address,
                     shipping_barangay: barangay,
                     shipping_city: city,
@@ -372,6 +385,7 @@ const Checkout: React.FC<CheckoutProps> = ({
                 fullName,
                 email,
                 phone,
+                contactMethod: contactMethod.trim() || undefined,
                 address,
                 barangay,
                 city,
@@ -447,7 +461,7 @@ ${dateTimeStamp}
 Name: ${fullName}
 Email: ${email}
 Phone: ${phone}
-
+${contactMethod.trim() ? `Contact (FB/WhatsApp): ${contactMethod.trim()}\n` : ''}${selectedSticker ? `Sticker: ${selectedSticker.name}\n` : ''}
 📦 SHIPPING ADDRESS
 ${address}
 ${barangay}
@@ -847,6 +861,8 @@ Please confirm this order. Thank you!
                                 setFullName('');
                                 setEmail(defaultEmail);
                                 setPhone('');
+                                setContactMethod('');
+                                setSelectedStickerId(null);
                                 setAddress('');
                                 setBarangay('');
                                 setCity('');
@@ -919,8 +935,29 @@ Please confirm this order. Thank you!
                                         required
                                     />
                                 </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-brand-700 uppercase tracking-wide mb-2">
+                                        Facebook Link or WhatsApp Number (Optional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={contactMethod}
+                                        onChange={(e) => setContactMethod(e.target.value)}
+                                        className="input-field"
+                                        placeholder="fb.com/yourprofile or 09XX XXX XXXX"
+                                    />
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                        Paste your Facebook profile link or WhatsApp number so we can reach you about your order.
+                                    </p>
+                                </div>
                             </div>
                         </div>
+
+                        <StickerPicker
+                            stickers={activeStickers}
+                            selectedId={selectedStickerId}
+                            onSelect={setSelectedStickerId}
+                        />
 
                         {/* Shipping Address */}
                         <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">

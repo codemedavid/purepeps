@@ -3,7 +3,7 @@ import AccessRequestsManager from './AccessRequestsManager';
 import AdminLogin from './AdminLogin';
 import BlossomLogo from './BlossomLogo';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -15,6 +15,7 @@ import CategoryManager from './CategoryManager';
 import TierManager from './TierManager';
 import PaymentMethodManager from './PaymentMethodManager';
 import VariationManager from './VariationManager';
+import { MoneyInput } from './MoneyInput';
 import COAManager from './COAManager';
 import PeptideInventoryManager from './PeptideInventoryManager';
 import OrdersManager from './OrdersManager';
@@ -23,6 +24,7 @@ import ShippingManager from './ShippingManager';
 import SiteSettingsManager from './SiteSettingsManager';
 import PromoCodeManager from './PromoCodeManager';
 import CourierManager from './CourierManager';
+import StickerManager from './StickerManager';
 import ProtocolManager from './ProtocolManager';
 import GroupBuyManager from './GroupBuyManager';
 // GuideManager removed (Peptalk functionality disabled)
@@ -31,7 +33,7 @@ const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
@@ -550,11 +552,10 @@ const AdminDashboard: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Base Price (₱) *</label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={formData.base_price || ''}
-                      onChange={(e) => setFormData({ ...formData, base_price: Number(e.target.value) })}
+                    <MoneyInput
+                      value={formData.base_price || null}
+                      allowEmpty
+                      onChange={(base_price) => setFormData({ ...formData, base_price: base_price ?? 0 })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                       placeholder="0"
                     />
@@ -799,11 +800,10 @@ const AdminDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Discount Price (₱)</label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={formData.discount_price || ''}
-                      onChange={(e) => setFormData({ ...formData, discount_price: Number(e.target.value) || null })}
+                    <MoneyInput
+                      value={formData.discount_price ?? null}
+                      allowEmpty
+                      onChange={(discount_price) => setFormData({ ...formData, discount_price })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                       placeholder="0"
                     />
@@ -1235,6 +1235,15 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  // Stickers View
+  if (currentView === 'stickers') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <StickerManager onBack={() => setCurrentView('dashboard')} />
+      </div>
+    );
+  }
+
   // Protocols View
   if (currentView === 'protocols') {
     return (
@@ -1562,6 +1571,18 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-teal-600 transition-colors">Couriers</span>
                     <span className="text-xs text-gray-500">Manage couriers</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('stickers')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-pink-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <StickerIcon className="h-5 w-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-pink-600 transition-colors">Stickers</span>
+                    <span className="text-xs text-gray-500">Manage checkout stickers</span>
                   </div>
                 </button>
                 <button

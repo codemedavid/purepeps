@@ -13,6 +13,8 @@ export interface SavedCheckoutInfo {
   zipCode: string;
   selectedCourierId: string;
   shippingLocation: string;
+  /** FB profile link or WhatsApp number the customer can be reached on. Optional. */
+  contactMethod?: string;
 }
 
 function readSavedInfo(): SavedCheckoutInfo | null {

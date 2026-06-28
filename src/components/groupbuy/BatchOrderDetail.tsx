@@ -183,6 +183,16 @@ export function BatchOrderDetail({
             <p>
               <span className="font-semibold">Phone:</span> {order.customer_phone}
             </p>
+            {order.contact_method && (
+              <p>
+                <span className="font-semibold">Contact (FB/WhatsApp):</span> {order.contact_method}
+              </p>
+            )}
+            {order.selected_sticker_name && (
+              <p>
+                <span className="font-semibold">Sticker:</span> {order.selected_sticker_name}
+              </p>
+            )}
             {order.shipping_address && (
               <p className="pt-1">
                 <span className="font-semibold">Ships to:</span> {order.shipping_address}

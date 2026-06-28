@@ -71,6 +71,18 @@ export interface PaymentMethod {
   updated_at: string;
 }
 
+// A promotional sticker design a customer can opt to include with their order.
+// Admin-managed (mirrors couriers/payment_methods): active rows are offered at
+// checkout, ordered by sort_order.
+export interface Sticker {
+  id: string;
+  name: string;
+  image_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface SiteSetting {
   id: string;
   value: string;
@@ -242,6 +254,8 @@ export interface BatchOrder {
   customer_email: string;
   customer_phone: string;
   contact_method: string | null;
+  selected_sticker_id: string | null;
+  selected_sticker_name: string | null;
   shipping_address: string | null;
   shipping_barangay: string | null;
   shipping_city: string | null;
