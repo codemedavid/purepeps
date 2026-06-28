@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Edit, Trash2, Save, X, Package } from 'lucide-react';
 import type { Product, ProductVariation } from '../types';
 import { useMenu } from '../hooks/useMenu';
+import { MoneyInput } from './MoneyInput';
 
 interface VariationManagerProps {
   product: Product;
@@ -209,11 +210,9 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                             <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                               Price (₱) *
                             </label>
-                            <input
-                              type="number"
-                              step="0.01"
+                            <MoneyInput
                               value={editingVariation.price}
-                              onChange={(e) => setEditingVariation({ ...editingVariation, price: parseFloat(e.target.value) || 0 })}
+                              onChange={(price) => setEditingVariation({ ...editingVariation, price: price ?? 0 })}
                               className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                             />
                           </div>
@@ -234,11 +233,10 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                             <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                               Discount Price (₱)
                             </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editingVariation.discount_price || ''}
-                              onChange={(e) => setEditingVariation({ ...editingVariation, discount_price: parseFloat(e.target.value) || null })}
+                            <MoneyInput
+                              value={editingVariation.discount_price}
+                              allowEmpty
+                              onChange={(discount_price) => setEditingVariation({ ...editingVariation, discount_price })}
                               className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                               placeholder="Leave empty for no discount"
                             />
@@ -378,11 +376,9 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                     <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                       Price (₱) *
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       value={newVariation.price}
-                      onChange={(e) => setNewVariation({ ...newVariation, price: parseFloat(e.target.value) || 0 })}
+                      onChange={(price) => setNewVariation({ ...newVariation, price: price ?? 0 })}
                       className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                     />
                   </div>
@@ -403,11 +399,10 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                     <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                       Discount Price (₱)
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newVariation.discount_price || ''}
-                      onChange={(e) => setNewVariation({ ...newVariation, discount_price: parseFloat(e.target.value) || null })}
+                    <MoneyInput
+                      value={newVariation.discount_price}
+                      allowEmpty
+                      onChange={(discount_price) => setNewVariation({ ...newVariation, discount_price })}
                       className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                       placeholder="Leave empty for no discount"
                     />
