@@ -110,7 +110,7 @@ const COA: React.FC = () => {
             </h1>
 
             <p className="text-sm md:text-lg text-gray-600 mb-4 md:mb-6 px-4">
-              Tested by <strong className="text-sky-600">Janoshik + Chromate</strong>
+              Independently <strong className="text-sky-600">lab tested</strong> for purity &amp; concentration
             </p>
 
             <div className="flex flex-wrap justify-center gap-2 md:gap-4 text-xs md:text-sm px-2">
@@ -218,46 +218,9 @@ const COA: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between py-1.5 md:py-2 border-b border-sky-100">
-                      <span className="text-xs md:text-sm text-gray-600 font-medium">Unique Key:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs md:text-sm text-gray-800 font-mono">{report.verification_key}</span>
-                        <button
-                          onClick={() => handleCopy(report.verification_key, `${report.id}-key`)}
-                          className="p-1 hover:bg-sky-50 rounded-full transition-colors"
-                          title="Copy Unique Key"
-                        >
-                          {copiedId === `${report.id}-key` ? (
-                            <Check className="w-3.5 h-3.5 text-green-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5 text-sky-400" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
                   </div>
 
                   <div className="space-y-2 md:space-y-3">
-                    {(() => {
-                      const isJanoshik = !report.laboratory || report.laboratory.toLowerCase().includes('janoshik');
-
-                      // Only Janoshik reports get a verify button; the Chromate
-                      // verify button has been removed.
-                      if (!isJanoshik) return null;
-
-                      return (
-                        <a
-                          href={`https://www.janoshik.com/verify/?key=${report.verification_key}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-center gap-1.5 md:gap-2 text-white px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl text-sm md:text-base font-medium transition-all duration-300 shadow-lg hover:shadow-xl bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600"
-                        >
-                          <Shield className="w-4 h-4 md:w-5 md:h-5" />
-                          Verify on Janoshik
-                        </a>
-                      );
-                    })()}
-
                     <button
                       onClick={() => setSelectedImage(report.image_url)}
                       className="w-full flex items-center justify-center gap-1.5 md:gap-2 bg-white text-sky-600 border-2 border-sky-400 hover:border-sky-500 hover:bg-sky-50 px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl text-sm md:text-base font-medium transition-all duration-300"
@@ -282,31 +245,11 @@ const COA: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1">
-                <h3 className="text-base md:text-xl font-bold text-gray-800 mb-2 md:mb-3">Independent Laboratory Verification</h3>
-                <p className="text-sm md:text-base text-gray-700 leading-relaxed mb-3 md:mb-4">
-                  We partner with top-tier third-party laboratories like <strong>Janoshik Analytical</strong> and <strong>Chromate</strong> to ensure the highest quality standards.
+                <h3 className="text-base md:text-xl font-bold text-gray-800 mb-2 md:mb-3">Independent Laboratory Testing</h3>
+                <p className="text-sm md:text-base text-gray-700 leading-relaxed">
+                  We partner with top-tier third-party laboratories to ensure the highest quality standards.
                   Each batch is rigorously tested for purity and concentration using HPLC and Mass Spectrometry.
                 </p>
-                <div className="flex gap-4">
-                  <a
-                    href="https://www.janoshik.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 md:gap-2 text-sm md:text-base text-sky-600 hover:text-sky-700 font-medium"
-                  >
-                    <span>Janoshik</span>
-                    <ExternalLink className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  </a>
-                  <a
-                    href="https://chromate.org"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 md:gap-2 text-sm md:text-base text-emerald-600 hover:text-emerald-700 font-medium"
-                  >
-                    <span>Chromate</span>
-                    <ExternalLink className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  </a>
-                </div>
               </div>
             </div>
           </div>
