@@ -3,7 +3,7 @@ import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, Ex
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
 import posthog from '../lib/posthog';
-import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel } from '../utils/orderTracking';
+import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders } from '../utils/orderTracking';
 import type { OrderBundleRow } from '../types';
 import LeftoverClaimPanel from './groupbuy/LeftoverClaimPanel';
 
@@ -67,8 +67,12 @@ const OrderTracking: React.FC = () => {
         void trackOrder(orderId);
     };
 
-    // The root drives the merged timeline; claim rows are listed as add-ons below.
-    const order = bundle.length > 0 ? (bundle.find((row) => !row.is_claim) ?? bundle[0]) : null;
+    // The customer's own orders (root + any same-email repeats in this batch),
+    // numbered Order 1, Order 2, … The root drives the merged timeline; claim
+    // rows are listed separately as add-ons below.
+    const sequencedOrders = sequenceBundleOrders(bundle);
+    const order = sequencedOrders[0]?.order ?? (bundle.length > 0 ? bundle[0] : null);
+    const hasRepeatOrders = sequencedOrders.length > 1;
     const claimRows = bundle.filter((row) => row.is_claim);
     const isFinalizing = order?.batch_status === 'finalizing';
 
@@ -357,6 +361,55 @@ const OrderTracking: React.FC = () => {
 
                             </div>
                         </div>
+
+                        {/* Your orders in this group buy — same-email repeats share this
+                            tracking, each keeping its own payment method and status. */}
+                        {hasRepeatOrders && (
+                            <div className="bg-white rounded-2xl shadow-xl border-2 border-navy-700/30 overflow-hidden">
+                                <div className="bg-navy-900 p-6 flex items-center gap-3 text-white">
+                                    <Package className="w-6 h-6 text-gold-400" />
+                                    <div>
+                                        <h2 className="text-xl font-bold text-white">Your orders in this group buy</h2>
+                                        <p className="text-sm text-gray-300">All orders you placed under this tracking, with their own payment.</p>
+                                    </div>
+                                </div>
+                                <div className="p-6 md:p-8 space-y-4">
+                                    {sequencedOrders.map(({ order: seqOrder, label }) => (
+                                        <div
+                                            key={seqOrder.id}
+                                            className="bg-gray-50 rounded-xl p-5 border border-gray-200"
+                                        >
+                                            <div className="flex items-start justify-between gap-4 mb-3">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">{label}</p>
+                                                    <p className="font-mono font-bold text-navy-900">
+                                                        {seqOrder.order_number || seqOrder.id.slice(0, 8).toUpperCase()}
+                                                    </p>
+                                                </div>
+                                                <span className="shrink-0 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-navy-900 text-gold-300">
+                                                    {orderStatusLabel(seqOrder.order_status)}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1 mb-3">
+                                                {seqOrder.order_items.map((item) => (
+                                                    <div key={`${item.product_name}`} className="flex justify-between text-sm">
+                                                        <span className="text-gray-600">{item.quantity}x {item.product_name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-200 text-sm">
+                                                <span className="text-gray-500">
+                                                    Payment: <span className="font-semibold text-navy-900">{seqOrder.payment_method_name || 'Not specified'}</span>
+                                                </span>
+                                                <span className="font-bold text-navy-900">
+                                                    ₱{(seqOrder.total_price + (seqOrder.shipping_fee || 0)).toLocaleString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Add-ons in this group buy — claim/add-on orders linked to the root. */}
                         {claimRows.length > 0 && (

@@ -284,6 +284,75 @@ describe('OrderTracking', () => {
     });
   });
 
+  // --- Linked repeat orders (same email, same batch) ---
+
+  describe('linked repeat orders', () => {
+    const repeatOrder = {
+      ...mockRoot,
+      id: 'order-uuid-456',
+      order_number: 'TBS-5678',
+      order_status: 'new',
+      payment_status: 'pending',
+      payment_method_name: 'Maya',
+      is_claim: false,
+      parent_order_id: 'order-uuid-123',
+      created_at: '2025-01-16T10:00:00Z',
+      total_price: 1500,
+      shipping_fee: 200,
+      order_items: [{ product_name: 'Semaglutide 5mg', quantity: 1 }],
+    };
+
+    it('numbers each linked order as Order 1 / Order 2', async () => {
+      mockBundleOnce([
+        { ...mockRoot, payment_method_name: 'GCash' },
+        repeatOrder,
+      ]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Order 1')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Order 2')).toBeInTheDocument();
+      // The second order's number is shown so the customer can identify it.
+      expect(screen.getByText('TBS-5678')).toBeInTheDocument();
+    });
+
+    it('shows each order its own payment method', async () => {
+      mockBundleOnce([
+        { ...mockRoot, payment_method_name: 'GCash' },
+        repeatOrder,
+      ]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/GCash/)).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Maya/)).toBeInTheDocument();
+    });
+
+    it('does not render the numbered-orders section for a single order', async () => {
+      mockBundleOnce([{ ...mockRoot, payment_method_name: 'GCash' }]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Order 2')).not.toBeInTheDocument();
+    });
+  });
+
   // --- Leftover Claim Panel ---
 
   describe('leftover claim panel', () => {

@@ -1,4 +1,4 @@
-import type { FulfillmentStage } from '../types';
+import type { FulfillmentStage, OrderBundleRow } from '../types';
 
 /**
  * Pure order-tracking timeline logic, shared by the customer Order Tracking page
@@ -149,6 +149,43 @@ export interface TrackingState {
   readonly isCancelled: boolean;
   /** The active step, or null when cancelled. */
   readonly current: TrackingStep | null;
+}
+
+/** A bundle order paired with its customer-facing sequence label ("Order 2"). */
+export interface SequencedOrder {
+  readonly order: OrderBundleRow;
+  /** 1-based position in the customer's order sequence. */
+  readonly sequence: number;
+  readonly label: string;
+}
+
+/**
+ * Number the customer's own orders within one tracking bundle.
+ *
+ * A repeat checkout from the same email in the same open batch is linked to the
+ * first order via parent_order_id (server-side trigger), so all the customer's
+ * orders share one tracking lookup. This returns those linked orders — the root
+ * first, then each repeat by creation time — labelled "Order 1", "Order 2", …
+ *
+ * Leftover-claim add-ons (is_claim) are excluded: they render in their own
+ * "Add-ons" section, not the numbered order sequence.
+ */
+export function sequenceBundleOrders(bundle: readonly OrderBundleRow[]): SequencedOrder[] {
+  const ownOrders = bundle.filter((row) => !row.is_claim);
+
+  const ordered = [...ownOrders].sort((a, b) => {
+    // The root (no parent) is always Order 1; repeats follow by creation time.
+    const aIsRoot = a.parent_order_id == null ? 0 : 1;
+    const bIsRoot = b.parent_order_id == null ? 0 : 1;
+    if (aIsRoot !== bIsRoot) return aIsRoot - bIsRoot;
+    return a.created_at.localeCompare(b.created_at);
+  });
+
+  return ordered.map((order, index) => ({
+    order,
+    sequence: index + 1,
+    label: `Order ${index + 1}`,
+  }));
 }
 
 export function computeTrackingStep(

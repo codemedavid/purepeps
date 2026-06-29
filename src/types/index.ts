@@ -290,6 +290,7 @@ export interface OrderBundleRow {
   order_number: string | null;
   order_status: string | null;
   payment_status: string;
+  payment_method_name: string | null;
   tracking_number: string | null;
   shipping_provider: string | null;
   shipping_note: string | null;

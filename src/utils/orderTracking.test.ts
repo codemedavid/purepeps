@@ -6,7 +6,35 @@ import {
   computeTrackingStep,
   fulfillmentStageLabel,
   orderStatusLabel,
+  sequenceBundleOrders,
 } from './orderTracking';
+import type { OrderBundleRow } from '../types';
+
+/** Build a minimal OrderBundleRow for the sequencing tests. */
+function makeRow(overrides: Partial<OrderBundleRow> = {}): OrderBundleRow {
+  return {
+    id: overrides.id ?? 'id',
+    order_number: 'TBS-1',
+    order_status: 'new',
+    payment_status: 'pending',
+    payment_method_name: null,
+    tracking_number: null,
+    shipping_provider: null,
+    shipping_note: null,
+    total_price: 0,
+    shipping_fee: 0,
+    order_items: [],
+    created_at: '2025-01-01T00:00:00Z',
+    promo_code: null,
+    discount_applied: null,
+    fulfillment_stage: null,
+    is_claim: false,
+    parent_order_id: null,
+    group_buy_batch_id: 'batch-1',
+    batch_status: 'open',
+    ...overrides,
+  };
+}
 
 describe('TRACKING_STEPS', () => {
   it('defines the full nine-stage timeline in order', () => {
@@ -129,5 +157,64 @@ describe('label helpers', () => {
     expect(orderStatusLabel('out_for_delivery')).toBe('Out for delivery');
     expect(orderStatusLabel('processing')).toBe('Processing');
     expect(orderStatusLabel('unknown')).toBe('unknown');
+  });
+});
+
+describe('sequenceBundleOrders — numbering repeat orders from the same customer', () => {
+  it('returns an empty list for an empty bundle', () => {
+    expect(sequenceBundleOrders([])).toEqual([]);
+  });
+
+  it('labels a lone root order as Order 1', () => {
+    const root = makeRow({ id: 'root', order_number: 'TBS-1', parent_order_id: null });
+    const result = sequenceBundleOrders([root]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sequence).toBe(1);
+    expect(result[0].label).toBe('Order 1');
+    expect(result[0].order.id).toBe('root');
+  });
+
+  it('numbers a repeat order from the same email as Order 2, root first', () => {
+    const root = makeRow({
+      id: 'root',
+      order_number: 'TBS-1',
+      parent_order_id: null,
+      created_at: '2025-01-01T10:00:00Z',
+    });
+    const repeat = makeRow({
+      id: 'repeat',
+      order_number: 'TBS-2',
+      parent_order_id: 'root',
+      created_at: '2025-01-01T12:00:00Z',
+    });
+
+    // Pass repeat first to prove ordering is by linkage + created_at, not input order.
+    const result = sequenceBundleOrders([repeat, root]);
+
+    expect(result.map((r) => r.label)).toEqual(['Order 1', 'Order 2']);
+    expect(result[0].order.id).toBe('root');
+    expect(result[1].order.id).toBe('repeat');
+  });
+
+  it('orders multiple repeats by creation time', () => {
+    const root = makeRow({ id: 'root', parent_order_id: null, created_at: '2025-01-01T08:00:00Z' });
+    const second = makeRow({ id: 'second', parent_order_id: 'root', created_at: '2025-01-01T09:00:00Z' });
+    const third = makeRow({ id: 'third', parent_order_id: 'root', created_at: '2025-01-01T10:00:00Z' });
+
+    const result = sequenceBundleOrders([third, root, second]);
+
+    expect(result.map((r) => r.order.id)).toEqual(['root', 'second', 'third']);
+    expect(result.map((r) => r.sequence)).toEqual([1, 2, 3]);
+  });
+
+  it('excludes claim/add-on rows from the numbered orders', () => {
+    const root = makeRow({ id: 'root', parent_order_id: null });
+    const claim = makeRow({ id: 'claim', parent_order_id: 'root', is_claim: true });
+
+    const result = sequenceBundleOrders([root, claim]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].order.id).toBe('root');
   });
 });
