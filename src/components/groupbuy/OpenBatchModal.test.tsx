@@ -3,18 +3,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OpenBatchModal } from './OpenBatchModal';
 
-vi.mock('../../hooks/useTierLibrary', () => ({
-  useTierLibrary: () => ({
-    tiers: [
-      { id: 't1', name: 'Weight Management', description: null, price: 300, isAllAccess: false, categoryIds: [] },
-      { id: 't2', name: 'All Access', description: null, price: 500, isAllAccess: true, categoryIds: null },
-    ],
-    loading: false,
-    error: null,
-    refresh: vi.fn(),
-  }),
-}));
-
 describe('OpenBatchModal', () => {
   it('renders nothing when closed', () => {
     const { container } = render(
@@ -23,44 +11,29 @@ describe('OpenBatchModal', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the tier library with prices, all selected by default', () => {
+  it('does not ask the admin to pick tiers or prices', () => {
     render(<OpenBatchModal open onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
-    const weight = screen.getByRole('button', { name: /Weight Management/i });
-    const allAccess = screen.getByRole('button', { name: /All Access/i });
-    expect(weight).toHaveAttribute('aria-pressed', 'true');
-    expect(allAccess).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/300/)).toBeInTheDocument();
-    expect(screen.getByText(/500/)).toBeInTheDocument();
+    // Tiers (and their pricing) now default to the server's active tier set, so
+    // the open form no longer surfaces a tier picker.
+    expect(screen.queryByText(/access tiers for this batch/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/all access/i)).not.toBeInTheDocument();
+    // No money fields in the open flow at all.
+    expect(screen.queryByText(/₱|PHP/)).not.toBeInTheDocument();
   });
 
-  it('submits the selected tier ids with a trimmed name', async () => {
+  it('submits a trimmed name with the announced dates, without tier ids', async () => {
     const onSubmit = vi.fn();
     render(<OpenBatchModal open onSubmit={onSubmit} onCancel={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/batch name/i), '  June Drop  ');
-    // Deselect the all-access tier so only Weight Management is offered.
-    await userEvent.click(screen.getByRole('button', { name: /All Access/i }));
     await userEvent.click(screen.getByRole('button', { name: /open batch/i }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       name: 'June Drop',
-      tierIds: ['t1'],
       startsAt: null,
       endsAt: null,
     });
-  });
-
-  it('blocks submit when no tier is selected', async () => {
-    const onSubmit = vi.fn();
-    render(<OpenBatchModal open onSubmit={onSubmit} onCancel={vi.fn()} />);
-
-    await userEvent.click(screen.getByRole('button', { name: /Weight Management/i }));
-    await userEvent.click(screen.getByRole('button', { name: /All Access/i }));
-    await userEvent.click(screen.getByRole('button', { name: /open batch/i }));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText(/choose at least one access tier/i)).toBeInTheDocument();
   });
 
   it('submits the announced start and finish dates', async () => {
@@ -73,7 +46,6 @@ describe('OpenBatchModal', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       name: null,
-      tierIds: ['t1', 't2'],
       startsAt: '2026-06-22',
       endsAt: '2026-07-05',
     });

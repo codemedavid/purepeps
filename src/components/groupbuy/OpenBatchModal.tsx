@@ -1,14 +1,10 @@
 import { useEffect, useId, useState } from 'react';
-import { Boxes, Unlock, AlertTriangle, Layers, Check } from 'lucide-react';
+import { Boxes, Unlock, AlertTriangle } from 'lucide-react';
 import { useDialogA11y } from './useDialogA11y';
-import { useTierLibrary } from '../../hooks/useTierLibrary';
-import { formatPrice } from '../../utils/currency';
 
 export interface OpenBatchValues {
   /** Trimmed batch name, or null when left blank. */
   name: string | null;
-  /** Ids of the access tiers this batch offers (members pick one to unlock). */
-  tierIds: string[];
   /** Announced start date ('YYYY-MM-DD'), or null for an open-ended start. */
   startsAt: string | null;
   /** Announced finish date ('YYYY-MM-DD'), or null for no deadline. */
@@ -26,9 +22,10 @@ interface OpenBatchModalProps {
 
 /**
  * In-app form that replaces the window.prompt() pair used to open a group-buy
- * batch. Captures an optional name, the announced window, and WHICH access tiers
- * this batch offers — members pay one of the selected tiers to unlock checkout.
- * Tiers are the reusable global library; the selection is scoped to this batch.
+ * batch. Captures an optional name and the announced window. Access tiers default
+ * to the server's active tier set (every active tier in the global library, at
+ * each tier's own price), so the admin no longer picks tiers or enters prices
+ * here — manage tiers in Access Tiers.
  */
 export function OpenBatchModal({
   open,
@@ -39,13 +36,9 @@ export function OpenBatchModal({
 }: OpenBatchModalProps) {
   const titleId = useId();
   const containerRef = useDialogA11y<HTMLDivElement>(open, onCancel);
-  const { tiers, loading: tiersLoading } = useTierLibrary(open);
   const [name, setName] = useState('');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
-  // null = not yet seeded from the loaded library; once seeded it's the set of
-  // selected tier ids. New batches default to offering every active tier.
-  const [selectedTierIds, setSelectedTierIds] = useState<Set<string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Reset the form ONLY when the modal opens — never on an unrelated parent
@@ -56,39 +49,12 @@ export function OpenBatchModal({
     setName('');
     setStartsAt('');
     setEndsAt('');
-    setSelectedTierIds(null);
     setError(null);
   }, [open]);
 
-  // Seed the selection to "all tiers" once the library loads for this opening.
-  useEffect(() => {
-    if (!open || tiersLoading || selectedTierIds !== null) return;
-    setSelectedTierIds(new Set(tiers.map((t) => t.id)));
-  }, [open, tiersLoading, tiers, selectedTierIds]);
-
   if (!open) return null;
 
-  const selected = selectedTierIds ?? new Set<string>();
-
-  const toggleTier = (id: string) => {
-    setSelectedTierIds((prev) => {
-      const next = new Set(prev ?? []);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-    setError(null);
-  };
-
   const handleSubmit = () => {
-    if (selected.size === 0) {
-      setError('Choose at least one access tier members can buy.');
-      return;
-    }
-
     const start = startsAt.trim() ? startsAt.trim() : null;
     const end = endsAt.trim() ? endsAt.trim() : null;
     if (start && end && end <= start) {
@@ -98,7 +64,6 @@ export function OpenBatchModal({
 
     onSubmit({
       name: name.trim() ? name.trim() : null,
-      tierIds: [...selected],
       startsAt: start,
       endsAt: end,
     });
@@ -156,68 +121,10 @@ export function OpenBatchModal({
             />
           </div>
 
-          <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1.5">
-              <Layers className="h-3.5 w-3.5 text-brand-400" />
-              Access tiers for this batch
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-              {tiersLoading ? (
-                <p className="text-xs text-gray-500 px-1 py-0.5">Loading tiers…</p>
-              ) : tiers.length === 0 ? (
-                <p className="text-xs text-gray-500 px-1 py-0.5">
-                  No active tiers yet. Add tiers in <strong>Access Tiers</strong> first so members
-                  can pay to unlock checkout.
-                </p>
-              ) : (
-                <ul className="space-y-1">
-                  {tiers.map((tier) => {
-                    const checked = selected.has(tier.id);
-                    return (
-                      <li key={tier.id}>
-                        <button
-                          type="button"
-                          onClick={() => toggleTier(tier.id)}
-                          disabled={busy}
-                          aria-pressed={checked}
-                          className={`w-full flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg border text-left text-sm transition-colors disabled:opacity-50 ${
-                            checked
-                              ? 'border-brand-300 bg-brand-50'
-                              : 'border-gray-200 bg-white hover:border-brand-200'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${
-                                checked ? 'bg-brand-400 text-white' : 'bg-gray-100'
-                              }`}
-                            >
-                              {checked && <Check className="h-3 w-3" strokeWidth={3} />}
-                            </span>
-                            <span className="truncate text-gray-800">
-                              {tier.name}
-                              {tier.isAllAccess && (
-                                <span className="ml-1.5 text-[10px] uppercase tracking-wide text-sakura-deep">
-                                  All access
-                                </span>
-                              )}
-                            </span>
-                          </span>
-                          <span className="font-mono font-semibold text-brand-500 whitespace-nowrap">
-                            {formatPrice(tier.price)}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Members pick one selected tier to unlock checkout for this batch. Manage tier pricing
-              and categories in <strong>Access Tiers</strong>.
-            </p>
-          </div>
+          <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-500">
+            This batch offers every active access tier at its set price. Manage tier pricing and
+            categories in <strong>Access Tiers</strong>.
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>

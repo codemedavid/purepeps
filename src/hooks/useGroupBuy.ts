@@ -95,20 +95,15 @@ export const useGroupBuy = () => {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
 
+  // Access tiers default to the server's set (every active tier at its own
+  // price): p_tier_ids is always null so open_group_buy_batch offers them all.
   const openBatch = useCallback(
-    async (
-      name?: string,
-      accessFee?: number | null,
-      startsAt?: string | null,
-      endsAt?: string | null,
-      tierIds?: string[] | null,
-    ) => {
+    async (name?: string, startsAt?: string | null, endsAt?: string | null) => {
       const { error: rpcError } = await supabase.rpc('open_group_buy_batch', {
         p_name: name?.trim() ? name.trim() : null,
-        p_access_fee: accessFee ?? null,
         p_starts_at: startsAt ?? null,
         p_ends_at: endsAt ?? null,
-        p_tier_ids: tierIds && tierIds.length > 0 ? tierIds : null,
+        p_tier_ids: null,
       });
       if (rpcError) throw rpcError;
       await refresh();

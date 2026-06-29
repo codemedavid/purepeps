@@ -59,3 +59,25 @@ describe('useGroupBuy.setFulfillmentStage', () => {
     expect(chain.update).toHaveBeenCalledWith({ fulfillment_stage: null });
   });
 });
+
+describe('useGroupBuy.openBatch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('opens a batch with null tier ids so the server offers its default tiers', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.openBatch('June Drop', '2026-06-22', '2026-07-05');
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('open_group_buy_batch', {
+      p_name: 'June Drop',
+      p_starts_at: '2026-06-22',
+      p_ends_at: '2026-07-05',
+      p_tier_ids: null,
+    });
+  });
+});
