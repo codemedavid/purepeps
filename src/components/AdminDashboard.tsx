@@ -85,7 +85,10 @@ const AdminDashboard: React.FC = () => {
     setCurrentView('add');
     setSelectedProducts(new Set());
     setManagingVariationsProductId(null);
-    const defaultCategory = categories.length > 0 ? categories[0].id : 'research';
+    // Skip the synthesized 'all' pseudo-category so new products land on a real
+    // category instead of the storefront's show-everything filter.
+    const realCategories = categories.filter((c) => c.id !== 'all');
+    const defaultCategory = realCategories.length > 0 ? realCategories[0].id : 'research';
     setFormData({
       name: '',
       description: '',

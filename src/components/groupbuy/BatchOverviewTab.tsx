@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Gauge, ChevronRight } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Gauge, ChevronRight, Settings } from 'lucide-react';
 import type { BatchOrder, GroupBuyBatch, GroupBuyProgressItem } from '../../types';
 import type { CapFillSummary, ItemRevenueSummary } from '../../utils/groupBuyOverview';
 import type { BatchPhase } from '../../utils/groupBuy';
@@ -28,6 +28,8 @@ interface BatchOverviewTabProps {
   onClose: (batchId: string) => void;
   onViewOrder: (order: BatchOrder) => void;
   onGoToOrders: () => void;
+  /** Opens the edit-settings modal; only offered while the batch is open. */
+  onEditSettings?: () => void;
 }
 
 const MAX_PREVIEW = 5;
@@ -54,10 +56,13 @@ export function BatchOverviewTab({
   onClose,
   onViewOrder,
   onGoToOrders,
+  onEditSettings,
 }: BatchOverviewTabProps) {
   const preview = needsAction.slice(0, MAX_PREVIEW);
   const overflow = needsAction.length - preview.length;
   const phase = (batch?.status ?? 'open') as BatchPhase;
+  // Name / dates / tiers are only editable while the batch is open (see scope).
+  const canEditSettings = batch != null && phase === 'open' && onEditSettings != null;
   // The closeout (revenue per item, shipping readiness, CSV export) is what the
   // admin needs once buying has stopped — surface it from finalizing onward.
   const showCloseout = batch != null && phase !== 'open' && itemRevenue != null;
@@ -75,6 +80,20 @@ export function BatchOverviewTab({
         onReopen={onReopen}
         onClose={onClose}
       />
+
+      {canEditSettings && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onEditSettings}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-300 hover:text-brand-500 disabled:opacity-50"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Edit settings
+          </button>
+        </div>
+      )}
 
       {showCloseout && (
         <BatchCloseoutPanel

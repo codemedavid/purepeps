@@ -8,8 +8,12 @@ import type {
   GroupBuyRemaining,
   GroupBuyRemainingItem,
 } from '../types';
+import type { BatchTierOption, EditBatchValues } from '../components/groupbuy/EditBatchModal';
 
 const EMPTY_PROGRESS: GroupBuyProgress = { batch: null, items: [] };
+
+/** The editable settings of an existing batch (name, announced window, tiers). */
+type BatchSettings = EditBatchValues;
 
 /**
  * Admin-side group-buy operations. Batches and caps are read/written directly
@@ -121,6 +125,62 @@ export const useGroupBuy = () => {
         p_ends_at: endsAt,
       });
       if (rpcError) throw rpcError;
+      await refresh();
+    },
+    [refresh],
+  );
+
+  // Active tiers the admin may offer on a batch (id, name, price), ordered for
+  // display. The storefront get_access_tiers RPC only returns the OPEN batch's
+  // offered tiers, so the editor reads the full active set directly instead.
+  const fetchOfferableTiers = useCallback(async (): Promise<BatchTierOption[]> => {
+    const { data, error: fetchError } = await supabase
+      .from('tiers')
+      .select('id, name, price')
+      .eq('active', true)
+      .order('sort_order', { ascending: true });
+    if (fetchError) throw fetchError;
+    return ((data ?? []) as Array<{ id: string; name: string; price: number | string | null }>).map(
+      (row) => ({ id: row.id, name: row.name, price: Number(row.price ?? 0) }),
+    );
+  }, []);
+
+  // Which tiers a batch currently offers (for seeding the editor's checkboxes).
+  const fetchBatchTierIds = useCallback(async (batchId: string): Promise<string[]> => {
+    const { data, error: fetchError } = await supabase
+      .from('batch_tiers')
+      .select('tier_id')
+      .eq('group_buy_batch_id', batchId);
+    if (fetchError) throw fetchError;
+    return ((data ?? []) as Array<{ tier_id: string }>).map((row) => row.tier_id);
+  }, []);
+
+  // Edit an existing batch's settings without reopening it: name (direct admin
+  // UPDATE, like setFulfillmentStage), announced window (set_group_buy_schedule),
+  // and offered tiers (set_batch_tiers). One refresh reconciles afterwards.
+  const updateBatchSettings = useCallback(
+    async (batchId: string, settings: BatchSettings) => {
+      const name = settings.name?.trim() ? settings.name.trim() : null;
+
+      const { error: nameError } = await supabase
+        .from('group_buy_batches')
+        .update({ name })
+        .eq('id', batchId);
+      if (nameError) throw nameError;
+
+      const { error: scheduleError } = await supabase.rpc('set_group_buy_schedule', {
+        p_id: batchId,
+        p_starts_at: settings.startsAt ?? null,
+        p_ends_at: settings.endsAt ?? null,
+      });
+      if (scheduleError) throw scheduleError;
+
+      const { error: tierError } = await supabase.rpc('set_batch_tiers', {
+        p_batch_id: batchId,
+        p_tier_ids: settings.tierIds,
+      });
+      if (tierError) throw tierError;
+
       await refresh();
     },
     [refresh],
@@ -246,6 +306,9 @@ export const useGroupBuy = () => {
     refresh,
     openBatch,
     setSchedule,
+    fetchOfferableTiers,
+    fetchBatchTierIds,
+    updateBatchSettings,
     closeBatch,
     startFinalizing,
     finalizeBatch,

@@ -10,6 +10,14 @@ vi.mock('../../hooks/useCouriers', () => ({
   useCouriers: () => ({ couriers: [] }),
 }));
 
+// Image upload hits ImageKit; stub it to resolve a stable URL.
+vi.mock('../../hooks/useImageUpload', () => ({
+  useImageUpload: () => ({
+    uploadImage: vi.fn(async () => 'https://cdn.example/balance.png'),
+    uploading: false,
+  }),
+}));
+
 function order(overrides: Partial<BatchOrder> = {}): BatchOrder {
   return {
     id: 'o1',
@@ -28,9 +36,11 @@ function order(overrides: Partial<BatchOrder> = {}): BatchOrder {
     order_items: [],
     subtotal: 1000,
     total_price: 1000,
+    paid_total: null,
     shipping_fee: 0,
     payment_method_name: 'GCash',
     payment_proof_url: null,
+    additional_payment_proof_url: null,
     payment_status: 'pending',
     order_status: 'packing',
     admin_notes: null,
@@ -55,6 +65,8 @@ function setup(o: BatchOrder) {
     onCancel: vi.fn(),
     onSaveTracking: vi.fn(),
     onSaveItems: vi.fn(),
+    onVerifyBalance: vi.fn(),
+    onAttachProof: vi.fn(),
   };
   let lastRequest: ConfirmRequest | null = null;
   const requestConfirm = vi.fn((req: ConfirmRequest) => {
@@ -101,5 +113,40 @@ describe('BatchOrderDetail status routing', () => {
 
     expect(handlers.onUpdateStatus).toHaveBeenCalledWith('o1', 'delivered');
     expect(handlers.onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('BatchOrderDetail balance flow', () => {
+  // paid_total 1000 + total 1500 => 500 owed for items added after payment.
+  const balanceOrder = (over: Partial<BatchOrder> = {}) =>
+    order({ paid_total: 1000, total_price: 1500, payment_status: 'pending', ...over });
+
+  it('shows the balance-due banner and marks the balance paid', async () => {
+    const { handlers } = setup(balanceOrder());
+
+    expect(screen.getByText(/balance due/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /mark balance paid/i }));
+
+    expect(handlers.onVerifyBalance).toHaveBeenCalledWith('o1');
+  });
+
+  it('soft-gates confirming an order that still owes a balance', async () => {
+    const { handlers, requestConfirm, getRequest } = setup(
+      balanceOrder({ order_status: 'new' }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /confirm order/i }));
+
+    // Warns first; only proceeds once the admin accepts the override.
+    expect(requestConfirm).toHaveBeenCalledTimes(1);
+    expect(handlers.onConfirm).not.toHaveBeenCalled();
+    getRequest()?.onConfirm();
+    expect(handlers.onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the balance banner when nothing is owed', () => {
+    setup(order({ paid_total: 1000, total_price: 1000, payment_status: 'paid' }));
+
+    expect(screen.queryByText(/balance due/i)).not.toBeInTheDocument();
   });
 });

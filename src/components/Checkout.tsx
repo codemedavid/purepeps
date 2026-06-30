@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ShieldCheck, Package, CreditCard, Activity, Copy, Check, MessageCircle, Tag, Upload, Database, Lock, Truck } from 'lucide-react';
-import type { CartItem, GroupBuyProgressItem } from '../types';
+import type { CartItem, GroupBuyProgressItem, Product } from '../types';
 import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useShippingLocations } from '../hooks/useShippingLocations';
@@ -23,6 +23,13 @@ interface CheckoutProps {
     lockEmail?: boolean;
     /** Whether the member's tier unlocks checkout for a given category. */
     canAccessCategory?: (categoryId: string | null | undefined) => boolean;
+    /**
+     * Live catalog products. The cart persists a snapshot of each product in
+     * localStorage, so its `category` can be stale after an admin re-categorises
+     * a product. We re-derive the current category from this list for the tier
+     * gate, so the client's check matches the server's (which reads live data).
+     */
+    products?: Product[];
     isBatchOpen?: boolean;
     batchId?: string | null;
     groupBuyItems?: GroupBuyProgressItem[];
@@ -36,6 +43,7 @@ const Checkout: React.FC<CheckoutProps> = ({
     defaultEmail = '',
     lockEmail = false,
     canAccessCategory,
+    products = [],
     isBatchOpen = true,
     batchId = null,
     groupBuyItems = [],
@@ -55,9 +63,19 @@ const Checkout: React.FC<CheckoutProps> = ({
     // device value (a mismatch would be rejected by the server tier gate).
     const [email, setEmail] = useState(lockEmail ? defaultEmail : savedInfo?.email || defaultEmail);
 
+    // Resolve a cart item's CURRENT category from the live catalog, falling back
+    // to the cart's stored snapshot when the product isn't in the live list. This
+    // keeps the tier gate in sync with the server, which reads live products.
+    const liveCategoryById = React.useMemo(
+        () => new Map(products.map((p) => [p.id, p.category])),
+        [products],
+    );
+    const itemCategory = (item: CartItem) =>
+        liveCategoryById.get(item.product.id) ?? item.product.category;
+
     // Cart items whose category is outside the member's tier (server will reject).
     const lockedItems = canAccessCategory
-        ? cartItems.filter((item) => !canAccessCategory(item.product.category))
+        ? cartItems.filter((item) => !canAccessCategory(itemCategory(item)))
         : [];
     const hasLockedItems = lockedItems.length > 0;
     // Self-serve tier upgrade — only verified members (locked email) can upgrade.
@@ -237,6 +255,18 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
+        // Tier gate (client mirror of the server trigger). A stale persisted cart
+        // can carry items outside the member's tier; block here with a clear,
+        // actionable message instead of letting the server reject the insert.
+        if (hasLockedItems) {
+            alert(
+                `These items are outside your access tier and can't be ordered: ${lockedItems
+                    .map((i) => i.product.name)
+                    .join(', ')}.\n\nRemove them from your cart, or upgrade your tier, to continue.`,
+            );
+            return;
+        }
+
         // Pre-submit cap check: catch any product whose cart quantity exceeds what
         // its batch cap still allows before we upload anything.
         const cartQtyByProduct = cartItems.reduce<Record<string, number>>((acc, item) => {
@@ -350,6 +380,13 @@ const Checkout: React.FC<CheckoutProps> = ({
                 if (lowerMessage.includes('group buy') || lowerMessage.includes('limit reached')) {
                     alert(orderError.message);
                     await onRefreshGroupBuy?.();
+                    return;
+                }
+
+                // Tier-gate rejections are already shopper-friendly (they name the
+                // category and the fix). Show as-is, without the support footer.
+                if (lowerMessage.includes('access tier') || lowerMessage.includes('group-buy access')) {
+                    alert(orderError.message);
                     return;
                 }
 

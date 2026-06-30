@@ -6,8 +6,11 @@ import {
   XCircle,
   Image as ImageIcon,
   Tag,
+  AlertTriangle,
+  Upload,
 } from 'lucide-react';
 import { useCouriers } from '../../hooks/useCouriers';
+import { useImageUpload } from '../../hooks/useImageUpload';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
 import type { BatchOrder, OrderLineItem, Product } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
@@ -31,6 +34,8 @@ interface BatchOrderDetailProps {
   onCancel: (orderId: string) => void;
   onSaveTracking: (orderId: string, tracking: TrackingInput) => void;
   onSaveItems: (orderId: string, items: OrderLineItem[]) => void;
+  onVerifyBalance: (orderId: string) => void;
+  onAttachProof: (orderId: string, proofUrl: string) => void;
 }
 
 /**
@@ -50,8 +55,12 @@ export function BatchOrderDetail({
   onCancel,
   onSaveTracking,
   onSaveItems,
+  onVerifyBalance,
+  onAttachProof,
 }: BatchOrderDetailProps) {
   const { couriers } = useCouriers();
+  const { uploadImage, uploading: uploadingProof } = useImageUpload('payment-proofs');
+  const [proofError, setProofError] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? '');
   // Seed from the stored provider only; never default to a hardcoded courier, which
   // could silently overwrite shipping_provider with the wrong value on save.
@@ -73,16 +82,53 @@ export function BatchOrderDetail({
   const isCancelled = order.order_status === 'cancelled';
   const isNew = order.order_status === 'new';
 
+  // Balance owed after items were added post-payment. paid_total is the amount
+  // confirmed paid; null means the order was never confirmed paid (no balance).
+  const total = order.total_price ?? 0;
+  const balanceDue = order.paid_total != null ? Math.max(0, total - order.paid_total) : 0;
+  const hasBalance = balanceDue > 0;
+  const proofUnderReview = hasBalance && order.payment_status === 'submitted';
+
+  // Confirming marks the order fully paid up to the current total, which clears
+  // any balance. Warn (soft gate) but let the admin proceed.
+  const confirmOrderGated = () => {
+    if (hasBalance) {
+      requestConfirm({
+        title: 'Balance still outstanding',
+        message: `This order has ${peso(
+          balanceDue,
+        )} unpaid from added items. Confirming marks it fully paid anyway. Proceed?`,
+        confirmLabel: 'Confirm as paid',
+        onConfirm: () => onConfirm(order),
+      });
+      return;
+    }
+    onConfirm(order);
+  };
+
   const handleStatusSelect = (value: string) => {
     if (value === order.order_status) return;
     // Always route confirmation through onConfirm so it marks paid consistently,
     // however the order reached 'confirmed' (not just from the 'new' state).
     if (value === 'confirmed') {
-      onConfirm(order);
+      confirmOrderGated();
     } else if (value === 'cancelled') {
       handleCancel();
     } else {
       onUpdateStatus(order.id, value);
+    }
+  };
+
+  const handleProofFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setProofError(null);
+    try {
+      const url = await uploadImage(file);
+      onAttachProof(order.id, url);
+    } catch (err) {
+      setProofError(err instanceof Error ? err.message : 'Failed to upload the receipt.');
     }
   };
 
@@ -136,7 +182,7 @@ export function BatchOrderDetail({
             {isNew && (
               <button
                 type="button"
-                onClick={() => onConfirm(order)}
+                onClick={confirmOrderGated}
                 disabled={busy}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs md:text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -211,10 +257,16 @@ export function BatchOrderDetail({
                 className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                   order.payment_status === 'paid'
                     ? 'bg-green-100 text-green-700'
-                    : 'bg-amber-100 text-amber-700'
+                    : order.payment_status === 'submitted'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-amber-100 text-amber-700'
                 }`}
               >
-                {order.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                {order.payment_status === 'paid'
+                  ? 'Paid'
+                  : order.payment_status === 'submitted'
+                    ? 'Under review'
+                    : 'Pending'}
               </span>
             </p>
             <p>
@@ -224,8 +276,55 @@ export function BatchOrderDetail({
               <span className="font-semibold">Total:</span>{' '}
               <span className="font-bold">{peso(order.total_price)}</span>
             </p>
+            {order.paid_total != null && (
+              <p>
+                <span className="font-semibold">Paid:</span> {peso(order.paid_total)}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* Balance due — items were added after the order was paid */}
+        {hasBalance && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="h-4 w-4" />
+              <h3 className="font-bold text-sm">Balance due — {peso(balanceDue)}</h3>
+            </div>
+            <p className="text-xs text-amber-800">
+              {proofUnderReview
+                ? 'The customer uploaded a new receipt for the added items. Review it below, then mark the balance paid.'
+                : 'Items were added after this order was paid. Ask the customer to upload a new receipt on the tracking page (or upload it for them here), then mark the balance paid.'}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label
+                className={`px-3 py-2 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs md:text-sm font-medium flex items-center justify-center gap-2 cursor-pointer hover:bg-amber-100 ${
+                  busy || uploadingProof ? 'opacity-50 pointer-events-none' : ''
+                }`}
+              >
+                <Upload className="h-4 w-4" />
+                {uploadingProof ? 'Uploading…' : 'Upload receipt for customer'}
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleProofFile}
+                  disabled={busy || uploadingProof}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => onVerifyBalance(order.id)}
+                disabled={busy || uploadingProof}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs md:text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle className="h-4 w-4" />
+                Mark balance paid
+              </button>
+            </div>
+            {proofError && <p className="text-xs text-red-600">{proofError}</p>}
+          </div>
+        )}
 
         {/* Payment proof */}
         {order.payment_proof_url && (
@@ -238,6 +337,23 @@ export function BatchOrderDetail({
               <img
                 src={order.payment_proof_url}
                 alt="Payment proof"
+                className="max-w-full md:max-w-md h-auto rounded-lg border border-gray-300"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Balance payment receipt — the new receipt for the added items */}
+        {order.additional_payment_proof_url && (
+          <div>
+            <h3 className="font-bold text-gray-900 mb-2 text-sm flex items-center gap-2">
+              <ImageIcon className="h-4 w-4" />
+              Balance payment receipt
+            </h3>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <img
+                src={order.additional_payment_proof_url}
+                alt="Balance payment receipt"
                 className="max-w-full md:max-w-md h-auto rounded-lg border border-gray-300"
               />
             </div>

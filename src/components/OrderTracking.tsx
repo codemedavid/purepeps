@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift } from 'lucide-react';
+import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
+import { useImageUpload } from '../hooks/useImageUpload';
 import posthog from '../lib/posthog';
 import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders } from '../utils/orderTracking';
 import type { OrderBundleRow } from '../types';
@@ -17,6 +18,8 @@ const OrderTracking: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
     const { orders: savedOrders } = useOrderHistory();
+    const { uploadImage, uploading: uploadingProof } = useImageUpload('payment-proofs');
+    const [balanceProofError, setBalanceProofError] = useState<string | null>(null);
 
     const trackOrder = useCallback(async (rawId: string) => {
         const trimmedId = rawId.trim();
@@ -66,6 +69,33 @@ const OrderTracking: React.FC = () => {
         e.preventDefault();
         void trackOrder(orderId);
     };
+
+    // Upload a fresh receipt for the balance owed after items were added, then
+    // re-fetch so the banner updates to "under review". The order number is the
+    // auth token; submit_additional_payment only accepts it when a balance is due.
+    const handleBalanceProofUpload = useCallback(
+        async (orderNumber: string, event: React.ChangeEvent<HTMLInputElement>) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            setBalanceProofError(null);
+            try {
+                const url = await uploadImage(file);
+                const { error } = await supabase.rpc('submit_additional_payment', {
+                    order_id_input: orderNumber,
+                    proof_url: url,
+                });
+                if (error) throw error;
+                await trackOrder(orderNumber);
+            } catch (err) {
+                console.error('Error submitting balance payment:', err);
+                setBalanceProofError(
+                    err instanceof Error ? err.message : 'Could not submit your receipt. Please try again.',
+                );
+            }
+        },
+        [uploadImage, trackOrder],
+    );
 
     // The customer's own orders (root + any same-email repeats in this batch),
     // numbered Order 1, Order 2, … The root drives the merged timeline; claim
@@ -182,6 +212,48 @@ const OrderTracking: React.FC = () => {
 
                 {hasSearched && order && (
                     <div className="space-y-6 animate-fade-in">
+                        {/* Additional payment required — items were added after payment */}
+                        {order.balance_due > 0 && order.order_number && (
+                            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 shadow-md">
+                                <div className="flex items-center gap-2 text-amber-800 mb-2">
+                                    <AlertCircle className="w-5 h-5" />
+                                    <h2 className="text-lg font-bold">
+                                        Additional payment required — ₱{order.balance_due.toLocaleString()}
+                                    </h2>
+                                </div>
+                                {order.payment_status === 'submitted' ? (
+                                    <p className="text-sm text-amber-800">
+                                        Thanks! Your new receipt is under review. We'll confirm your order
+                                        once payment is verified. You can upload a different receipt if needed.
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-amber-800">
+                                        New items were added to your order. Please pay the remaining
+                                        ₱{order.balance_due.toLocaleString()} and upload your receipt below so we
+                                        can confirm your order.
+                                    </p>
+                                )}
+                                <label
+                                    className={`mt-4 inline-flex items-center gap-2 px-5 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-xl font-bold cursor-pointer transition-colors ${
+                                        uploadingProof ? 'opacity-50 pointer-events-none' : ''
+                                    }`}
+                                >
+                                    <Upload className="w-5 h-5" />
+                                    {uploadingProof ? 'Uploading…' : 'Upload new receipt'}
+                                    <input
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        onChange={(e) => void handleBalanceProofUpload(order.order_number as string, e)}
+                                        disabled={uploadingProof}
+                                        className="hidden"
+                                    />
+                                </label>
+                                {balanceProofError && (
+                                    <p className="mt-2 text-sm text-red-600">{balanceProofError}</p>
+                                )}
+                            </div>
+                        )}
+
                         {/* Status Card */}
                         <div className="bg-white rounded-2xl shadow-xl border-2 border-navy-700/30 overflow-hidden">
                             <div className="bg-navy-900 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">

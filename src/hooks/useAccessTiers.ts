@@ -34,6 +34,11 @@ async function fetchTiers(): Promise<Tier[]> {
 // runs once, and the result is reused on subsequent mounts (no loading flash).
 // While active, one realtime subscription live-updates the picker when an admin
 // edits tiers or their categories.
+//
+// get_access_tiers is scoped to the OPEN batch's offered set (batch_tiers), so we
+// must also refresh when a batch's offered tiers change or a new batch opens —
+// otherwise the cached list goes stale (e.g. empty if it first loaded before the
+// open batch had any tiers linked) and the picker shows nothing.
 const tiersResource = createSharedResource<Tier[]>({
   fetcher: fetchTiers,
   initial: [],
@@ -42,6 +47,10 @@ const tiersResource = createSharedResource<Tier[]>({
       .channel('tiers-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tiers' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tier_categories' }, () =>
+        refresh(),
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'batch_tiers' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_buy_batches' }, () =>
         refresh(),
       )
       .subscribe();

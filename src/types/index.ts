@@ -267,8 +267,14 @@ export interface BatchOrder {
   subtotal: number | null;
   total_price: number | null;
   shipping_fee: number | null;
+  // Total confirmed paid so far. balance_due = max(0, total_price - paid_total).
+  // NULL means the order was never confirmed paid.
+  paid_total: number | null;
   payment_method_name: string | null;
   payment_proof_url: string | null;
+  // Receipt covering the balance owed after items were added post-payment.
+  additional_payment_proof_url: string | null;
+  // 'pending' | 'submitted' (balance receipt under review) | 'paid' | 'failed'.
   payment_status: string;
   order_status: string;
   admin_notes: string | null;
@@ -305,4 +311,8 @@ export interface OrderBundleRow {
   parent_order_id: string | null;
   group_buy_batch_id: string | null;
   batch_status: GroupBuyStatus | null;
+  // Total confirmed paid so far (NULL if never confirmed paid).
+  paid_total: number | null;
+  // Outstanding balance owed after items were added post-payment (0 when none).
+  balance_due: number;
 }

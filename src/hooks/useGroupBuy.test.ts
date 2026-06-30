@@ -60,6 +60,93 @@ describe('useGroupBuy.setFulfillmentStage', () => {
   });
 });
 
+describe('useGroupBuy.fetchBatchTierIds', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads tier_id rows for the batch from batch_tiers', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.fetchBatchTierIds('batch-1');
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith('batch_tiers');
+    expect(chain.select).toHaveBeenCalledWith('tier_id');
+    expect(chain.eq).toHaveBeenCalledWith('group_buy_batch_id', 'batch-1');
+  });
+});
+
+describe('useGroupBuy.fetchOfferableTiers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads active tiers ordered by sort order', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.fetchOfferableTiers();
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith('tiers');
+    expect(chain.eq).toHaveBeenCalledWith('active', true);
+    expect(chain.order).toHaveBeenCalledWith('sort_order', { ascending: true });
+  });
+});
+
+describe('useGroupBuy.updateBatchSettings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('writes the name, schedule, and offered tiers for the batch', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.updateBatchSettings('batch-1', {
+        name: 'July Drop',
+        startsAt: '2026-06-22',
+        endsAt: '2026-07-05',
+        tierIds: ['t1', 't2'],
+      });
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith('group_buy_batches');
+    expect(chain.update).toHaveBeenCalledWith({ name: 'July Drop' });
+    expect(chain.eq).toHaveBeenCalledWith('id', 'batch-1');
+    expect(mockRpc).toHaveBeenCalledWith('set_group_buy_schedule', {
+      p_id: 'batch-1',
+      p_starts_at: '2026-06-22',
+      p_ends_at: '2026-07-05',
+    });
+    expect(mockRpc).toHaveBeenCalledWith('set_batch_tiers', {
+      p_batch_id: 'batch-1',
+      p_tier_ids: ['t1', 't2'],
+    });
+  });
+
+  it('stores a blank name as null', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.updateBatchSettings('batch-1', {
+        name: null,
+        startsAt: null,
+        endsAt: null,
+        tierIds: [],
+      });
+    });
+
+    expect(chain.update).toHaveBeenCalledWith({ name: null });
+  });
+});
+
 describe('useGroupBuy.openBatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();

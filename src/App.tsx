@@ -127,6 +127,7 @@ function MainApp() {
                         defaultEmail={access.email ?? ''}
                         lockEmail={Boolean(access.email)}
                         canAccessCategory={access.canAccessCategory}
+                        products={menuItems}
                         isBatchOpen={isBatchOpen}
                         batchId={groupBuy.batch?.id ?? null}
                         groupBuyItems={groupBuy.items}

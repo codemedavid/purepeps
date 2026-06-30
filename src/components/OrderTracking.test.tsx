@@ -25,6 +25,14 @@ vi.mock('./groupbuy/LeftoverClaimPanel', () => ({
   default: () => <div data-testid="leftover-claim-panel">Leftover panel</div>,
 }));
 
+// Image upload hits ImageKit; stub it to resolve a stable URL.
+vi.mock('../hooks/useImageUpload', () => ({
+  useImageUpload: () => ({
+    uploadImage: vi.fn(async () => 'https://cdn.example/balance.png'),
+    uploading: false,
+  }),
+}));
+
 const mockRoot = {
   id: 'order-uuid-123',
   order_number: 'TBS-1234',
@@ -350,6 +358,69 @@ describe('OrderTracking', () => {
         expect(screen.getByText('TBS-1234')).toBeInTheDocument();
       });
       expect(screen.queryByText('Order 2')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Additional payment (balance after items added post-payment) ---
+
+  describe('additional payment', () => {
+    const balanceRoot = {
+      ...mockRoot,
+      payment_status: 'pending',
+      paid_total: 1000,
+      balance_due: 500,
+    };
+
+    it('prompts for the balance and submits a new receipt', async () => {
+      mockBundleOnce([balanceRoot]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Additional payment required/)).toBeInTheDocument();
+      });
+      expect(screen.getAllByText(/₱500/).length).toBeGreaterThanOrEqual(1);
+
+      const input = screen.getByLabelText(/upload new receipt/i);
+      const file = new File(['x'], 'receipt.png', { type: 'image/png' });
+      await userEvent.upload(input, file);
+
+      await waitFor(() => {
+        expect(mockRpc).toHaveBeenCalledWith('submit_additional_payment', {
+          order_id_input: 'TBS-1234',
+          proof_url: 'https://cdn.example/balance.png',
+        });
+      });
+    });
+
+    it('shows the under-review message once a balance receipt is submitted', async () => {
+      mockBundleOnce([{ ...balanceRoot, payment_status: 'submitted' }]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/under review/i)).toBeInTheDocument();
+      });
+    });
+
+    it('does not show the banner when nothing is owed', async () => {
+      mockBundleOnce([{ ...mockRoot, balance_due: 0 }]);
+
+      render(<OrderTracking />);
+
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Additional payment required/)).not.toBeInTheDocument();
     });
   });
 

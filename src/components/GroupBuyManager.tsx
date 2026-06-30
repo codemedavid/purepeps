@@ -23,6 +23,8 @@ import { CapsProgressTable } from './groupbuy/CapsProgressTable';
 import { BatchCloseoutPanel } from './groupbuy/BatchCloseoutPanel';
 import { OpenBatchModal } from './groupbuy/OpenBatchModal';
 import type { OpenBatchValues } from './groupbuy/OpenBatchModal';
+import { EditBatchModal } from './groupbuy/EditBatchModal';
+import type { BatchTierOption, EditBatchValues } from './groupbuy/EditBatchModal';
 import { ConfirmDialog } from './groupbuy/ConfirmDialog';
 import type { ConfirmRequest, RequestConfirm } from './groupbuy/ConfirmDialog';
 import { formatDateTime } from './groupbuy/orderStatusStyles';
@@ -50,6 +52,9 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     removeCap,
     setFulfillmentStage,
     fetchProgress,
+    fetchOfferableTiers,
+    fetchBatchTierIds,
+    updateBatchSettings,
   } = useGroupBuy();
   const { products } = useMenu();
 
@@ -64,6 +69,11 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     closesCurrent: false,
   });
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [editState, setEditState] = useState<{
+    open: boolean;
+    tiers: BatchTierOption[];
+    selectedTierIds: string[];
+  }>({ open: false, tiers: [], selectedTierIds: [] });
 
   // One shared confirm dialog serves every destructive/lifecycle action.
   const requestConfirm = useCallback<RequestConfirm>((request) => {
@@ -85,6 +95,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     error: ordersError,
     reload: reloadOrders,
     confirmOrder,
+    verifyAdditionalPayment,
+    attachAdminPaymentProof,
     updateStatus,
     cancelOrder,
     saveTracking,
@@ -169,6 +181,28 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     void runAction(() => openBatch(name ?? undefined, startsAt, endsAt));
   };
 
+  // ---- Edit-settings modal (open batch only) ----
+  // Load the offerable tiers + the batch's current selection before opening, so
+  // the modal seeds its checkboxes from server truth rather than stale state.
+  const handleEditSettings = () => {
+    if (!activeBatch) return;
+    void runAction(async () => {
+      const [tiers, selectedTierIds] = await Promise.all([
+        fetchOfferableTiers(),
+        fetchBatchTierIds(activeBatch.id),
+      ]);
+      setEditState({ open: true, tiers, selectedTierIds });
+    });
+  };
+
+  const closeEditModal = () => setEditState((prev) => ({ ...prev, open: false }));
+
+  const submitEditSettings = (values: EditBatchValues) => {
+    if (!activeBatch) return;
+    closeEditModal();
+    void runAction(() => updateBatchSettings(activeBatch.id, values));
+  };
+
   // ---- Lifecycle handlers (confirmation lives in the lifecycle bar) ----
   const handleStartFinalizing = (batchId: string) => void runAction(() => startFinalizing(batchId));
   const handleFinalize = (batchId: string) => void runAction(() => finalizeBatch(batchId));
@@ -220,6 +254,10 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   ) => void runAction(() => saveTracking(orderId, tracking));
   const handleSaveItems = (orderId: string, items: OrderLineItem[]) =>
     void runAction(() => saveItems(orderId, items));
+  const handleVerifyBalance = (orderId: string) =>
+    void runAction(() => verifyAdditionalPayment(orderId));
+  const handleAttachProof = (orderId: string, proofUrl: string) =>
+    void runAction(() => attachAdminPaymentProof(orderId, proofUrl));
   const handleBulkUpdate = (orderIds: string[], status: string) =>
     void runAction(() => bulkUpdateStatus(orderIds, status));
 
@@ -318,6 +356,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
             onCancel={handleCancelOrder}
             onSaveTracking={handleSaveTracking}
             onSaveItems={handleSaveItems}
+            onVerifyBalance={handleVerifyBalance}
+            onAttachProof={handleAttachProof}
           />
         ) : !selectedBatch ? (
           <BatchOverviewTab
@@ -353,6 +393,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 busy={busy}
                 onViewOrder={handleViewOrder}
                 onGoToOrders={() => setActiveTab('orders')}
+                onEditSettings={handleEditSettings}
                 {...lifecycleHandlers}
               />
             )}
@@ -516,6 +557,18 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
         onSubmit={submitOpenBatch}
         onCancel={() => setOpenModal((prev) => ({ ...prev, open: false }))}
       />
+
+      {activeBatch && (
+        <EditBatchModal
+          open={editState.open}
+          busy={busy}
+          batch={activeBatch}
+          tiers={editState.tiers}
+          selectedTierIds={editState.selectedTierIds}
+          onSubmit={submitEditSettings}
+          onCancel={closeEditModal}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmState?.open ?? false}

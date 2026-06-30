@@ -65,27 +65,78 @@ export function useBatchOrders(batchId: string | null) {
   }, []);
 
   // Group-buy confirm: mark confirmed + paid. Deliberately NO stock check and NO
-  // stock deduction — pre-orders are capped, not inventory-backed.
+  // stock deduction — pre-orders are capped, not inventory-backed. Records
+  // paid_total as the current total so any later item edit can detect a balance.
   const confirmOrder = useCallback(
     async (order: BatchOrder): Promise<void> => {
       try {
         const updatedAt = new Date().toISOString();
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({
-            order_status: 'confirmed',
-            payment_status: 'paid',
-            updated_at: updatedAt,
-          })
-          .eq('id', order.id);
-        if (updateError) throw updateError;
-        patchOrder(order.id, {
+        const patch = {
           order_status: 'confirmed',
           payment_status: 'paid',
+          paid_total: order.total_price ?? 0,
           updated_at: updatedAt,
-        });
+        };
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update(patch)
+          .eq('id', order.id);
+        if (updateError) throw updateError;
+        patchOrder(order.id, patch);
       } catch (err) {
         console.error('Error confirming batch order:', err);
+        throw err;
+      }
+    },
+    [patchOrder],
+  );
+
+  // Admin confirms the customer paid the outstanding balance: mark fully paid and
+  // advance paid_total to the current total so the balance clears.
+  const verifyAdditionalPayment = useCallback(
+    async (orderId: string): Promise<void> => {
+      try {
+        const updatedAt = new Date().toISOString();
+        const existing = orders.find((order) => order.id === orderId);
+        const patch = {
+          payment_status: 'paid',
+          paid_total: existing?.total_price ?? 0,
+          updated_at: updatedAt,
+        };
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId);
+        if (updateError) throw updateError;
+        patchOrder(orderId, patch);
+      } catch (err) {
+        console.error('Error verifying additional payment:', err);
+        throw err;
+      }
+    },
+    [orders, patchOrder],
+  );
+
+  // Admin uploads the balance receipt on the customer's behalf (e.g. they sent it
+  // over FB/WhatsApp). Stores the proof and marks it under review — the admin
+  // still verifies separately, mirroring the customer self-serve path.
+  const attachAdminPaymentProof = useCallback(
+    async (orderId: string, proofUrl: string): Promise<void> => {
+      try {
+        const updatedAt = new Date().toISOString();
+        const patch = {
+          additional_payment_proof_url: proofUrl,
+          payment_status: 'submitted',
+          updated_at: updatedAt,
+        };
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId);
+        if (updateError) throw updateError;
+        patchOrder(orderId, patch);
+      } catch (err) {
+        console.error('Error attaching balance payment proof:', err);
         throw err;
       }
     },
@@ -159,37 +210,62 @@ export function useBatchOrders(batchId: string | null) {
   // Edit the line items of an order. subtotal and total_price are both the sum of
   // line totals — total_price EXCLUDES shipping in this codebase (shipping_fee is
   // stored and applied separately). Appends an audit line to admin_notes.
+  //
+  // If the order was already paid and the new total exceeds what was paid, it
+  // grows a BALANCE: payment_status drops back to 'pending' (balance due) and any
+  // stale balance receipt is cleared, so the customer (or admin) supplies a fresh
+  // receipt and an admin re-verifies. The paid baseline is paid_total, falling
+  // back to the pre-edit total for orders paid before paid_total was tracked
+  // (self-healing). Lowering the total never creates a balance.
   const saveItems = useCallback(
     async (orderId: string, items: OrderLineItem[]): Promise<void> => {
       try {
         const newTotal = items.reduce((sum, item) => sum + (item.total ?? 0), 0);
         const updatedAt = new Date().toISOString();
         const existing = orders.find((order) => order.id === orderId);
-        const auditLine = `[${updatedAt}] Items edited by admin (${items.length} line item${
-          items.length === 1 ? '' : 's'
-        }, subtotal ${newTotal}).`;
+
+        const paidBaseline =
+          existing?.paid_total ??
+          (existing?.payment_status === 'paid' ? existing.total_price ?? 0 : null);
+        const hasBalance = paidBaseline != null && newTotal > paidBaseline;
+
+        const auditLine = hasBalance
+          ? `[${updatedAt}] Items edited by admin (${items.length} line item${
+              items.length === 1 ? '' : 's'
+            }, subtotal ${newTotal}). Balance due ${newTotal - paidBaseline} — awaiting additional payment.`
+          : `[${updatedAt}] Items edited by admin (${items.length} line item${
+              items.length === 1 ? '' : 's'
+            }, subtotal ${newTotal}).`;
         const nextNotes = existing?.admin_notes
           ? `${existing.admin_notes}\n${auditLine}`
           : auditLine;
 
-        const { error: updateError } = await supabase
-          .from('orders')
-          .update({
-            order_items: items,
-            subtotal: newTotal,
-            total_price: newTotal,
-            admin_notes: nextNotes,
-            updated_at: updatedAt,
-          })
-          .eq('id', orderId);
-        if (updateError) throw updateError;
-        patchOrder(orderId, {
+        const patch: Partial<BatchOrder> & {
+          order_items: OrderLineItem[];
+          subtotal: number;
+          total_price: number;
+          admin_notes: string;
+          updated_at: string;
+        } = {
           order_items: items,
           subtotal: newTotal,
           total_price: newTotal,
           admin_notes: nextNotes,
           updated_at: updatedAt,
-        });
+        };
+        if (hasBalance) {
+          patch.payment_status = 'pending';
+          patch.additional_payment_proof_url = null;
+          // Pin the baseline so the balance stays correct on subsequent edits.
+          patch.paid_total = paidBaseline;
+        }
+
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId);
+        if (updateError) throw updateError;
+        patchOrder(orderId, patch);
       } catch (err) {
         console.error('Error saving batch order items:', err);
         throw err;
@@ -233,6 +309,8 @@ export function useBatchOrders(batchId: string | null) {
     error,
     reload,
     confirmOrder,
+    verifyAdditionalPayment,
+    attachAdminPaymentProof,
     updateStatus,
     cancelOrder,
     saveTracking,

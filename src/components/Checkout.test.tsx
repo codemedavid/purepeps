@@ -416,4 +416,63 @@ describe('Checkout', () => {
       expect(screen.getByText(/Promo code applied/)).toBeInTheDocument();
     });
   });
+
+  // --- Access Tier Gate ---
+  // Mirrors the server enforce_tier_on_order trigger so a member never reaches a
+  // dead-end "Failed to save order" rejection at the final step. The gate must
+  // (1) name the blocked items, (2) disable Proceed to Payment, and (3) judge
+  // each item by its LIVE catalog category, not the cart's stored snapshot.
+
+  describe('access tier gate', () => {
+    it('blocks checkout and names items whose category is outside the member tier', () => {
+      render(<Checkout {...defaultProps} canAccessCategory={() => false} />);
+
+      expect(
+        screen.getByText(/Some items are outside your access tier/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Proceed to Payment').closest('button'),
+      ).toBeDisabled();
+    });
+
+    it('allows checkout when every cart category is within the member tier', () => {
+      render(<Checkout {...defaultProps} canAccessCategory={() => true} />);
+
+      expect(
+        screen.queryByText(/outside your access tier/i),
+      ).not.toBeInTheDocument();
+    });
+
+    it('gates on the LIVE catalog category, not the stale cart snapshot', () => {
+      // The cart snapshot says 'Recovery' (which the member's tier allows), but
+      // the catalog has since re-categorised the same product into the locked
+      // 'Fat dissolvers' category. The gate must follow the live product, exactly
+      // as the server does — otherwise the client passes an order the server then
+      // rejects with a raw "access tier does not include ..." error.
+      const liveProduct: Product = { ...mockProduct, category: 'Fat dissolvers' };
+
+      render(
+        <Checkout
+          {...defaultProps}
+          products={[liveProduct]}
+          canAccessCategory={(categoryId) => categoryId !== 'Fat dissolvers'}
+        />,
+      );
+
+      expect(
+        screen.getByText(/Some items are outside your access tier/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Proceed to Payment').closest('button'),
+      ).toBeDisabled();
+    });
+
+    it('does not gate any items when no tier restriction is supplied', () => {
+      render(<Checkout {...defaultProps} />);
+
+      expect(
+        screen.queryByText(/outside your access tier/i),
+      ).not.toBeInTheDocument();
+    });
+  });
 });
