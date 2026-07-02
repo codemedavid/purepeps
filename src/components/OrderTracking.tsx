@@ -17,6 +17,10 @@ const OrderTracking: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
+    // Which order in the bundle drives the main status card. Defaults to the
+    // order the customer actually searched for, and switches when they tap one
+    // of the linked "Your orders in this group buy" cards.
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const { orders: savedOrders } = useOrderHistory();
     const { uploadImage, uploading: uploadingProof } = useImageUpload('payment-proofs');
     const [balanceProofError, setBalanceProofError] = useState<string | null>(null);
@@ -52,10 +56,16 @@ const OrderTracking: React.FC = () => {
             }
 
             setBundle(rows);
+            // Show the order the customer searched for. Claim add-ons render in
+            // their own section, so only match the numbered orders; fall back to
+            // the root when the lookup was by a shared key (e.g. balance re-fetch).
             const root = rows.find((row) => !row.is_claim) ?? rows[0];
+            const tracked =
+                rows.find((row) => !row.is_claim && row.order_number === trimmedId) ?? root;
+            setSelectedOrderId(tracked.id);
             posthog.capture('tbs_order_tracked', {
-                order_number: root.order_number,
-                order_status: root.order_status,
+                order_number: tracked.order_number,
+                order_status: tracked.order_status,
             });
         } catch (err) {
             console.error('Error fetching order:', err);
@@ -101,7 +111,10 @@ const OrderTracking: React.FC = () => {
     // numbered Order 1, Order 2, … The root drives the merged timeline; claim
     // rows are listed separately as add-ons below.
     const sequencedOrders = sequenceBundleOrders(bundle);
-    const order = sequencedOrders[0]?.order ?? (bundle.length > 0 ? bundle[0] : null);
+    const order =
+        sequencedOrders.find((seq) => seq.order.id === selectedOrderId)?.order ??
+        sequencedOrders[0]?.order ??
+        (bundle.length > 0 ? bundle[0] : null);
     const hasRepeatOrders = sequencedOrders.length > 1;
     const claimRows = bundle.filter((row) => row.is_claim);
     const isFinalizing = order?.batch_status === 'finalizing';
@@ -447,9 +460,16 @@ const OrderTracking: React.FC = () => {
                                 </div>
                                 <div className="p-6 md:p-8 space-y-4">
                                     {sequencedOrders.map(({ order: seqOrder, label }) => (
-                                        <div
+                                        <button
                                             key={seqOrder.id}
-                                            className="bg-gray-50 rounded-xl p-5 border border-gray-200"
+                                            type="button"
+                                            onClick={() => setSelectedOrderId(seqOrder.id)}
+                                            aria-pressed={seqOrder.id === order.id}
+                                            className={`w-full text-left rounded-xl p-5 border transition-all ${
+                                                seqOrder.id === order.id
+                                                    ? 'bg-gold-50/40 border-navy-900 ring-2 ring-gold-500/20'
+                                                    : 'bg-gray-50 border-gray-200 hover:border-navy-900 hover:bg-gray-50'
+                                            }`}
                                         >
                                             <div className="flex items-start justify-between gap-4 mb-3">
                                                 <div className="min-w-0">
@@ -477,7 +497,7 @@ const OrderTracking: React.FC = () => {
                                                     ₱{(seqOrder.total_price + (seqOrder.shipping_fee || 0)).toLocaleString()}
                                                 </span>
                                             </div>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </div>

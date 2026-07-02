@@ -359,6 +359,55 @@ describe('OrderTracking', () => {
       });
       expect(screen.queryByText('Order 2')).not.toBeInTheDocument();
     });
+
+    // Bug: tracking any order in a bundle only ever showed the root order. A
+    // customer whose first order was cancelled but who placed a fresh order
+    // (linked under the same tracking) only saw the cancelled root, never the
+    // order they actually searched for.
+    it('shows the searched order in the main status card, not the root', async () => {
+      mockBundleOnce([
+        { ...mockRoot, order_status: 'cancelled', payment_method_name: 'GCash' },
+        repeatOrder, // TBS-5678, order_status 'new'
+      ]);
+
+      render(<OrderTracking />);
+
+      // Search for the NEW order, not the cancelled root.
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-5678');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        // The new order's timeline (starts at "Placed") must be shown...
+        expect(screen.getAllByText('Placed').length).toBeGreaterThanOrEqual(1);
+      });
+      // ...and the cancelled root's banner must NOT dominate the main card.
+      expect(screen.queryByText('Order Cancelled')).not.toBeInTheDocument();
+    });
+
+    it('switches the main status card when a linked order card is clicked', async () => {
+      mockBundleOnce([
+        { ...mockRoot, order_status: 'cancelled', payment_method_name: 'GCash' },
+        repeatOrder, // TBS-5678, order_status 'new'
+      ]);
+
+      render(<OrderTracking />);
+
+      // Search the cancelled root first — main card shows the cancelled banner.
+      await userEvent.type(screen.getByPlaceholderText(/Enter Order Number/), 'TBS-1234');
+      await userEvent.click(screen.getByText('Track Order'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Order Cancelled')).toBeInTheDocument();
+      });
+
+      // Click the linked "Order 2" card (TBS-5678) to switch the main view.
+      await userEvent.click(screen.getByText('TBS-5678'));
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Placed').length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.queryByText('Order Cancelled')).not.toBeInTheDocument();
+    });
   });
 
   // --- Additional payment (balance after items added post-payment) ---
