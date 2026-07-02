@@ -10,6 +10,8 @@ import {
   pendingUnits,
   resellableUnits,
   productDemandState,
+  isPasaloEligible,
+  filterPasaloProducts,
 } from './groupBuy';
 import type { GroupBuyProgressItem } from '../types';
 
@@ -233,5 +235,55 @@ describe('cancelled-aware progress semantics', () => {
   it('keeps remainingForProduct and claimableRemaining in agreement for capped items', () => {
     const i = item({ cap_quantity: 80, total_quantity: 55, cancelled_quantity: 12 });
     expect(remainingForProduct(i)).toBe(claimableRemaining(i));
+  });
+});
+
+// Pasalo mode: the storefront re-opening filter. Shows ONLY products that have a
+// batch cap AND still have remaining slots — capped-and-full and uncapped
+// products are hidden so shoppers see only items that still need orders.
+describe('isPasaloEligible', () => {
+  it('is true for a capped product with remaining capacity', () => {
+    expect(isPasaloEligible(item({ cap_quantity: 100, total_quantity: 78 }))).toBe(true);
+  });
+
+  it('is false for an uncapped (unlimited) product', () => {
+    expect(isPasaloEligible(item({ cap_quantity: null }))).toBe(false);
+  });
+
+  it('is false for a capped product that is full', () => {
+    expect(isPasaloEligible(item({ cap_quantity: 50, total_quantity: 50 }))).toBe(false);
+    expect(isPasaloEligible(item({ cap_quantity: 50, total_quantity: 60 }))).toBe(false);
+  });
+
+  it('is false when there is no progress item for the product', () => {
+    expect(isPasaloEligible(undefined)).toBe(false);
+  });
+});
+
+describe('filterPasaloProducts', () => {
+  const products = [
+    { id: 'capped-remaining' },
+    { id: 'capped-full' },
+    { id: 'uncapped' },
+    { id: 'no-progress' },
+  ];
+  const items = [
+    item({ product_id: 'capped-remaining', cap_quantity: 100, total_quantity: 40 }),
+    item({ product_id: 'capped-full', cap_quantity: 30, total_quantity: 30 }),
+    item({ product_id: 'uncapped', cap_quantity: null }),
+  ];
+
+  it('keeps only capped products that still have remaining slots', () => {
+    expect(filterPasaloProducts(products, items).map((p) => p.id)).toEqual(['capped-remaining']);
+  });
+
+  it('returns an empty list when there is no progress data (no open batch)', () => {
+    expect(filterPasaloProducts(products, [])).toEqual([]);
+  });
+
+  it('does not mutate the input product array', () => {
+    const input = [...products];
+    filterPasaloProducts(input, items);
+    expect(input).toEqual(products);
   });
 });

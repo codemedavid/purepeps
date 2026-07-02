@@ -44,6 +44,31 @@ export function isSoldOut(item: GroupBuyProgressItem | undefined): boolean {
 }
 
 /**
+ * "Pasalo mode" eligibility: true only for products that have a batch cap AND
+ * still have remaining slots. Uncapped (unlimited) and capped-but-full products
+ * are excluded so the re-opening storefront shows only items still needing
+ * orders. Reuses remainingForProduct so the math stays single-sourced.
+ */
+export function isPasaloEligible(item: GroupBuyProgressItem | undefined): boolean {
+  const remaining = remainingForProduct(item);
+  return remaining != null && remaining > 0;
+}
+
+/**
+ * Filters a product list to the pasalo-eligible subset: capped products with
+ * remaining capacity in the current batch. Pure — returns a new array and never
+ * mutates the input. An empty `items` list (no open batch) yields no matches.
+ */
+export function filterPasaloProducts<T extends { id: string }>(
+  products: readonly T[],
+  items: GroupBuyProgressItem[],
+): T[] {
+  return products.filter((product) =>
+    isPasaloEligible(findProgressItem(items, product.id)),
+  );
+}
+
+/**
  * Units still claimable for a capped product against its cap. `total_quantity`
  * already excludes cancelled units, so this mirrors `remainingForProduct` but is
  * named for the finalizing/claim flow. Returns `null` when there is no cap.
