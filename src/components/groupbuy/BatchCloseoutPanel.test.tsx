@@ -130,6 +130,63 @@ describe('BatchCloseoutPanel', () => {
     expect(writeText.mock.calls[0][0]).toContain('Product,Orders,Units ordered');
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
+
+  it('shows units ordered in kits with vials as subtext', () => {
+    render(
+      <BatchCloseoutPanel
+        summary={summary({ rows: [summary().rows[0]] })}
+        orders={[order({ order_items: [lineItem({ quantity: 3 })] })]}
+        fulfillmentStage={null}
+      />,
+    );
+    // unitsOrdered on the fixture row is 3 vials → 0.3 kits (also totalled in the footer).
+    expect(screen.getAllByText('0.3').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('3 vials').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders a per-variation breakdown under each product row', () => {
+    render(
+      <BatchCloseoutPanel
+        summary={summary()}
+        orders={[
+          order({
+            id: 'a',
+            order_items: [
+              lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: '5mg', quantity: 2 }),
+            ],
+          }),
+          order({
+            id: 'b',
+            order_items: [
+              lineItem({ product_id: 'p1', variation_id: 'v2', variation_name: '10mg', quantity: 1 }),
+            ],
+          }),
+        ]}
+        fulfillmentStage={null}
+      />,
+    );
+    expect(screen.getByText('5mg')).toBeInTheDocument();
+    expect(screen.getByText('10mg')).toBeInTheDocument();
+    expect(screen.getAllByText('1 order')).toHaveLength(2);
+  });
+
+  it('omits the sub-row for a product with only one variation (it would just duplicate the parent row)', () => {
+    render(
+      <BatchCloseoutPanel
+        summary={summary()}
+        orders={[
+          order({
+            order_items: [
+              lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: '5mg', quantity: 3 }),
+            ],
+          }),
+        ]}
+        fulfillmentStage={null}
+      />,
+    );
+    expect(screen.queryByText('5mg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Standard')).not.toBeInTheDocument();
+  });
 });
 
 beforeEach(() => {

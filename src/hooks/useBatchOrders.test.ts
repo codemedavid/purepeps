@@ -67,12 +67,17 @@ const chain: Record<string, ReturnType<typeof vi.fn>> & {
   eq: vi.fn(() => chain),
   in: vi.fn(() => chain),
   update: vi.fn(() => chain),
+  insert: vi.fn(() => chain),
 };
 
 const mockFrom = vi.fn(() => chain);
+const mockRpc = vi.fn(async () => ({ data: 'PP-9999', error: null }));
 
 vi.mock('../lib/supabase', () => ({
-  supabase: { from: (...args: unknown[]) => mockFrom(...args) },
+  supabase: {
+    from: (...args: unknown[]) => mockFrom(...args),
+    rpc: (...args: unknown[]) => mockRpc(...args),
+  },
 }));
 
 const ITEMS_1500 = [{ product_id: 'p', product_name: 'P', variation_id: null, variation_name: null, quantity: 3, price: 500, total: 1500 }];
@@ -165,5 +170,77 @@ describe('useBatchOrders — paid_total bookkeeping', () => {
     const patch = lastUpdate();
     expect(patch.additional_payment_proof_url).toBe('balance.png');
     expect(patch.payment_status).toBe('submitted');
+  });
+});
+
+const ADDED = [
+  { product_id: 'p2', product_name: 'AHK-CU', variation_id: null, variation_name: null, quantity: 1, price: 400, total: 400 },
+];
+
+// The insert payload passed for a given order (last insert call).
+const lastInsert = () => (chain.insert.mock.calls.at(-1)?.[0] as Record<string, unknown>[])?.[0];
+
+describe('useBatchOrders.addLinkedOrder — new order sequence for added items', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('inserts a linked child order under the same root with its own pending payment', async () => {
+    const result = await mountLoaded();
+    const parent = SEED[0]; // id 'paid', parent_order_id null → it is its own root
+
+    await act(async () => {
+      await result.current.addLinkedOrder(parent, ADDED);
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('next_order_number');
+    const payload = lastInsert();
+    expect(payload.order_number).toBe('PP-9999');
+    expect(payload.parent_order_id).toBe('paid');
+    expect(payload.group_buy_batch_id).toBe('batch-1');
+    expect(payload.order_items).toEqual(ADDED);
+    expect(payload.total_price).toBe(400);
+    expect(payload.subtotal).toBe(400);
+    expect(payload.payment_status).toBe('pending');
+    expect(payload.order_status).toBe('new');
+    expect(payload.is_claim).toBe(false);
+    // Customer identity is copied so the new order stays under the same person.
+    expect(payload.customer_name).toBe(parent.customer_name);
+    expect(payload.customer_email).toBe(parent.customer_email);
+  });
+
+  it('links to the ultimate root when the parent is itself a child order', async () => {
+    const result = await mountLoaded();
+    const child = makeOrder({ id: 'child', parent_order_id: 'root-1' });
+
+    await act(async () => {
+      await result.current.addLinkedOrder(child, ADDED);
+    });
+
+    expect(lastInsert().parent_order_id).toBe('root-1');
+  });
+
+  it('never marks the added order paid before its own confirmation', async () => {
+    const result = await mountLoaded();
+    const paidParent = SEED[0]; // fully paid parent
+
+    await act(async () => {
+      await result.current.addLinkedOrder(paidParent, ADDED);
+    });
+
+    const payload = lastInsert();
+    expect(payload.payment_status).toBe('pending');
+    expect(payload.paid_total ?? null).toBeNull();
+  });
+
+  it('throws when the order-number RPC fails, without inserting', async () => {
+    const result = await mountLoaded();
+    mockRpc.mockResolvedValueOnce({ data: null as unknown as string, error: { message: 'rpc down' } as never });
+
+    await expect(
+      act(async () => {
+        await result.current.addLinkedOrder(SEED[0], ADDED);
+      }),
+    ).rejects.toBeTruthy();
+
+    expect(chain.insert).not.toHaveBeenCalled();
   });
 });

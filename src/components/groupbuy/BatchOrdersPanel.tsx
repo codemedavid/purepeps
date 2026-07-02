@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  ShoppingCart,
-  RefreshCw,
-  CheckSquare,
-  Square,
-  Tag,
-  ChevronRight,
-  Search,
-  X,
-} from 'lucide-react';
+import { ShoppingCart, RefreshCw, CheckSquare, Users, Search, X } from 'lucide-react';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
 import { filterBatchOrders } from '../../utils/groupBuyOverview';
+import { groupBatchOrders } from '../../utils/batchOrderGroups';
 import type { BatchOrder } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
-import { batchStatusColor, peso, itemsSummary, formatDateTime } from './orderStatusStyles';
+import { peso } from './orderStatusStyles';
+import { BatchOrderRow } from './BatchOrderRow';
 
 interface BatchOrdersPanelProps {
   batchNumber: number;
@@ -75,6 +68,10 @@ export function BatchOrdersPanel({
     () => filterBatchOrders(orders, { query, status: statusFilter }),
     [orders, query, statusFilter],
   );
+
+  // Group each customer's linked orders under one reference; a lone order stays a
+  // single-order group and renders exactly like the flat list did.
+  const groups = useMemo(() => groupBatchOrders(filtered), [filtered]);
 
   // Count once per orders change instead of re-scanning the array for every chip.
   const countByStatus = useMemo(
@@ -270,80 +267,64 @@ export function BatchOrdersPanel({
             )}
           </div>
         ) : (
-          filtered.map((order) => {
-            const isSelected = selectedIds.has(order.id);
-            const handleRowClick = () => {
-              if (selectMode) {
-                toggleSelect(order.id);
-              } else {
-                onSelectOrder(order);
-              }
-            };
+          groups.map((group) => {
+            // A lone order renders as a flat row, unchanged from the old list.
+            if (!group.isMulti) {
+              const order = group.root;
+              return (
+                <BatchOrderRow
+                  key={order.id}
+                  order={order}
+                  selectMode={selectMode}
+                  isSelected={selectedIds.has(order.id)}
+                  onActivate={onSelectOrder}
+                  onToggleSelect={toggleSelect}
+                />
+              );
+            }
+
+            // A multi-order group: one reference header, numbered sub-rows below.
             return (
-              <button
-                key={order.id}
-                type="button"
-                onClick={handleRowClick}
-                aria-pressed={selectMode ? isSelected : undefined}
-                className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                  isSelected ? 'bg-indigo-50/60' : ''
-                }`}
-              >
-                {selectMode && (
-                  <span className="shrink-0 text-indigo-600">
-                    <span className="sr-only">{isSelected ? 'Selected' : 'Not selected'}</span>
-                    {isSelected ? (
-                      <CheckSquare className="h-4 w-4" />
-                    ) : (
-                      <Square className="h-4 w-4 text-gray-300" />
-                    )}
+              <div key={group.root.id}>
+                <div className="px-4 py-2 bg-gray-50 flex items-center gap-2 flex-wrap">
+                  <Users className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                  <span className="text-xs font-bold text-gray-900 font-mono">
+                    {group.reference}
                   </span>
-                )}
-
-                {order.payment_proof_url ? (
-                  <img
-                    src={order.payment_proof_url}
-                    alt="Proof"
-                    className="h-10 w-10 rounded object-cover border border-gray-200 shrink-0"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded bg-gray-100 border border-gray-200 shrink-0 flex items-center justify-center text-[9px] text-gray-400">
-                    no proof
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-gray-900 font-mono">
-                      {order.order_number || order.id.slice(0, 8)}
-                    </span>
-                    <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${batchStatusColor(
-                        order.order_status,
-                      )}`}
-                    >
-                      {orderStatusLabel(order.order_status)}
-                    </span>
-                    {order.is_claim && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                        <Tag className="h-2.5 w-2.5" />
-                        Claim
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-700 mt-0.5 truncate">{order.customer_name}</p>
-                  <p className="text-[11px] text-gray-500 truncate">
-                    {itemsSummary(order.order_items)}
-                  </p>
+                  <span className="text-xs text-gray-600 truncate">{group.root.customer_name}</span>
+                  <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                    {group.allOrders.length} orders
+                  </span>
+                  <span className="ml-auto text-xs font-bold text-gray-900">
+                    {peso(group.groupTotal)}
+                  </span>
                 </div>
-
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-gray-900">{peso(order.total_price)}</p>
-                  <p className="text-[10px] text-gray-400">{formatDateTime(order.created_at)}</p>
+                <div className="divide-y divide-gray-100">
+                  {group.sequenced.map((seq) => (
+                    <BatchOrderRow
+                      key={seq.order.id}
+                      order={seq.order}
+                      sequenceLabel={seq.label}
+                      selectMode={selectMode}
+                      isSelected={selectedIds.has(seq.order.id)}
+                      onActivate={onSelectOrder}
+                      onToggleSelect={toggleSelect}
+                      nested
+                    />
+                  ))}
+                  {group.addOns.map((addOn) => (
+                    <BatchOrderRow
+                      key={addOn.id}
+                      order={addOn}
+                      selectMode={selectMode}
+                      isSelected={selectedIds.has(addOn.id)}
+                      onActivate={onSelectOrder}
+                      onToggleSelect={toggleSelect}
+                      nested
+                    />
+                  ))}
                 </div>
-
-                {!selectMode && <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />}
-              </button>
+              </div>
             );
           })
         )}

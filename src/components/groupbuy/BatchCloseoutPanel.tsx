@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ClipboardCheck, Copy, PackageCheck, Receipt, Truck } from 'lucide-react';
 import type { BatchOrder, FulfillmentStage } from '../../types';
-import type { ItemRevenueSummary } from '../../utils/groupBuyOverview';
+import type { ItemRevenueSummary, VariationBreakdownRow } from '../../utils/groupBuyOverview';
+import { summarizeVariationBreakdown } from '../../utils/groupBuyOverview';
 import { buildBatchCloseoutCsv } from '../../utils/batchCloseoutExport';
 import { fulfillmentStageLabel } from '../../utils/orderTracking';
 import { peso } from './orderStatusStyles';
+import { KitCell } from './KitCell';
 
 type Props = {
   /** Per-item closeout derived from the batch's orders. */
@@ -71,6 +73,7 @@ export function BatchCloseoutPanel({ summary, orders, fulfillmentStage }: Props)
   if (summary.rows.length === 0) return null;
 
   const readiness = shipReadiness(orders);
+  const variationsByProduct: Map<string, VariationBreakdownRow[]> = summarizeVariationBreakdown(orders);
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(buildBatchCloseoutCsv(summary, orders));
@@ -139,36 +142,70 @@ export function BatchCloseoutPanel({ summary, orders, fulfillmentStage }: Props)
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {summary.rows.map((row) => (
-              <tr key={row.product_id} className="hover:bg-gray-50">
-                <td className="px-4 py-2 text-xs font-semibold text-gray-900">
-                  {row.product_name ?? 'Unnamed product'}
-                </td>
-                <td className="px-4 py-2 text-right text-xs text-gray-600">{row.orderCount}</td>
-                <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">{row.unitsOrdered}</td>
-                <td className="px-4 py-2 text-right text-xs font-semibold text-emerald-700">
-                  {row.unitsConfirmed}
-                </td>
-                <td className="px-4 py-2 text-right text-xs">
-                  {row.unitsPending > 0 ? (
-                    <span className="font-semibold text-amber-600">{row.unitsPending}</span>
-                  ) : (
-                    <span className="text-gray-300">0</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-right text-xs text-gray-600">{peso(row.grossRevenue)}</td>
-                <td className="px-4 py-2 text-right text-xs font-bold text-gray-900">
-                  {peso(row.collectedRevenue)}
-                </td>
-              </tr>
-            ))}
+            {summary.rows.map((row) => {
+              // A single variation would just repeat the parent row's numbers — only
+              // worth a breakdown when there's more than one to actually compare.
+              const allVariations = variationsByProduct.get(row.product_id) ?? [];
+              const variations = allVariations.length > 1 ? allVariations : [];
+              return (
+                <Fragment key={row.product_id}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-xs font-semibold text-gray-900">
+                      {row.product_name ?? 'Unnamed product'}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-gray-600">{row.orderCount}</td>
+                    <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
+                      <KitCell vials={row.unitsOrdered} />
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs font-semibold text-emerald-700">
+                      {row.unitsConfirmed}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs">
+                      {row.unitsPending > 0 ? (
+                        <span className="font-semibold text-amber-600">{row.unitsPending}</span>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs text-gray-600">{peso(row.grossRevenue)}</td>
+                    <td className="px-4 py-2 text-right text-xs font-bold text-gray-900">
+                      {peso(row.collectedRevenue)}
+                    </td>
+                  </tr>
+                  {variations.map((variation) => (
+                    <tr
+                      key={`${row.product_id}-${variation.variation_id ?? 'standard'}`}
+                      className="bg-gray-50/50"
+                    >
+                      <td className="px-4 py-1.5 pl-8 text-[11px] text-gray-600">
+                        {variation.variation_name}
+                      </td>
+                      <td className="px-4 py-1.5 text-right text-[11px] text-gray-500">
+                        {variation.orderCount} order{variation.orderCount === 1 ? '' : 's'}
+                      </td>
+                      <td className="px-4 py-1.5 text-right text-xs font-medium text-gray-700">
+                        <KitCell vials={variation.unitsOrdered} />
+                      </td>
+                      <td className="px-4 py-1.5 text-right text-[11px] text-gray-500">
+                        {variation.unitsConfirmed}
+                      </td>
+                      <td className="px-4 py-1.5 text-right text-[11px] text-gray-500">
+                        {variation.unitsPending}
+                      </td>
+                      <td className="px-4 py-1.5" />
+                      <td className="px-4 py-1.5" />
+                    </tr>
+                  ))}
+                </Fragment>
+              );
+            })}
           </tbody>
           <tfoot className="bg-gray-50 border-t border-gray-200">
             <tr>
               <td className="px-4 py-2 text-xs font-bold text-gray-700">All items</td>
               <td className="px-4 py-2" />
               <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
-                {summary.totalUnitsOrdered}
+                <KitCell vials={summary.totalUnitsOrdered} />
               </td>
               <td className="px-4 py-2 text-right text-xs font-semibold text-emerald-700">
                 {summary.totalUnitsConfirmed}

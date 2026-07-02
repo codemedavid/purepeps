@@ -84,6 +84,30 @@ function setup(o: BatchOrder) {
   return { handlers, requestConfirm, getRequest: () => lastRequest };
 }
 
+describe('BatchOrderDetail contact method', () => {
+  it('renders a facebook contact method as a clickable link to the profile', () => {
+    setup(order({ contact_method: 'fb.com/juan.delacruz' }));
+
+    const link = screen.getByRole('link', { name: /fb\.com\/juan\.delacruz/ });
+    expect(link).toHaveAttribute('href', 'https://fb.com/juan.delacruz');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders a whatsapp number as plain text, not a link', () => {
+    setup(order({ contact_method: '09171234567' }));
+
+    expect(screen.getByText('09171234567')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /09171234567/ })).not.toBeInTheDocument();
+  });
+
+  it('omits the contact row entirely when contact_method is absent', () => {
+    setup(order({ contact_method: null }));
+
+    expect(screen.queryByText(/Contact \(FB\/WhatsApp\)/)).not.toBeInTheDocument();
+  });
+});
+
 describe('BatchOrderDetail status routing', () => {
   it('routes a move to Confirmed through onConfirm (paid-marking) even on a non-new order', async () => {
     const { handlers } = setup(order({ order_status: 'packing' }));
@@ -148,5 +172,72 @@ describe('BatchOrderDetail balance flow', () => {
     setup(order({ paid_total: 1000, total_price: 1000, payment_status: 'paid' }));
 
     expect(screen.queryByText(/balance due/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('BatchOrderDetail sequence context', () => {
+  const sequence = {
+    reference: 'PP-0001',
+    label: 'Order 2',
+    position: 2,
+    total: 3,
+    siblings: [
+      { id: 'root', label: 'Order 1', isCurrent: false },
+      { id: 'o1', label: 'Order 2', isCurrent: true },
+      { id: 'third', label: 'Order 3', isCurrent: false },
+    ],
+  };
+
+  it('shows the position, reference, and sibling links for a grouped order', () => {
+    render(
+      <BatchOrderDetail
+        order={order()}
+        products={[]}
+        busy={false}
+        sequence={sequence}
+        onSelectSibling={vi.fn()}
+        requestConfirm={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={vi.fn()}
+        onUpdateStatus={vi.fn()}
+        onCancel={vi.fn()}
+        onSaveTracking={vi.fn()}
+        onSaveItems={vi.fn()}
+        onVerifyBalance={vi.fn()}
+        onAttachProof={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Order 2 of 3 · Reference/)).toBeInTheDocument();
+    expect(screen.getByText('PP-0001')).toBeInTheDocument();
+    // The current order's chip is disabled; its siblings are actionable.
+    expect(screen.getByRole('button', { name: 'Order 1' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Order 2' })).toBeDisabled();
+  });
+
+  it('navigates to a sibling order on click', async () => {
+    const onSelectSibling = vi.fn();
+    render(
+      <BatchOrderDetail
+        order={order()}
+        products={[]}
+        busy={false}
+        sequence={sequence}
+        onSelectSibling={onSelectSibling}
+        requestConfirm={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={vi.fn()}
+        onUpdateStatus={vi.fn()}
+        onCancel={vi.fn()}
+        onSaveTracking={vi.fn()}
+        onSaveItems={vi.fn()}
+        onVerifyBalance={vi.fn()}
+        onAttachProof={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Order 3' }));
+
+    expect(onSelectSibling).toHaveBeenCalledWith('third');
   });
 });

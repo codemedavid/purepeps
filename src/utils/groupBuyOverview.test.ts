@@ -7,6 +7,9 @@ import {
   summarizeDemand,
   ordersNeedingAction,
   filterBatchOrders,
+  VIALS_PER_KIT,
+  formatKits,
+  summarizeVariationBreakdown,
 } from './groupBuyOverview';
 import type { BatchOrder, GroupBuyProgressItem, OrderLineItem } from '../types';
 
@@ -471,5 +474,117 @@ describe('filterBatchOrders', () => {
 
   it('returns an empty array when nothing matches', () => {
     expect(filterBatchOrders(orders, { query: 'zzzz', status: 'all' })).toEqual([]);
+  });
+});
+
+// --- formatKits -------------------------------------------------------------
+
+describe('formatKits', () => {
+  it('converts a whole number of vials into whole kits', () => {
+    expect(formatKits(20)).toBe('2');
+  });
+
+  it('formats a partial kit to one decimal place', () => {
+    expect(formatKits(25)).toBe('2.5');
+  });
+
+  it('formats a sub-kit quantity as a decimal below 1', () => {
+    expect(formatKits(3)).toBe('0.3');
+  });
+
+  it('formats zero vials as zero kits', () => {
+    expect(formatKits(0)).toBe('0');
+  });
+
+  it('uses VIALS_PER_KIT as the conversion factor', () => {
+    expect(VIALS_PER_KIT).toBe(10);
+    expect(formatKits(VIALS_PER_KIT)).toBe('1');
+  });
+
+  it('falls back to "0" for a non-finite vial count instead of rendering "NaN"', () => {
+    expect(formatKits(NaN)).toBe('0');
+  });
+});
+
+// --- summarizeVariationBreakdown --------------------------------------------
+
+describe('summarizeVariationBreakdown', () => {
+  it('returns an empty map for no orders', () => {
+    expect(summarizeVariationBreakdown([]).size).toBe(0);
+  });
+
+  it('groups units and orders per variation within a product', () => {
+    const byProduct = summarizeVariationBreakdown([
+      order({
+        order_status: 'confirmed',
+        order_items: [lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: '5mg', quantity: 2 })],
+      }),
+      order({
+        order_status: 'new',
+        order_items: [lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: '5mg', quantity: 1 })],
+      }),
+      order({
+        order_status: 'confirmed',
+        order_items: [lineItem({ product_id: 'p1', variation_id: 'v2', variation_name: '10mg', quantity: 3 })],
+      }),
+    ]);
+    const p1 = byProduct.get('p1');
+    expect(p1).toHaveLength(2);
+    const v1 = p1?.find((row) => row.variation_id === 'v1');
+    expect(v1).toMatchObject({
+      variation_name: '5mg',
+      orderCount: 2,
+      unitsOrdered: 3,
+      unitsConfirmed: 2,
+      unitsPending: 1,
+    });
+    const v2 = p1?.find((row) => row.variation_id === 'v2');
+    expect(v2).toMatchObject({ variation_name: '10mg', orderCount: 1, unitsOrdered: 3, unitsConfirmed: 3 });
+  });
+
+  it('buckets items with no variation under a "Standard" row', () => {
+    const byProduct = summarizeVariationBreakdown([
+      order({ order_items: [lineItem({ product_id: 'p1', variation_id: null, variation_name: null, quantity: 4 })] }),
+    ]);
+    const rows = byProduct.get('p1');
+    expect(rows).toEqual([
+      expect.objectContaining({ variation_id: null, variation_name: 'Standard', unitsOrdered: 4 }),
+    ]);
+  });
+
+  it('excludes cancelled orders entirely', () => {
+    const byProduct = summarizeVariationBreakdown([
+      order({
+        order_status: 'cancelled',
+        order_items: [lineItem({ product_id: 'p1', variation_id: 'v1', quantity: 9 })],
+      }),
+    ]);
+    expect(byProduct.get('p1')).toBeUndefined();
+  });
+
+  it('counts an order once per variation even with repeated lines', () => {
+    const byProduct = summarizeVariationBreakdown([
+      order({
+        order_items: [
+          lineItem({ product_id: 'p1', variation_id: 'v1', quantity: 1 }),
+          lineItem({ product_id: 'p1', variation_id: 'v1', quantity: 2 }),
+        ],
+      }),
+    ]);
+    const v1 = byProduct.get('p1')?.[0];
+    expect(v1?.orderCount).toBe(1);
+    expect(v1?.unitsOrdered).toBe(3);
+  });
+
+  it('sorts variation rows by name', () => {
+    const byProduct = summarizeVariationBreakdown([
+      order({
+        order_items: [
+          lineItem({ product_id: 'p1', variation_id: 'v2', variation_name: 'Zinc', quantity: 1 }),
+          lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: 'Acet', quantity: 1 }),
+        ],
+      }),
+    ]);
+    expect(byProduct.get('p1')?.map((r) => r.variation_name)).toEqual(['Acet', 'Zinc']);
   });
 });

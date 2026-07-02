@@ -81,6 +81,64 @@ describe('BatchOrdersPanel', () => {
     expect(screen.queryByText('Jose Rizal')).not.toBeInTheDocument();
   });
 
+  it('groups a repeat order under one reference with numbered sub-rows', () => {
+    const root = { ...order('root', 'Juan Dela Cruz', 'confirmed'), order_number: 'PP-0001' };
+    const repeat = {
+      ...order('repeat', 'Juan Dela Cruz', 'new'),
+      order_number: 'PP-0007',
+      parent_order_id: 'root',
+      created_at: '2026-06-02T08:00:00Z',
+    };
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[repeat, root]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={vi.fn()}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    // One reference header + a per-order count badge for the group. PP-0001 shows
+    // twice: as the group reference and as the root order's own number on Order 1.
+    expect(screen.getAllByText('PP-0001')).toHaveLength(2);
+    expect(screen.getByText('2 orders')).toBeInTheDocument();
+    // Numbered sub-rows, each keeping its own real order number.
+    expect(screen.getByText('Order 1')).toBeInTheDocument();
+    expect(screen.getByText('Order 2')).toBeInTheDocument();
+    expect(screen.getByText('PP-0007')).toBeInTheDocument();
+  });
+
+  it('opens the specific sub-order that was clicked', async () => {
+    const onSelectOrder = vi.fn();
+    const root = { ...order('root', 'Juan Dela Cruz'), order_number: 'PP-0001' };
+    const repeat = {
+      ...order('repeat', 'Juan Dela Cruz'),
+      order_number: 'PP-0007',
+      parent_order_id: 'root',
+      created_at: '2026-06-02T08:00:00Z',
+    };
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[repeat, root]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={onSelectOrder}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByText('Order 2'));
+
+    expect(onSelectOrder).toHaveBeenCalledWith(expect.objectContaining({ id: 'repeat' }));
+  });
+
   it('routes bulk apply through requestConfirm and fires the update on confirm', async () => {
     const { onBulkUpdateStatus, requestConfirm, getRequest } = setup();
 

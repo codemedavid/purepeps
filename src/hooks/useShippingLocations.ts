@@ -7,13 +7,14 @@ export interface ShippingLocation {
     fee: number;
     is_active: boolean;
     order_index: number;
+    courier_id: string | null;
 }
 
 // Default shipping locations (fallback if database table doesn't exist)
 const defaultLocations: ShippingLocation[] = [
-    { id: 'LBC_METRO', name: 'LBC - Metro Manila', fee: 150, is_active: true, order_index: 1 },
-    { id: 'LBC_PROVINCIAL', name: 'LBC - Provincial', fee: 200, is_active: true, order_index: 2 },
-    { id: 'LALAMOVE', name: 'Lalamove (Metro Manila / Davao)', fee: 0, is_active: true, order_index: 3 },
+    { id: 'LBC_METRO', name: 'LBC - Metro Manila', fee: 150, is_active: true, order_index: 1, courier_id: null },
+    { id: 'LBC_PROVINCIAL', name: 'LBC - Provincial', fee: 200, is_active: true, order_index: 2, courier_id: null },
+    { id: 'LALAMOVE', name: 'Lalamove (Metro Manila / Davao)', fee: 0, is_active: true, order_index: 3, courier_id: null },
 ];
 
 export const useShippingLocations = () => {

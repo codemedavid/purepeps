@@ -288,6 +288,92 @@ export function summarizeDemand(
   };
 }
 
+/** Products are shipped in kits of this many vials; the overview headline reads in kits. */
+export const VIALS_PER_KIT = 10;
+
+/** Render a vial count as kits, one decimal place, no trailing zero (e.g. 20 → "2", 25 → "2.5"). */
+export function formatKits(vials: number): string {
+  if (!Number.isFinite(vials)) return '0';
+  const kits = vials / VIALS_PER_KIT;
+  return Number.isInteger(kits) ? String(kits) : kits.toFixed(1);
+}
+
+export interface VariationBreakdownRow {
+  variation_id: string | null;
+  variation_name: string;
+  /** Distinct non-cancelled orders that include this variation. */
+  orderCount: number;
+  /** Non-cancelled units ordered for this variation. */
+  unitsOrdered: number;
+  /** Non-cancelled units whose order moved past `new` (admin-confirmed). */
+  unitsConfirmed: number;
+  /** Non-cancelled units still awaiting confirmation. */
+  unitsPending: number;
+}
+
+const NO_VARIATION_LABEL = 'Standard';
+
+const emptyVariationRow = (
+  variationId: string | null,
+  variationName: string | null,
+): VariationBreakdownRow => ({
+  variation_id: variationId,
+  variation_name: variationName ?? NO_VARIATION_LABEL,
+  orderCount: 0,
+  unitsOrdered: 0,
+  unitsConfirmed: 0,
+  unitsPending: 0,
+});
+
+/**
+ * Roll a batch's orders up into per-variation demand, grouped by product. Mirrors
+ * summarizeItemRevenue's shape but keyed one level deeper (variation within
+ * product) so the status board can show "N orders" and kit totals per variation.
+ * Cancelled orders are excluded; items with no variation fall under "Standard".
+ */
+export function summarizeVariationBreakdown(
+  orders: BatchOrder[],
+): Map<string, VariationBreakdownRow[]> {
+  const byProduct = new Map<string, Map<string, VariationBreakdownRow>>();
+
+  for (const order of orders) {
+    if (isCancelled(order)) continue;
+    const confirmed = order.order_status !== NEW;
+    const seenInOrder = new Set<string>();
+
+    for (const item of order.order_items ?? []) {
+      const productId = item.product_id;
+      if (productId == null) continue;
+      const variationKey = item.variation_id ?? '__standard__';
+      const dedupeKey = `${productId}::${variationKey}`;
+      const qty = item.quantity ?? 0;
+
+      const byVariation = byProduct.get(productId) ?? new Map<string, VariationBreakdownRow>();
+      const prev =
+        byVariation.get(variationKey) ?? emptyVariationRow(item.variation_id, item.variation_name);
+
+      byVariation.set(variationKey, {
+        ...prev,
+        orderCount: prev.orderCount + (seenInOrder.has(dedupeKey) ? 0 : 1),
+        unitsOrdered: prev.unitsOrdered + qty,
+        unitsConfirmed: prev.unitsConfirmed + (confirmed ? qty : 0),
+        unitsPending: prev.unitsPending + (confirmed ? 0 : qty),
+      });
+      seenInOrder.add(dedupeKey);
+      byProduct.set(productId, byVariation);
+    }
+  }
+
+  const result = new Map<string, VariationBreakdownRow[]>();
+  for (const [productId, byVariation] of byProduct) {
+    result.set(
+      productId,
+      [...byVariation.values()].sort((a, b) => a.variation_name.localeCompare(b.variation_name)),
+    );
+  }
+  return result;
+}
+
 /** New orders awaiting confirmation, oldest first (longest-waiting needs attention soonest). */
 export function ordersNeedingAction(orders: BatchOrder[]): BatchOrder[] {
   return orders

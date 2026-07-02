@@ -10,6 +10,8 @@ import {
   summarizeItemRevenue,
   ordersNeedingAction,
 } from '../utils/groupBuyOverview';
+import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
+import type { OrderSequenceContext } from '../utils/batchOrderGroups';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
 import { BatchKpiStrip } from './groupbuy/BatchKpiStrip';
 import { BatchSwitcher } from './groupbuy/BatchSwitcher';
@@ -101,6 +103,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     cancelOrder,
     saveTracking,
     saveItems,
+    addLinkedOrder,
     bulkUpdateStatus,
   } = useBatchOrders(selectedBatch?.id ?? null);
 
@@ -108,6 +111,18 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     () => orders.find((o) => o.id === selectedOrderId) ?? null,
     [orders, selectedOrderId],
   );
+
+  // Sequence context for the open order, so a repeat purchase shows "Order 2 of 3
+  // · Reference PP-0001" with sibling links. Null for a lone order — the detail
+  // view then renders unchanged.
+  const orderSequence = useMemo<OrderSequenceContext | null>(() => {
+    if (!selectedOrder) return null;
+    const group = groupBatchOrders(orders).find((g) =>
+      g.allOrders.some((o) => o.id === selectedOrder.id),
+    );
+    if (!group || !group.isMulti) return null;
+    return buildOrderSequenceContext(group, selectedOrder.id);
+  }, [orders, selectedOrder]);
 
   const kpis = useMemo(() => computeBatchKpis(orders), [orders]);
   const needsAction = useMemo(() => ordersNeedingAction(orders), [orders]);
@@ -158,14 +173,18 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     }
   }, [selectedBatchId2, selectedBatchStatus, selectedBatchIsOpen, fetchProgress]);
 
-  const runAction = async (fn: () => Promise<void>) => {
+  // Returns whether the action succeeded so callers (e.g. the items editor) can
+  // avoid optimistic UI resets when a save actually failed.
+  const runAction = async (fn: () => Promise<void>): Promise<boolean> => {
     setActionError(null);
     setBusy(true);
     try {
       await fn();
+      return true;
     } catch (err) {
       console.error('Group buy action failed:', err);
       setActionError(err instanceof Error ? err.message : 'Action failed');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -252,8 +271,25 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     orderId: string,
     tracking: { tracking_number: string | null; shipping_provider: string | null; shipping_note: string | null },
   ) => void runAction(() => saveTracking(orderId, tracking));
-  const handleSaveItems = (orderId: string, items: OrderLineItem[]) =>
-    void runAction(() => saveItems(orderId, items));
+  // Corrections to existing lines (keptItems) update this order in place; brand-new
+  // products (addedItems) spawn a separate linked order with its own payment so the
+  // customer's reference gathers multiple independently-confirmed orders.
+  const handleSaveItems = (
+    orderId: string,
+    keptItems: OrderLineItem[],
+    addedItems: OrderLineItem[],
+  ): Promise<boolean> =>
+    runAction(async () => {
+      const existing = orders.find((o) => o.id === orderId);
+      const keptChanged =
+        existing != null && JSON.stringify(existing.order_items) !== JSON.stringify(keptItems);
+      if (keptChanged) {
+        await saveItems(orderId, keptItems);
+      }
+      if (existing && addedItems.length > 0) {
+        await addLinkedOrder(existing, addedItems);
+      }
+    });
   const handleVerifyBalance = (orderId: string) =>
     void runAction(() => verifyAdditionalPayment(orderId));
   const handleAttachProof = (orderId: string, proofUrl: string) =>
@@ -349,6 +385,9 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
             order={selectedOrder}
             products={products}
             busy={busy}
+            sequence={orderSequence}
+            onSelectSibling={setSelectedOrderId}
+            canAddOrder={isOpenBatchSelected}
             requestConfirm={requestConfirm}
             onBack={() => setSelectedOrderId(null)}
             onConfirm={handleConfirmOrder}

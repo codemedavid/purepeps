@@ -1074,10 +1074,9 @@ Please confirm this order. Thank you!
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Courier Selection */}
-                    <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
+                        {/* Courier Selection */}
+                        <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
                         <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-3 flex items-center gap-2">
                             <Truck className="w-5 h-5 text-brand-600" />
                             Select Courier Provider *
@@ -1115,20 +1114,7 @@ Please confirm this order. Thank you!
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {shippingLocations
-                                .filter(loc => {
-                                    if (!selectedCourierId) return false;
-                                    const courier = couriers.find(c => c.id === selectedCourierId);
-                                    if (!courier) return false;
-
-                                    // Match logic:
-                                    // 1. If location ID explicitly contains courier code (e.g. LBC_METRO contains LBC)
-                                    // 2. Or check against common patterns if codes don't strictly match
-                                    const code = courier.code.toLowerCase();
-                                    const locId = loc.id.toLowerCase();
-                                    const locName = loc.name.toLowerCase();
-
-                                    return locId.includes(code) || locName.includes(code);
-                                })
+                                .filter(loc => selectedCourierId && loc.courier_id === selectedCourierId)
                                 .map((loc) => (
                                     <button
                                         key={loc.id}
@@ -1183,10 +1169,10 @@ Please confirm this order. Thank you!
                     >
                         Proceed to Payment
                     </button>
-                </div>
+                    </div>
 
-                {/* Order Summary Sidebar */}
-                <div className="lg:col-span-1">
+                    {/* Order Summary Sidebar */}
+                    <div className="lg:col-span-1">
                     <div className="bg-white rounded shadow-clinical p-6 sticky top-24 border border-gray-100">
                         <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-6 flex items-center gap-2">
                             Order Summary
@@ -1285,6 +1271,7 @@ Please confirm this order. Thank you!
                         </div>
 
                     </div>
+                </div>
                 </div>
             </div>
         </div>

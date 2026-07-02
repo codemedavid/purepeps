@@ -274,6 +274,69 @@ export function useBatchOrders(batchId: string | null) {
     [orders, patchOrder],
   );
 
+  // Add newly-picked products as a SEPARATE linked order rather than growing the
+  // current one. The child links to the same root (parent_order_id) so it shares
+  // one reference, but carries its OWN pending payment and 'new' status — the
+  // admin (or customer) confirms it independently. The open-batch trigger
+  // re-asserts the batch, auto-links are skipped because parent is set, and the
+  // added units still count against the batch cap. Reloads so the new sequence
+  // shows immediately.
+  const addLinkedOrder = useCallback(
+    async (parentOrder: BatchOrder, items: OrderLineItem[]): Promise<void> => {
+      try {
+        const { data: generatedNumber, error: numErr } =
+          await supabase.rpc('next_order_number');
+        if (numErr || !generatedNumber) {
+          throw new Error(
+            numErr?.message ?? 'Failed to generate an order number for the added order.',
+          );
+        }
+
+        const subtotal = items.reduce((sum, item) => sum + (item.total ?? 0), 0);
+        const rootId = parentOrder.parent_order_id ?? parentOrder.id;
+        const updatedAt = new Date().toISOString();
+        const payload = {
+          order_number: generatedNumber as string,
+          parent_order_id: rootId,
+          group_buy_batch_id: parentOrder.group_buy_batch_id,
+          customer_name: parentOrder.customer_name,
+          customer_email: parentOrder.customer_email,
+          customer_phone: parentOrder.customer_phone,
+          contact_method: parentOrder.contact_method,
+          selected_sticker_id: parentOrder.selected_sticker_id,
+          selected_sticker_name: parentOrder.selected_sticker_name,
+          shipping_address: parentOrder.shipping_address,
+          shipping_barangay: parentOrder.shipping_barangay,
+          shipping_city: parentOrder.shipping_city,
+          shipping_state: parentOrder.shipping_state,
+          shipping_zip_code: parentOrder.shipping_zip_code,
+          shipping_country: parentOrder.shipping_country,
+          shipping_location: parentOrder.shipping_location,
+          payment_method_name: parentOrder.payment_method_name,
+          order_items: items,
+          subtotal,
+          total_price: subtotal,
+          shipping_fee: 0,
+          paid_total: null,
+          payment_status: 'pending',
+          order_status: 'new',
+          is_claim: false,
+          admin_notes: `[${updatedAt}] Added by admin as a new linked order under ${
+            parentOrder.order_number ?? rootId
+          }.`,
+        };
+
+        const { error: insertError } = await supabase.from('orders').insert([payload]);
+        if (insertError) throw insertError;
+        await load();
+      } catch (err) {
+        console.error('Error adding linked order:', err);
+        throw err;
+      }
+    },
+    [load],
+  );
+
   const bulkUpdateStatus = useCallback(
     async (orderIds: string[], status: string): Promise<void> => {
       if (orderIds.length === 0) return;
@@ -315,6 +378,7 @@ export function useBatchOrders(batchId: string | null) {
     cancelOrder,
     saveTracking,
     saveItems,
+    addLinkedOrder,
     bulkUpdateStatus,
   };
 }

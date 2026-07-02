@@ -68,16 +68,20 @@ describe('OrderItemsEditor — adding with variations', () => {
     await user.click(screen.getByRole('button', { name: /add/i }));
     await user.click(screen.getByRole('button', { name: /save items/i }));
 
-    expect(onSave).toHaveBeenCalledWith([
-      expect.objectContaining({
-        product_id: 'p1',
-        variation_id: 'v1',
-        variation_name: '10mg',
-        price: 1500,
-        quantity: 1,
-        total: 1500,
-      }),
-    ]);
+    // A brand-new product is reported as an addition (2nd arg), not a kept line.
+    expect(onSave).toHaveBeenCalledWith(
+      [],
+      [
+        expect.objectContaining({
+          product_id: 'p1',
+          variation_id: 'v1',
+          variation_name: '10mg',
+          price: 1500,
+          quantity: 1,
+          total: 1500,
+        }),
+      ],
+    );
   });
 
   it('uses the discount price when the variation discount is active', async () => {
@@ -95,9 +99,10 @@ describe('OrderItemsEditor — adding with variations', () => {
     await user.click(screen.getByRole('button', { name: /add/i }));
     await user.click(screen.getByRole('button', { name: /save items/i }));
 
-    expect(onSave).toHaveBeenCalledWith([
-      expect.objectContaining({ variation_id: 'v1', price: 1200, total: 1200 }),
-    ]);
+    expect(onSave).toHaveBeenCalledWith(
+      [],
+      [expect.objectContaining({ variation_id: 'v1', price: 1200, total: 1200 })],
+    );
   });
 
   it('adds a base-price line with null variation for products without variations', async () => {
@@ -110,14 +115,17 @@ describe('OrderItemsEditor — adding with variations', () => {
     await user.click(screen.getByRole('button', { name: /add/i }));
     await user.click(screen.getByRole('button', { name: /save items/i }));
 
-    expect(onSave).toHaveBeenCalledWith([
-      expect.objectContaining({
-        product_id: 'p1',
-        variation_id: null,
-        variation_name: null,
-        price: 800,
-      }),
-    ]);
+    expect(onSave).toHaveBeenCalledWith(
+      [],
+      [
+        expect.objectContaining({
+          product_id: 'p1',
+          variation_id: null,
+          variation_name: null,
+          price: 800,
+        }),
+      ],
+    );
   });
 
   it('disables Add until a variation is chosen for a variant product', async () => {
@@ -133,5 +141,97 @@ describe('OrderItemsEditor — adding with variations', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '' }), 'p1');
 
     expect(screen.getByRole('button', { name: /add/i })).toBeDisabled();
+  });
+});
+
+describe('OrderItemsEditor — added vs kept split', () => {
+  const existing: OrderLineItem = {
+    product_id: 'p1',
+    product_name: 'GHK-CU',
+    variation_id: null,
+    variation_name: null,
+    quantity: 3,
+    price: 198,
+    total: 594,
+  };
+
+  it('keeps an existing line while splitting a newly added product into additions', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(
+      <OrderItemsEditor
+        items={[existing]}
+        products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
+        onSave={onSave}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '' }), 'p2');
+    await user.click(screen.getByRole('button', { name: /add/i }));
+    // The intent hint appears before saving.
+    expect(
+      screen.getByText(/saved as a separate order under this customer's reference/i),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save items/i }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      [existing],
+      [expect.objectContaining({ product_id: 'p2', price: 400 })],
+    );
+  });
+
+  it('keeps the added line in the draft when the save fails', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(false);
+    render(
+      <OrderItemsEditor
+        items={[existing]}
+        products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
+        onSave={onSave}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '' }), 'p2');
+    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /save items/i }));
+
+    // Save failed: the added product must remain so the admin can retry.
+    expect(screen.getByText('AHK-CU')).toBeInTheDocument();
+    expect(
+      screen.getByText(/saved as a separate order under this customer's reference/i),
+    ).toBeInTheDocument();
+  });
+
+  it('drops the added line from the draft after a successful save', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(
+      <OrderItemsEditor
+        items={[existing]}
+        products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
+        onSave={onSave}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '' }), 'p2');
+    await user.click(screen.getByRole('button', { name: /add/i }));
+    await user.click(screen.getByRole('button', { name: /save items/i }));
+
+    // Success: the added product moved to its own order and leaves this editor.
+    expect(screen.queryByText('AHK-CU')).not.toBeInTheDocument();
+    expect(screen.getByText('GHK-CU')).toBeInTheDocument();
+  });
+
+  it('hides the add-product control when adding is not allowed', () => {
+    render(
+      <OrderItemsEditor
+        items={[existing]}
+        products={[product({ id: 'p2', name: 'AHK-CU' })]}
+        canAddProducts={false}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument();
   });
 });

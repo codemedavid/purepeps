@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MapPin, Edit2, Save, X, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { useShippingLocationsAdmin, ShippingLocation } from '../hooks/useShippingLocations';
+import { useCouriers } from '../hooks/useCouriers';
 
 interface ShippingManagerProps {
     onBack: () => void;
@@ -8,24 +9,30 @@ interface ShippingManagerProps {
 
 const ShippingManager: React.FC<ShippingManagerProps> = ({ onBack }) => {
     const { locations, loading, error, updateLocation, addLocation, deleteLocation, refetch } = useShippingLocationsAdmin();
+    const { couriers } = useCouriers();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editFee, setEditFee] = useState<number>(0);
     const [editName, setEditName] = useState<string>('');
+    const [editCourierId, setEditCourierId] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
-    const [newLocation, setNewLocation] = useState({ id: '', name: '', fee: 0, is_active: true });
+    const [newLocation, setNewLocation] = useState<{ id: string; name: string; fee: number; is_active: boolean; courier_id: string | null }>({ id: '', name: '', fee: 0, is_active: true, courier_id: null });
     const [saveError, setSaveError] = useState<string | null>(null);
+
+    const courierName = (courierId: string | null): string =>
+        couriers.find(c => c.id === courierId)?.name ?? 'Unassigned';
 
     const handleEdit = (location: ShippingLocation) => {
         setEditingId(location.id);
         setEditFee(location.fee);
         setEditName(location.name);
+        setEditCourierId(location.courier_id);
         setSaveError(null);
     };
 
     const handleSave = async (id: string) => {
         try {
             setSaveError(null);
-            await updateLocation(id, { fee: editFee, name: editName });
+            await updateLocation(id, { fee: editFee, name: editName, courier_id: editCourierId });
             setEditingId(null);
         } catch (err) {
             setSaveError(err instanceof Error ? err.message : 'Failed to save');
@@ -42,11 +49,15 @@ const ShippingManager: React.FC<ShippingManagerProps> = ({ onBack }) => {
             setSaveError('ID and name are required');
             return;
         }
+        if (!newLocation.courier_id) {
+            setSaveError('Please select a courier for this rate');
+            return;
+        }
         try {
             setSaveError(null);
             await addLocation(newLocation);
             setIsAdding(false);
-            setNewLocation({ id: '', name: '', fee: 0, is_active: true });
+            setNewLocation({ id: '', name: '', fee: 0, is_active: true, courier_id: null });
         } catch (err) {
             setSaveError(err instanceof Error ? err.message : 'Failed to add location');
         }
@@ -133,7 +144,20 @@ const ShippingManager: React.FC<ShippingManagerProps> = ({ onBack }) => {
                 {isAdding && (
                     <div className="mb-4 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                         <h3 className="font-semibold text-gray-900 mb-3">Add New Shipping Location</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Courier</label>
+                                <select
+                                    value={newLocation.courier_id ?? ''}
+                                    onChange={(e) => setNewLocation({ ...newLocation, courier_id: e.target.value || null })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white"
+                                >
+                                    <option value="">Select courier…</option>
+                                    {couriers.map((c) => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">ID (e.g., CEBU)</label>
                                 <input
@@ -201,6 +225,19 @@ const ShippingManager: React.FC<ShippingManagerProps> = ({ onBack }) => {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
                                         />
                                     </div>
+                                    <div className="w-full md:w-48">
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Courier</label>
+                                        <select
+                                            value={editCourierId ?? ''}
+                                            onChange={(e) => setEditCourierId(e.target.value || null)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white"
+                                        >
+                                            <option value="">Unassigned</option>
+                                            {couriers.map((c) => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <div className="w-32">
                                         <label className="block text-xs font-medium text-gray-700 mb-1">Fee (₱)</label>
                                         <input
@@ -233,6 +270,9 @@ const ShippingManager: React.FC<ShippingManagerProps> = ({ onBack }) => {
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">
                                                     {location.id}
+                                                </span>
+                                                <span className={`text-xs px-2 py-0.5 rounded ${location.courier_id ? 'bg-brand-50 text-brand-600' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {courierName(location.courier_id)}
                                                 </span>
                                                 {!location.is_active && (
                                                     <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-600">

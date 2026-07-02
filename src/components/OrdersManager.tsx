@@ -5,6 +5,7 @@ import { useMenu } from '../hooks/useMenu';
 import { useCouriers } from '../hooks/useCouriers';
 import posthog from '../lib/posthog';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../utils/orderTracking';
+import { toFacebookProfileUrl } from '../utils/facebookLink';
 
 interface OrderItem {
   product_id: string;
@@ -854,7 +855,22 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
               {order.contact_method && (
                 <p className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold">Contact Method:</span>
-                  <span className="flex items-center gap-1 text-pink-600"><MessageCircle className="w-3 h-3 md:w-4 md:h-4" /> Instagram</span>
+                  {(() => {
+                    const facebookUrl = toFacebookProfileUrl(order.contact_method);
+                    if (facebookUrl) {
+                      return (
+                        <a
+                          href={facebookUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          <MessageCircle className="w-3 h-3 md:w-4 md:h-4" /> {order.contact_method}
+                        </a>
+                      );
+                    }
+                    return <span>{order.contact_method}</span>;
+                  })()}
                 </p>
               )}
             </div>

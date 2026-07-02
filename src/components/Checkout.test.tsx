@@ -15,8 +15,8 @@ const mockPaymentMethods = [
 ];
 
 const mockLocations = [
-  { id: 'lbc_metro', name: 'Metro Manila (LBC)', fee: 150, active: true, sort_order: 1, created_at: '', updated_at: '' },
-  { id: 'lbc_provincial', name: 'Provincial (LBC)', fee: 300, active: true, sort_order: 2, created_at: '', updated_at: '' },
+  { id: 'lbc_metro', name: 'Metro Manila (LBC)', fee: 150, is_active: true, order_index: 1, courier_id: 'cour-1', created_at: '', updated_at: '' },
+  { id: 'lbc_provincial', name: 'Provincial (LBC)', fee: 300, is_active: true, order_index: 2, courier_id: 'cour-1', created_at: '', updated_at: '' },
 ];
 
 const mockCouriers = [
@@ -206,7 +206,7 @@ describe('Checkout', () => {
       // Select courier first
       await userEvent.click(screen.getByText('LBC Express'));
 
-      // Now shipping locations should appear (filtered by courier code 'lbc')
+      // Now shipping locations should appear (filtered by courier_id)
       await waitFor(() => {
         expect(screen.getByText(/Metro Manila/)).toBeInTheDocument();
         expect(screen.getByText(/Provincial/)).toBeInTheDocument();

@@ -1,12 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Save, X } from 'lucide-react';
+import { splitEditedItems } from '../../utils/orderItemEdits';
 import type { OrderLineItem, Product, ProductVariation } from '../../types';
 
 interface OrderItemsEditorProps {
   items: OrderLineItem[];
   products: Product[];
   busy?: boolean;
-  onSave: (items: OrderLineItem[]) => void | Promise<void>;
+  /** Whether adding a NEW product is allowed (only while the batch is open). */
+  canAddProducts?: boolean;
+  /**
+   * Persist the edit. keptItems stay on this order (corrections applied in
+   * place); addedItems are brand-new products that should become a new linked
+   * order sequence with their own payment confirmation.
+   */
+  onSave: (
+    keptItems: OrderLineItem[],
+    addedItems: OrderLineItem[],
+  ) => void | Promise<boolean | void>;
 }
 
 const peso = (value: number): string =>
@@ -36,7 +47,13 @@ function lineTotal(price: number, quantity: number): number {
  * This powers "admin adds the claimed units onto a customer's order". Saving
  * recomputes each line total and hands the new array up to saveItems().
  */
-export function OrderItemsEditor({ items, products, busy = false, onSave }: OrderItemsEditorProps) {
+export function OrderItemsEditor({
+  items,
+  products,
+  busy = false,
+  canAddProducts = true,
+  onSave,
+}: OrderItemsEditorProps) {
   const [draft, setDraft] = useState<OrderLineItem[]>(items);
   const [addProductId, setAddProductId] = useState<string>('');
   const [addVariationId, setAddVariationId] = useState<string>('');
@@ -110,6 +127,21 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
 
   const handleReset = () => setDraft(items);
 
+  // Which draft lines are corrections to keep here vs brand-new products that
+  // should split off into their own linked order.
+  const split = useMemo(() => splitEditedItems(items, draft), [items, draft]);
+  const hasAdditions = split.addedItems.length > 0;
+
+  const handleSave = async () => {
+    const result = await onSave(split.keptItems, split.addedItems);
+    // Only collapse the draft to the kept lines once the save actually
+    // succeeded — a failed save (false) keeps the added items so the admin can
+    // retry instead of silently losing what they entered.
+    if (result !== false) {
+      setDraft(split.keptItems);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="space-y-2">
@@ -152,7 +184,10 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
         )}
       </div>
 
-      {/* Add a product */}
+      {/* Add a product — only while the batch is open, since a new product
+          becomes a separate linked order that the trigger enforces against the
+          open batch. */}
+      {canAddProducts && (
       <div className="flex flex-col sm:flex-row gap-2 bg-indigo-50/60 border border-indigo-100 rounded-lg p-3">
         <select
           value={addProductId}
@@ -207,6 +242,15 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
           Add
         </button>
       </div>
+      )}
+
+      {hasAdditions && (
+        <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+          {split.addedItems.length} new item
+          {split.addedItems.length === 1 ? '' : 's'} will be saved as a separate order under this
+          customer's reference, with its own payment confirmation.
+        </p>
+      )}
 
       {/* Recomputed totals + save */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -231,12 +275,12 @@ export function OrderItemsEditor({ items, products, busy = false, onSave }: Orde
           )}
           <button
             type="button"
-            onClick={() => onSave(draft)}
+            onClick={handleSave}
             disabled={busy || !isDirty}
             className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-xs font-medium flex items-center gap-1 disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
-            {busy ? 'Saving…' : 'Save items'}
+            {busy ? 'Saving…' : hasAdditions ? 'Save items & add order' : 'Save items'}
           </button>
         </div>
       </div>

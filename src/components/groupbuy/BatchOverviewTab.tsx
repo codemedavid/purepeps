@@ -223,7 +223,7 @@ export function BatchOverviewTab({
 
       {/* Phase-aware product status board: ordered / confirmed / pending plus the
           headline the admin needs now (Left → To take over → Confirmed). */}
-      {batch && <ProductStatusBoard items={items} phase={phase} />}
+      {batch && <ProductStatusBoard items={items} phase={phase} orders={orders} />}
     </div>
   );
 }

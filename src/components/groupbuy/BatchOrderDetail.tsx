@@ -12,6 +12,8 @@ import {
 import { useCouriers } from '../../hooks/useCouriers';
 import { useImageUpload } from '../../hooks/useImageUpload';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
+import { toFacebookProfileUrl } from '../../utils/facebookLink';
+import type { OrderSequenceContext } from '../../utils/batchOrderGroups';
 import type { BatchOrder, OrderLineItem, Product } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { OrderItemsEditor } from './OrderItemsEditor';
@@ -27,13 +29,22 @@ interface BatchOrderDetailProps {
   order: BatchOrder;
   products: Product[];
   busy: boolean;
+  /** Sequence context when this order is one of a customer's linked orders. */
+  sequence?: OrderSequenceContext | null;
+  onSelectSibling?: (orderId: string) => void;
+  /** Whether adding a new product (as a new linked order) is allowed here. */
+  canAddOrder?: boolean;
   requestConfirm: RequestConfirm;
   onBack: () => void;
   onConfirm: (order: BatchOrder) => void;
   onUpdateStatus: (orderId: string, status: string) => void;
   onCancel: (orderId: string) => void;
   onSaveTracking: (orderId: string, tracking: TrackingInput) => void;
-  onSaveItems: (orderId: string, items: OrderLineItem[]) => void;
+  onSaveItems: (
+    orderId: string,
+    keptItems: OrderLineItem[],
+    addedItems: OrderLineItem[],
+  ) => void | Promise<boolean | void>;
   onVerifyBalance: (orderId: string) => void;
   onAttachProof: (orderId: string, proofUrl: string) => void;
 }
@@ -48,6 +59,9 @@ export function BatchOrderDetail({
   order,
   products,
   busy,
+  sequence,
+  onSelectSibling,
+  canAddOrder = true,
   requestConfirm,
   onBack,
   onConfirm,
@@ -161,6 +175,36 @@ export function BatchOrderDetail({
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-5 space-y-5">
+        {/* Sequence context: which of the customer's linked orders this is, with
+            quick links to the others under the same reference. */}
+        {sequence && (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 space-y-2">
+            <p className="text-xs font-semibold text-indigo-800">
+              {sequence.label}
+              {sequence.position > 0 ? ` of ${sequence.total}` : ''} · Reference{' '}
+              <span className="font-mono">{sequence.reference}</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {sequence.siblings.map((sib) => (
+                <button
+                  key={sib.id}
+                  type="button"
+                  onClick={() => onSelectSibling?.(sib.id)}
+                  disabled={sib.isCurrent}
+                  aria-current={sib.isCurrent ? 'true' : undefined}
+                  className={`text-[11px] font-medium px-2 py-1 rounded-full border transition-colors ${
+                    sib.isCurrent
+                      ? 'bg-indigo-600 text-white border-indigo-600 cursor-default'
+                      : 'bg-white text-indigo-700 border-indigo-200 hover:border-indigo-400'
+                  }`}
+                >
+                  {sib.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Header: order number + status controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
@@ -229,11 +273,26 @@ export function BatchOrderDetail({
             <p>
               <span className="font-semibold">Phone:</span> {order.customer_phone}
             </p>
-            {order.contact_method && (
-              <p>
-                <span className="font-semibold">Contact (FB/WhatsApp):</span> {order.contact_method}
-              </p>
-            )}
+            {order.contact_method && (() => {
+              const facebookUrl = toFacebookProfileUrl(order.contact_method);
+              return (
+                <p>
+                  <span className="font-semibold">Contact (FB/WhatsApp):</span>{' '}
+                  {facebookUrl ? (
+                    <a
+                      href={facebookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {order.contact_method}
+                    </a>
+                  ) : (
+                    order.contact_method
+                  )}
+                </p>
+              );
+            })()}
             {order.selected_sticker_name && (
               <p>
                 <span className="font-semibold">Sticker:</span> {order.selected_sticker_name}
@@ -367,7 +426,8 @@ export function BatchOrderDetail({
             items={order.order_items}
             products={products}
             busy={busy}
-            onSave={(items) => onSaveItems(order.id, items)}
+            canAddProducts={canAddOrder}
+            onSave={(keptItems, addedItems) => onSaveItems(order.id, keptItems, addedItems)}
           />
         </div>
 
