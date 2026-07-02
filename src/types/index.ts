@@ -178,6 +178,12 @@ export interface GroupBuyBatch {
   starts_at?: string | null;
   /** Admin-announced finish/deadline of the group buy window (TIMESTAMPTZ). Display-only. */
   ends_at?: string | null;
+  /**
+   * "Pasalo mode": when true, the storefront shows only this batch's capped
+   * products that still have remaining slots. Drives a re-opening phase where
+   * shoppers see only items still needing orders. Default false.
+   */
+  pasalo_mode?: boolean;
 }
 
 export interface GroupBuyCap {
@@ -215,6 +221,7 @@ export interface GroupBuyProgress {
     | 'fulfillment_stage'
     | 'starts_at'
     | 'ends_at'
+    | 'pasalo_mode'
   > | null;
   items: GroupBuyProgressItem[];
 }

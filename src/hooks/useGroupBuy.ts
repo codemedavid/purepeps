@@ -130,6 +130,20 @@ export const useGroupBuy = () => {
     [refresh],
   );
 
+  // Toggle "pasalo mode" on a batch: when on, the storefront shows only this
+  // batch's capped products that still have remaining slots.
+  const setPasaloMode = useCallback(
+    async (batchId: string, enabled: boolean) => {
+      const { error: rpcError } = await supabase.rpc('set_group_buy_pasalo_mode', {
+        p_id: batchId,
+        p_enabled: enabled,
+      });
+      if (rpcError) throw rpcError;
+      await refresh();
+    },
+    [refresh],
+  );
+
   // Active tiers the admin may offer on a batch (id, name, price), ordered for
   // display. The storefront get_access_tiers RPC only returns the OPEN batch's
   // offered tiers, so the editor reads the full active set directly instead.
@@ -306,6 +320,7 @@ export const useGroupBuy = () => {
     refresh,
     openBatch,
     setSchedule,
+    setPasaloMode,
     fetchOfferableTiers,
     fetchBatchTierIds,
     updateBatchSettings,

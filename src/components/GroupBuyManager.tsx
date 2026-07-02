@@ -57,6 +57,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     fetchOfferableTiers,
     fetchBatchTierIds,
     updateBatchSettings,
+    setPasaloMode,
   } = useGroupBuy();
   const { products } = useMenu();
 
@@ -247,6 +248,11 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   const handleRemoveCap = (productId: string) => {
     if (!activeBatch) return;
     void runAction(() => removeCap(activeBatch.id, productId));
+  };
+
+  const handleTogglePasaloMode = () => {
+    if (!activeBatch) return;
+    void runAction(() => setPasaloMode(activeBatch.id, !activeBatch.pasalo_mode));
   };
 
   // ---- Shipment stage (shared international leg for the whole batch) ----
@@ -452,16 +458,47 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
 
             {activeTab === 'caps' &&
               (isOpenBatchSelected || isFinalizing ? (
-                <CapsProgressTable
-                  rows={rows}
-                  items={progress.items}
-                  capDrafts={capDrafts}
-                  busy={busy}
-                  onCapDraftChange={handleCapDraftChange}
-                  onSaveCap={handleSaveCap}
-                  onRemoveCap={handleRemoveCap}
-                  readOnly={!isOpenBatchSelected}
-                />
+                <div className="space-y-4">
+                  {isOpenBatchSelected && activeBatch && (
+                    <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900">Pasalo mode</h3>
+                        <p className="mt-1 text-xs text-gray-500">
+                          When on, the storefront shows only capped products that still have
+                          remaining slots — for a re-opening phase where shoppers see just the
+                          items that still need orders.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={activeBatch.pasalo_mode ?? false}
+                        aria-label="Toggle pasalo mode"
+                        disabled={busy}
+                        onClick={handleTogglePasaloMode}
+                        className={`relative mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                          activeBatch.pasalo_mode ? 'bg-brand-500' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                            activeBatch.pasalo_mode ? 'translate-x-5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+                  <CapsProgressTable
+                    rows={rows}
+                    items={progress.items}
+                    capDrafts={capDrafts}
+                    busy={busy}
+                    onCapDraftChange={handleCapDraftChange}
+                    onSaveCap={handleSaveCap}
+                    onRemoveCap={handleRemoveCap}
+                    readOnly={!isOpenBatchSelected}
+                  />
+                </div>
               ) : itemRevenue.rows.length > 0 ? (
                 // Closed/finalized: live caps are gone, but the per-product closeout
                 // (final units + revenue, with CSV export) is what the admin needs to

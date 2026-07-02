@@ -14,6 +14,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useAccess } from './hooks/useAccess';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
+import { filterPasaloProducts } from './utils/groupBuy';
 
 // Lazy load route components
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
@@ -55,6 +56,14 @@ function MainApp() {
         ? menuItems
         : menuItems.filter(item => item.category === selectedCategory);
 
+    // "Pasalo mode" (per open batch): show only capped products that still have
+    // remaining slots. Gated on an open batch so no-batch / flag-off / still-loading
+    // all fall back to the full catalog (never an empty flash). See groupBuy utils.
+    const pasaloOn = !groupBuy.loading && groupBuy.isBatchOpen && (groupBuy.batch?.pasalo_mode ?? false);
+    const visibleProducts = pasaloOn
+        ? filterPasaloProducts(filteredProducts, groupBuy.items)
+        : filteredProducts;
+
     return (
         <div className="min-h-screen bg-white font-inter flex flex-col">
             <Header
@@ -77,7 +86,7 @@ function MainApp() {
             <main className="flex-grow">
                 {currentView === 'menu' && (
                     <Menu
-                        menuItems={filteredProducts}
+                        menuItems={visibleProducts}
                         isLoading={menuLoading}
                         addToCart={cart.addToCart}
                         cartItems={cart.cartItems}
