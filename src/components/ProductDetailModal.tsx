@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Package, Beaker, ShoppingCart, Plus, Minus, Sparkles, ArrowLeft, Lock } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { remainingAfterCart } from '../utils/groupBuy';
+import { MIN_ORDER_QUANTITY } from '../constants/order';
 
 interface ProductDetailModalProps {
   product: Product;
@@ -38,7 +39,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | undefined>(
     getFirstAvailableVariation()
   );
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(MIN_ORDER_QUANTITY);
 
   const hasDiscount = product.discount_active && product.discount_price;
 
@@ -65,8 +66,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const overCap = capRemaining != null && quantity > capRemaining;
 
   const incrementQuantity = () =>
-    setQuantity(prev => (capRemaining != null ? Math.min(prev + 1, Math.max(1, capRemaining)) : prev + 1));
-  const decrementQuantity = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
+    setQuantity(prev => (capRemaining != null ? Math.min(prev + 1, Math.max(MIN_ORDER_QUANTITY, capRemaining)) : prev + 1));
+  const decrementQuantity = () =>
+    setQuantity(prev => (prev > MIN_ORDER_QUANTITY ? prev - 1 : MIN_ORDER_QUANTITY));
 
   const handleAddToCart = () => {
     if (!isBatchOpen || capReached || overCap) return;
@@ -306,16 +308,21 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div className="flex items-center justify-center gap-3 sm:gap-4 md:gap-5">
                     <button
                       onClick={decrementQuantity}
+                      aria-label="Decrease quantity"
                       className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300 rounded transition-all active:scale-95 text-gray-600"
                       disabled={!product.available}
                     >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <span className="text-xl sm:text-2xl font-bold text-charcoal-900 min-w-[50px] text-center">
+                    <span
+                      data-testid="quantity-value"
+                      className="text-xl sm:text-2xl font-bold text-charcoal-900 min-w-[50px] text-center"
+                    >
                       {quantity}
                     </span>
                     <button
                       onClick={incrementQuantity}
+                      aria-label="Increase quantity"
                       className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300 rounded transition-all active:scale-95 text-gray-600"
                       disabled={!product.available}
                     >

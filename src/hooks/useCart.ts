@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { MIN_ORDER_QUANTITY } from '../constants/order';
 import type { CartItem, Product, ProductVariation } from '../types';
 
 export function useCart() {
@@ -56,7 +57,9 @@ export function useCart() {
       updatedItems[existingItemIndex].quantity += quantity;
       setCartItems(updatedItems);
     } else {
-      // Add new item - check if quantity exceeds stock
+      // Add new item - enforce the per-product minimum order, then check stock
+      quantity = Math.max(quantity, MIN_ORDER_QUANTITY);
+
       if (quantity > availableStock) {
         alert(`Only ${availableStock} item(s) available in stock. Added ${availableStock} to your cart.`);
         quantity = availableStock;
@@ -75,6 +78,11 @@ export function useCart() {
     if (quantity <= 0) {
       removeFromCart(index);
       return;
+    }
+
+    // Keep the line at or above the per-product minimum order
+    if (quantity < MIN_ORDER_QUANTITY) {
+      quantity = MIN_ORDER_QUANTITY;
     }
 
     // Check stock availability

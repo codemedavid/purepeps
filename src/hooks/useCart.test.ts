@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCart } from './useCart';
+import { MIN_ORDER_QUANTITY } from '../constants/order';
 import type { Product, ProductVariation } from '../types';
 
 const mockProduct: Product = {
@@ -81,7 +82,7 @@ describe('useCart', () => {
   // --- addToCart ---
 
   describe('addToCart', () => {
-    it('adds a product to cart with default quantity of 1', () => {
+    it('adds a product to cart with the minimum order quantity by default', () => {
       const { result } = renderHook(() => useCart());
 
       act(() => {
@@ -90,7 +91,7 @@ describe('useCart', () => {
 
       expect(result.current.cartItems).toHaveLength(1);
       expect(result.current.cartItems[0].product.id).toBe('prod-1');
-      expect(result.current.cartItems[0].quantity).toBe(1);
+      expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY);
     });
 
     it('adds a product with specific quantity', () => {
@@ -117,6 +118,7 @@ describe('useCart', () => {
     it('increments quantity for existing item (same product, no variation)', () => {
       const { result } = renderHook(() => useCart());
 
+      // First add starts a new line at the minimum (2); the second is additive (+1 default).
       act(() => {
         result.current.addToCart(mockProduct);
       });
@@ -125,7 +127,7 @@ describe('useCart', () => {
       });
 
       expect(result.current.cartItems).toHaveLength(1);
-      expect(result.current.cartItems[0].quantity).toBe(2);
+      expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY + 1);
     });
 
     it('increments quantity for existing item (same product + variation)', () => {
@@ -139,7 +141,7 @@ describe('useCart', () => {
       });
 
       expect(result.current.cartItems).toHaveLength(1);
-      expect(result.current.cartItems[0].quantity).toBe(2);
+      expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY + 1);
     });
 
     it('treats same product with different variations as separate items', () => {
@@ -221,6 +223,43 @@ describe('useCart', () => {
       });
 
       expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('maximum available quantity'));
+    });
+  });
+
+  // --- minimum order quantity ---
+
+  describe('minimum order quantity', () => {
+    it('raises a below-minimum requested quantity up to the minimum for a new item', () => {
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(mockProduct, undefined, 1);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY);
+    });
+
+    it('keeps an above-minimum requested quantity unchanged', () => {
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(mockProduct, undefined, 4);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(4);
+    });
+
+    it('clamps updateQuantity to the minimum instead of dropping below it', () => {
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(mockProduct, undefined, 3);
+      });
+      act(() => {
+        result.current.updateQuantity(0, 1);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY);
     });
   });
 
@@ -371,20 +410,20 @@ describe('useCart', () => {
       const { result } = renderHook(() => useCart());
 
       act(() => {
-        result.current.addToCart(discounted);
+        result.current.addToCart(discounted); // floored to minimum quantity of 2
       });
 
-      expect(result.current.getTotalPrice()).toBe(2000); // discount_price
+      expect(result.current.getTotalPrice()).toBe(2000 * MIN_ORDER_QUANTITY); // discount_price
     });
 
     it('uses base price when discount is inactive even if discount_price exists', () => {
       const { result } = renderHook(() => useCart());
 
       act(() => {
-        result.current.addToCart(mockProduct); // discount_active: false
+        result.current.addToCart(mockProduct); // discount_active: false, floored to 2
       });
 
-      expect(result.current.getTotalPrice()).toBe(2500); // base_price
+      expect(result.current.getTotalPrice()).toBe(2500 * MIN_ORDER_QUANTITY); // base_price
     });
 
     it('uses variation price when variation is present', () => {
@@ -402,13 +441,13 @@ describe('useCart', () => {
       const { result } = renderHook(() => useCart());
 
       act(() => {
-        result.current.addToCart(mockProduct, undefined, 1); // 2500
+        result.current.addToCart(mockProduct, undefined, 2); // 2500 * 2
       });
       act(() => {
         result.current.addToCart(product2, undefined, 3); // 1000 * 3
       });
 
-      expect(result.current.getTotalPrice()).toBe(5500);
+      expect(result.current.getTotalPrice()).toBe(8000);
     });
   });
 
