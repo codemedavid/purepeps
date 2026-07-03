@@ -3,6 +3,8 @@ import { ArrowLeft, Boxes, Truck, RotateCcw } from 'lucide-react';
 import { useGroupBuy } from '../hooks/useGroupBuy';
 import { useBatchOrders } from '../hooks/useBatchOrders';
 import { useBatchMembers } from '../hooks/useBatchMembers';
+import { useTierCatalog } from '../hooks/useTierCatalog';
+import { useAccessRequests } from '../hooks/useAccessRequests';
 import { useMenu } from '../hooks/useMenu';
 import { FULFILLMENT_STAGES, fulfillmentStageLabel } from '../utils/orderTracking';
 import {
@@ -115,6 +117,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     loading: membersLoading,
     reload: reloadMembers,
   } = useBatchMembers(selectedBatch?.id ?? null);
+  const { tiers: tierCatalog } = useTierCatalog();
+  const { setTier } = useAccessRequests();
 
   const selectedOrder = useMemo(
     () => orders.find((o) => o.id === selectedOrderId) ?? null,
@@ -471,6 +475,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 members={batchMembers}
                 loading={membersLoading}
                 onReload={reloadMembers}
+                tiers={tierCatalog}
+                onSetTier={setTier}
               />
             )}
 

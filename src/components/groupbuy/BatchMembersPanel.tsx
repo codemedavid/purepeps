@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Users, RefreshCw, Search, X, Clock, CheckCircle2 } from 'lucide-react';
+import { Users, RefreshCw, Search, X, Clock, CheckCircle2, Layers, Check } from 'lucide-react';
 import type { AccessRequest, AccessStatus } from '../../utils/access';
+import type { CatalogTier } from '../../hooks/useTierCatalog';
+import { formatPrice } from '../../utils/currency';
 import { peso } from './orderStatusStyles';
 
 interface BatchMembersPanelProps {
@@ -8,6 +10,10 @@ interface BatchMembersPanelProps {
   members: AccessRequest[];
   loading: boolean;
   onReload: () => void;
+  /** Selectable tiers for the inline corrector. Omit to render the roster read-only. */
+  tiers?: CatalogTier[];
+  /** Applies a tier change to a member's request. Omit to render the roster read-only. */
+  onSetTier?: (id: string, tierId: string, tierName: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 type MemberFilter = 'all' | Extract<AccessStatus, 'approved' | 'pending'>;
@@ -26,12 +32,45 @@ const STATUS_CHIP: Record<'approved' | 'pending', { label: string; className: st
 /**
  * Roster of every member who subscribed to the selected group-buy batch — the
  * paid access requests, both approved (checkout unlocked) and pending (paid,
- * awaiting review). Read-only view: search by email, filter by status, see each
- * member's tier and amount. Tier corrections live in the Access Requests admin.
+ * awaiting review). Search by email, filter by status, see each member's tier
+ * and amount. When `tiers` + `onSetTier` are provided, each row also gets an
+ * inline tier corrector so the admin can fix/upgrade access right here.
  */
-export function BatchMembersPanel({ batchNumber, members, loading, onReload }: BatchMembersPanelProps) {
+export function BatchMembersPanel({
+  batchNumber,
+  members,
+  loading,
+  onReload,
+  tiers,
+  onSetTier,
+}: BatchMembersPanelProps) {
   const [filter, setFilter] = useState<MemberFilter>('all');
   const [query, setQuery] = useState('');
+  // Inline tier corrector: which member row is open, the tier picked, busy + error.
+  const canEditTier = Boolean(onSetTier && tiers && tiers.length > 0);
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
+  const [correctTierId, setCorrectTierId] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleSetTier = async (id: string) => {
+    const tier = tiers?.find((t) => t.id === correctTierId);
+    if (!onSetTier || !tier) {
+      setActionError('Choose a tier to assign.');
+      return;
+    }
+    setBusyId(id);
+    setActionError(null);
+    const result = await onSetTier(id, tier.id, tier.name);
+    setBusyId(null);
+    if (!result.success) {
+      setActionError(result.error ?? 'Failed to update access tier.');
+      return;
+    }
+    setCorrectingId(null);
+    setCorrectTierId('');
+    onReload();
+  };
 
   const counts = useMemo(() => {
     let approved = 0;
@@ -123,25 +162,89 @@ export function BatchMembersPanel({ batchNumber, members, loading, onReload }: B
           {visible.map((m) => {
             const chip = m.status === 'approved' ? STATUS_CHIP.approved : STATUS_CHIP.pending;
             const StatusIcon = m.status === 'approved' ? CheckCircle2 : Clock;
+            const isCorrecting = correctingId === m.id;
             return (
-              <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-                <StatusIcon
-                  className={`h-4 w-4 shrink-0 ${
-                    m.status === 'approved' ? 'text-emerald-500' : 'text-amber-500'
-                  }`}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{m.email}</p>
-                  <p className="truncate text-xs text-gray-500">
-                    {m.tier_name ?? 'Legacy access'} · {peso(Number(m.amount))} ·{' '}
-                    {new Date(m.created_at).toLocaleDateString('en-PH')}
-                  </p>
+              <li key={m.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <StatusIcon
+                    className={`h-4 w-4 shrink-0 ${
+                      m.status === 'approved' ? 'text-emerald-500' : 'text-amber-500'
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">{m.email}</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {m.tier_name ?? 'Legacy access'} · {peso(Number(m.amount))} ·{' '}
+                      {new Date(m.created_at).toLocaleDateString('en-PH')}
+                    </p>
+                  </div>
+                  {canEditTier && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionError(null);
+                        if (isCorrecting) {
+                          setCorrectingId(null);
+                          setCorrectTierId('');
+                        } else {
+                          setCorrectingId(m.id);
+                          setCorrectTierId(m.tier_id ?? '');
+                        }
+                      }}
+                      disabled={busyId === m.id}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                      title="Change this member's access tier"
+                    >
+                      <Layers className="h-3.5 w-3.5" /> Change tier
+                    </button>
+                  )}
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${chip.className}`}
+                  >
+                    {chip.label}
+                  </span>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${chip.className}`}
-                >
-                  {chip.label}
-                </span>
+                {isCorrecting && canEditTier && (
+                  <div className="mt-2 ml-7 rounded-lg border border-gray-200 bg-gray-50 p-2.5 space-y-2">
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-600">
+                      <Layers className="h-3.5 w-3.5" /> Assign tier
+                    </label>
+                    <select
+                      value={correctTierId}
+                      onChange={(e) => setCorrectTierId(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-800"
+                    >
+                      <option value="">Choose a tier…</option>
+                      {tiers?.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} — {formatPrice(t.price)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSetTier(m.id)}
+                        disabled={busyId === m.id || !correctTierId}
+                        className="inline-flex items-center gap-1 rounded-lg bg-brand-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-60"
+                      >
+                        <Check className="h-3.5 w-3.5" /> Set tier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCorrectingId(null);
+                          setCorrectTierId('');
+                        }}
+                        disabled={busyId === m.id}
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {actionError && <p className="text-[11px] font-medium text-red-600">{actionError}</p>}
+                  </div>
+                )}
               </li>
             );
           })}

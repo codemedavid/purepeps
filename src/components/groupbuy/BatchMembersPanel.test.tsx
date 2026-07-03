@@ -80,4 +80,61 @@ describe('BatchMembersPanel', () => {
     await user.click(screen.getByRole('button', { name: /Refresh/ }));
     expect(onReload).toHaveBeenCalledOnce();
   });
+
+  it('renders no tier corrector when tiers/onSetTier are omitted', () => {
+    render(
+      <BatchMembersPanel batchNumber={3} members={MEMBERS} loading={false} onReload={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Change tier' })).not.toBeInTheDocument();
+  });
+
+  it('applies a tier change and reloads the roster', async () => {
+    const user = userEvent.setup();
+    const onSetTier = vi.fn().mockResolvedValue({ success: true });
+    const onReload = vi.fn();
+    const tiers = [
+      { id: 'tier-1', name: '200 Access', price: 200, isAllAccess: false },
+      { id: 'tier-2', name: '300 Access', price: 300, isAllAccess: false },
+    ];
+    render(
+      <BatchMembersPanel
+        batchNumber={3}
+        members={[MEMBERS[0]]}
+        loading={false}
+        onReload={onReload}
+        tiers={tiers}
+        onSetTier={onSetTier}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change tier' }));
+    await user.selectOptions(screen.getByRole('combobox'), 'tier-2');
+    await user.click(screen.getByRole('button', { name: /Set tier/ }));
+
+    expect(onSetTier).toHaveBeenCalledWith('m1', 'tier-2', '300 Access');
+    expect(onReload).toHaveBeenCalled();
+  });
+
+  it('surfaces an error and keeps the corrector open when the tier change fails', async () => {
+    const user = userEvent.setup();
+    const onSetTier = vi.fn().mockResolvedValue({ success: false, error: 'Tier not found' });
+    const tiers = [{ id: 'tier-2', name: '300 Access', price: 300, isAllAccess: false }];
+    render(
+      <BatchMembersPanel
+        batchNumber={3}
+        members={[MEMBERS[0]]}
+        loading={false}
+        onReload={vi.fn()}
+        tiers={tiers}
+        onSetTier={onSetTier}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Change tier' }));
+    await user.selectOptions(screen.getByRole('combobox'), 'tier-2');
+    await user.click(screen.getByRole('button', { name: /Set tier/ }));
+
+    expect(await screen.findByText('Tier not found')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+  });
 });
