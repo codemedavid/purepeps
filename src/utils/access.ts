@@ -21,6 +21,18 @@ export const PENDING_ACCESS_EMAIL_KEY = 'pp_pending_email';
 /** How often to re-check a pending email's approval status while it's unresolved. */
 export const ACCESS_POLL_INTERVAL_MS = 10_000;
 
+/**
+ * site_settings key that gates NEW paid access requests. When its value is the
+ * string 'false', request intake is CLOSED: the storefront hides the Get Access
+ * payment form (verify-only), and a BEFORE INSERT trigger on access_requests
+ * rejects every new row server-side. Any other value (or missing key) = OPEN.
+ * Used to cap intake when approval capacity is limited.
+ */
+export const ACCESS_REQUESTS_OPEN_KEY = 'access_requests_open';
+
+/** Substring the DB intake trigger raises so the client can show a friendly closed message. */
+export const ACCESS_REQUESTS_CLOSED_MARKER = 'access requests are currently closed';
+
 /** Persisted status of an individual access request row. */
 export type AccessStatus = 'pending' | 'approved' | 'rejected';
 
@@ -92,6 +104,42 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmail(email: string): boolean {
   return EMAIL_RE.test(email.trim());
+}
+
+/** Minimal tier shape needed to price-check a request (id → price + name). */
+export interface TierPrice {
+  id: string;
+  name: string;
+  price: number;
+}
+
+/** A detected amount↔tier discrepancy: what was paid vs. the granted tier's price. */
+export interface TierAmountMismatch {
+  paid: number;
+  tierPrice: number;
+  tierName: string;
+}
+
+/**
+ * Detects the "paid one price but got a different tier" bug: returns the
+ * discrepancy when a request's paid `amount` differs from the price of the tier
+ * it's tagged to, else null. Callers should skip upgrade rows (which pay only a
+ * delta) so those legitimate part-payments aren't flagged.
+ */
+export function findTierAmountMismatch(
+  request: { amount: number; tier_id: string | null },
+  tiers: TierPrice[],
+): TierAmountMismatch | null {
+  if (!request.tier_id) return null;
+  const tier = tiers.find((t) => t.id === request.tier_id);
+  if (!tier) return null;
+
+  const paid = Number(request.amount);
+  const tierPrice = Number(tier.price);
+  if (!Number.isFinite(paid) || !Number.isFinite(tierPrice)) return null;
+  if (paid === tierPrice) return null;
+
+  return { paid, tierPrice, tierName: tier.name };
 }
 
 /**

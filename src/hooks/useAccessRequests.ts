@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ACCESS_FEE_PHP, type AccessRequest, type AccessStatus } from '../utils/access';
+import {
+  ACCESS_FEE_PHP,
+  ACCESS_REQUESTS_CLOSED_MARKER,
+  type AccessRequest,
+  type AccessStatus,
+} from '../utils/access';
 
 export interface SubmitAccessInput {
   email: string;
@@ -80,41 +85,54 @@ export function useAccessRequests() {
       if (insertError) throw insertError;
       return { success: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to submit access request';
+      const rawMessage = err instanceof Error ? err.message : 'Failed to submit access request';
       console.error('Error submitting access request:', err);
+      // The intake trigger raises when requests are closed — surface a clear,
+      // member-facing message instead of the raw Postgres exception text.
+      const isClosed = rawMessage.toLowerCase().includes(ACCESS_REQUESTS_CLOSED_MARKER);
+      const message = isClosed
+        ? 'Access requests are currently closed. We can only take a limited number of members per batch — please check back next batch.'
+        : rawMessage;
       return { success: false, error: message };
     }
   }, []);
 
+  // Every admin write to access_requests goes through the `approve-access` Edge
+  // Function: the anon/admin REST API can no longer change these rows (RLS denies
+  // it), so the function validates the caller's Supabase Auth JWT + admin
+  // membership server-side before writing with the service role. supabase-js
+  // automatically attaches the logged-in admin's access token to the invoke.
+  const invokeApprove = useCallback(
+    async (body: Record<string, unknown>): Promise<AccessRequest> => {
+      const { data, error: fnError } = await supabase.functions.invoke('approve-access', {
+        body,
+      });
+
+      if (fnError) {
+        // supabase-js wraps non-2xx responses; the JSON body carries our message.
+        let message = fnError.message;
+        try {
+          const errBody = await (fnError as { context?: Response }).context?.json?.();
+          if (errBody?.error) message = errBody.error;
+        } catch {
+          // keep the wrapped message
+        }
+        throw new Error(message);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error ?? 'Failed to update access request');
+      }
+
+      return data.data as AccessRequest;
+    },
+    [],
+  );
+
   const updateStatus = useCallback(
     async (id: string, status: AccessStatus): Promise<MutationResult> => {
       try {
-        // Approvals are admin-only: the anon REST API can no longer change status
-        // (RLS denies it). We go through the `approve-access` Edge Function, which
-        // validates the caller's Supabase Auth JWT + admin membership server-side
-        // before writing with the service role. supabase-js automatically attaches
-        // the logged-in admin's access token to the invoke request.
-        const { data, error: fnError } = await supabase.functions.invoke('approve-access', {
-          body: { id, status },
-        });
-
-        if (fnError) {
-          // supabase-js wraps non-2xx responses; the JSON body carries our message.
-          let message = fnError.message;
-          try {
-            const body = await (fnError as { context?: Response }).context?.json?.();
-            if (body?.error) message = body.error;
-          } catch {
-            // keep the wrapped message
-          }
-          throw new Error(message);
-        }
-
-        if (!data?.success) {
-          throw new Error(data?.error ?? 'Failed to update access request');
-        }
-
-        const updated = data.data as AccessRequest;
+        const updated = await invokeApprove({ id, status });
         setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)));
         return { success: true, data: updated };
       } catch (err) {
@@ -123,12 +141,34 @@ export function useAccessRequests() {
         return { success: false, error: message };
       }
     },
-    [],
+    [invokeApprove],
+  );
+
+  // Admin correction/upgrade of a member's tier on an existing request. Applies
+  // immediately — get_access_grant reads the request's tier_id, so the member's
+  // checkout access changes as soon as this returns. `tierName` is passed so the
+  // admin list can relabel the row without a full refetch (the function's
+  // returned row carries tier_id but not the joined tier name).
+  const setTier = useCallback(
+    async (id: string, tierId: string, tierName: string | null): Promise<MutationResult> => {
+      try {
+        const updated = await invokeApprove({ id, tier_id: tierId });
+        setRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...updated, tier_name: tierName } : r)),
+        );
+        return { success: true, data: updated };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to update access tier';
+        console.error('Error updating access tier:', err);
+        return { success: false, error: message };
+      }
+    },
+    [invokeApprove],
   );
 
   useEffect(() => {
     // Admin view opts in by calling fetchAll(); no auto-fetch for the public flow.
   }, []);
 
-  return { requests, loading, error, fetchAll, submitRequest, updateStatus };
+  return { requests, loading, error, fetchAll, submitRequest, updateStatus, setTier };
 }

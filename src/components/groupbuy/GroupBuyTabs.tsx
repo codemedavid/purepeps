@@ -1,8 +1,8 @@
 import { useRef } from 'react';
-import { LayoutDashboard, ShoppingCart, SlidersHorizontal, Truck, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, SlidersHorizontal, Truck, History } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type GroupBuyTab = 'overview' | 'orders' | 'caps' | 'shipping' | 'history';
+export type GroupBuyTab = 'overview' | 'orders' | 'members' | 'caps' | 'shipping' | 'history';
 
 interface TabDef {
   id: GroupBuyTab;
@@ -13,6 +13,7 @@ interface TabDef {
 const TABS: readonly TabDef[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingCart },
+  { id: 'members', label: 'Members', icon: Users },
   { id: 'caps', label: 'Items & Caps', icon: SlidersHorizontal },
   { id: 'shipping', label: 'Shipping', icon: Truck },
   { id: 'history', label: 'History', icon: History },

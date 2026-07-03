@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Home, Layout } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useImageUpload } from '../hooks/useImageUpload';
+import AccessIntakeToggle from './AccessIntakeToggle';
 
 const SiteSettingsManager: React.FC = () => {
   const { siteSettings, loading, updateSiteSettings } = useSiteSettings();
@@ -114,6 +115,9 @@ const SiteSettingsManager: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* Access request intake switch (shared with the Access Requests view). */}
+      <AccessIntakeToggle />
+
       {/* General Site Settings Card */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
         <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">

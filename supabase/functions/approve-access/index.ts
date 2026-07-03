@@ -29,7 +29,13 @@ function json(body: unknown, status = 200): Response {
 interface ApprovePayload {
   id?: string;
   status?: string;
+  // Optional admin tier correction/upgrade. When present, the request's tier_id
+  // is set to this value, applied immediately (get_access_grant reads it). May be
+  // sent alone (change tier, keep status) or alongside status (approve AT a tier).
+  tier_id?: string;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -85,17 +91,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { id, status } = payload;
+  const { id, status, tier_id } = payload;
   if (!id || typeof id !== 'string') {
     return json({ error: 'Missing request id' }, 400);
   }
-  if (!status || !ALLOWED_STATUSES.includes(status as Status)) {
-    return json({ error: 'Invalid status' }, 400);
+
+  // Build the patch from whichever fields were supplied. A caller may change the
+  // status, the tier, or both — but must change at least one.
+  const patch: { status?: Status; tier_id?: string } = {};
+  if (status !== undefined) {
+    if (!ALLOWED_STATUSES.includes(status as Status)) {
+      return json({ error: 'Invalid status' }, 400);
+    }
+    patch.status = status as Status;
+  }
+  if (tier_id !== undefined) {
+    if (typeof tier_id !== 'string' || !UUID_RE.test(tier_id)) {
+      return json({ error: 'Invalid tier id' }, 400);
+    }
+    // The tier must exist and be active before we grant it to a member.
+    const { data: tierRow, error: tierError } = await admin
+      .from('tiers')
+      .select('id')
+      .eq('id', tier_id)
+      .eq('active', true)
+      .maybeSingle();
+    if (tierError) {
+      return json({ error: 'Tier lookup failed' }, 500);
+    }
+    if (!tierRow) {
+      return json({ error: 'Tier not found or inactive' }, 400);
+    }
+    patch.tier_id = tier_id;
+  }
+
+  if (patch.status === undefined && patch.tier_id === undefined) {
+    return json({ error: 'Nothing to update' }, 400);
   }
 
   const { data, error } = await admin
     .from('access_requests')
-    .update({ status })
+    .update(patch)
     .eq('id', id)
     .select('*')
     .single();

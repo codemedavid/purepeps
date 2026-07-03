@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Boxes, Truck, RotateCcw } from 'lucide-react';
 import { useGroupBuy } from '../hooks/useGroupBuy';
 import { useBatchOrders } from '../hooks/useBatchOrders';
+import { useBatchMembers } from '../hooks/useBatchMembers';
 import { useMenu } from '../hooks/useMenu';
 import { FULFILLMENT_STAGES, fulfillmentStageLabel } from '../utils/orderTracking';
 import {
@@ -19,6 +20,7 @@ import { GroupBuyTabs } from './groupbuy/GroupBuyTabs';
 import type { GroupBuyTab } from './groupbuy/GroupBuyTabs';
 import { BatchOverviewTab } from './groupbuy/BatchOverviewTab';
 import { BatchOrdersPanel } from './groupbuy/BatchOrdersPanel';
+import { BatchMembersPanel } from './groupbuy/BatchMembersPanel';
 import { BatchOrderDetail } from './groupbuy/BatchOrderDetail';
 import { BatchLeftoverPanel } from './groupbuy/BatchLeftoverPanel';
 import { CapsProgressTable } from './groupbuy/CapsProgressTable';
@@ -107,6 +109,12 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     addLinkedOrder,
     bulkUpdateStatus,
   } = useBatchOrders(selectedBatch?.id ?? null);
+
+  const {
+    members: batchMembers,
+    loading: membersLoading,
+    reload: reloadMembers,
+  } = useBatchMembers(selectedBatch?.id ?? null);
 
   const selectedOrder = useMemo(
     () => orders.find((o) => o.id === selectedOrderId) ?? null,
@@ -331,6 +339,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   const tabBadges: Partial<Record<GroupBuyTab, number>> = {
     overview: kpis.toConfirmCount,
     orders: kpis.activeOrders,
+    members: batchMembers.length,
   };
 
   const lifecycleHandlers = {
@@ -453,6 +462,15 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 onReload={reloadOrders}
                 onSelectOrder={handleViewOrder}
                 onBulkUpdateStatus={handleBulkUpdate}
+              />
+            )}
+
+            {activeTab === 'members' && (
+              <BatchMembersPanel
+                batchNumber={selectedBatch.batch_number}
+                members={batchMembers}
+                loading={membersLoading}
+                onReload={reloadMembers}
               />
             )}
 

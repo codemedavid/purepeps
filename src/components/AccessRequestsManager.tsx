@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Ban, Check, Clock, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Ban, Check, Clock, Layers, RefreshCw, X } from 'lucide-react';
 import { useAccessRequests } from '../hooks/useAccessRequests';
+import { useTierCatalog } from '../hooks/useTierCatalog';
+import AccessIntakeToggle from './AccessIntakeToggle';
 import { formatPrice } from '../utils/currency';
-import type { AccessStatus } from '../utils/access';
+import { findTierAmountMismatch, type AccessStatus } from '../utils/access';
 
 type Filter = 'all' | AccessStatus;
 
@@ -26,10 +28,14 @@ interface AccessRequestsManagerProps {
 
 /** Admin view for reviewing paid group-buy access requests. */
 function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
-  const { requests, loading, error, fetchAll, updateStatus } = useAccessRequests();
+  const { requests, loading, error, fetchAll, updateStatus, setTier } = useAccessRequests();
+  const { tiers } = useTierCatalog();
   const [filter, setFilter] = useState<Filter>('pending');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Which request row currently has its tier corrector open, and the tier picked in it.
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
+  const [correctTierId, setCorrectTierId] = useState<string>('');
 
   useEffect(() => {
     fetchAll();
@@ -71,8 +77,30 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
     onChange?.();
   };
 
+  const handleSetTier = async (id: string) => {
+    const tier = tiers.find((t) => t.id === correctTierId);
+    if (!tier) {
+      setActionError('Choose a tier to assign.');
+      return;
+    }
+    setBusyId(id);
+    setActionError(null);
+    const result = await setTier(id, tier.id, tier.name);
+    setBusyId(null);
+    if (!result.success) {
+      setActionError(result.error ?? 'Failed to update access tier.');
+      return;
+    }
+    setCorrectingId(null);
+    setCorrectTierId('');
+    onChange?.();
+  };
+
   return (
     <div className="space-y-6">
+      {/* Open/close new request intake (shared with the Site Settings view). */}
+      <AccessIntakeToggle />
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-charcoal-900">Access Requests</h2>
@@ -163,7 +191,62 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
                 <div className="font-mono text-[11px] text-charcoal-400 mt-0.5">
                   {new Date(req.created_at).toLocaleString('en-PH')}
                 </div>
-                <div className="flex gap-2 mt-3">
+                {(() => {
+                  // Only first-time requests are price-checked; upgrades pay a delta
+                  // by design, so comparing their amount to the tier price is invalid.
+                  if (upgradeIds.has(req.id)) return null;
+                  const mismatch = findTierAmountMismatch(req, tiers);
+                  if (!mismatch) return null;
+                  return (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+                      <span>
+                        Paid <strong>{formatPrice(mismatch.paid)}</strong> but assigned{' '}
+                        <strong>{mismatch.tierName}</strong> ({formatPrice(mismatch.tierPrice)}).
+                        Confirm the correct tier.
+                      </span>
+                    </div>
+                  );
+                })()}
+                {correctingId === req.id && (
+                  <div className="mt-2 rounded-lg border border-charcoal-200 bg-charcoal-50 p-2.5 space-y-2">
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-charcoal-600">
+                      <Layers className="w-3.5 h-3.5" /> Assign tier
+                    </label>
+                    <select
+                      value={correctTierId}
+                      onChange={(e) => setCorrectTierId(e.target.value)}
+                      className="w-full rounded-lg border border-charcoal-200 bg-white px-2.5 py-1.5 text-xs text-charcoal-800"
+                    >
+                      <option value="">Choose a tier…</option>
+                      {tiers.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} — {formatPrice(t.price)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSetTier(req.id)}
+                        disabled={busyId === req.id || !correctTierId}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sakura-primary hover:bg-sakura-deep text-white text-xs font-semibold disabled:opacity-60"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Set tier
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCorrectingId(null);
+                          setCorrectTierId('');
+                        }}
+                        disabled={busyId === req.id}
+                        className="px-3 py-1.5 rounded-lg border border-charcoal-200 text-charcoal-600 hover:bg-charcoal-100 text-xs font-semibold disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-2 mt-3 flex-wrap">
                   {req.status !== 'approved' && (
                     <button
                       onClick={() => handleUpdate(req.id, 'approved')}
@@ -192,6 +275,23 @@ function AccessRequestsManager({ onChange }: AccessRequestsManagerProps) {
                       <Ban className="w-3.5 h-3.5" /> Revoke
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      setActionError(null);
+                      if (correctingId === req.id) {
+                        setCorrectingId(null);
+                        setCorrectTierId('');
+                      } else {
+                        setCorrectingId(req.id);
+                        setCorrectTierId(req.tier_id ?? '');
+                      }
+                    }}
+                    disabled={busyId === req.id}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-charcoal-200 text-charcoal-700 hover:bg-charcoal-50 text-xs font-semibold disabled:opacity-60"
+                    title="Change this member's access tier"
+                  >
+                    <Layers className="w-3.5 h-3.5" /> Change tier
+                  </button>
                 </div>
               </div>
             </div>

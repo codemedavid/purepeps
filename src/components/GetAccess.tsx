@@ -3,6 +3,7 @@ import { ArrowLeft, Check, Clock, Copy, Lock, RefreshCw, ShieldCheck } from 'luc
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useAccessRequests } from '../hooks/useAccessRequests';
 import { useActiveAccess } from '../hooks/useActiveAccess';
+import { useAccessIntake } from '../hooks/useAccessIntake';
 import { useAccessTiers } from '../hooks/useAccessTiers';
 import { useCategories } from '../hooks/useCategories';
 import type { VerifyResult } from '../hooks/useAccess';
@@ -36,6 +37,7 @@ function GetAccess({
   const { paymentMethods, loading: methodsLoading } = usePaymentMethods();
   const { submitRequest } = useAccessRequests();
   const { info: accessInfo } = useActiveAccess();
+  const { isIntakeOpen, loading: intakeLoading } = useAccessIntake();
   const { tiers, loading: tiersLoading } = useAccessTiers();
   const { categories } = useCategories();
 
@@ -59,6 +61,11 @@ function GetAccess({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Explicit member confirmation of which tier they're buying — prevents the
+  // "paid one price, expected a different tier" mismatch by making the choice
+  // deliberate. Reset whenever the selected tier changes so a switch can't carry
+  // a stale confirmation.
+  const [tierConfirmed, setTierConfirmed] = useState(false);
 
   // "Already paid?" verify-email panel
   const [verifyInput, setVerifyInput] = useState('');
@@ -110,6 +117,10 @@ function GetAccess({
       setFormError('Please choose an access tier.');
       return;
     }
+    if (!tierConfirmed) {
+      setFormError(`Please confirm you're buying ${selectedTier.name} for ${formatPrice(accessFee)}.`);
+      return;
+    }
 
     setSubmitting(true);
     const result = await submitRequest({
@@ -138,6 +149,48 @@ function GetAccess({
   useEffect(() => {
     if (submitted && isVerified) onVerified();
   }, [submitted, isVerified, onVerified]);
+
+  // The "Already approved?" verify-email panel — shown on the normal form AND on
+  // the closed-intake screen, so approved members can always still verify.
+  const verifyPanel = (
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white border border-sakura-ink/10 rounded-2xl p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-sakura-ink shrink-0">
+          <ShieldCheck className="w-4 h-4 text-sakura-sage" /> Already approved?
+        </div>
+        <input
+          type="email"
+          value={verifyInput}
+          onChange={(e) => {
+            setVerifyInput(e.target.value);
+            setVerifyMsg(null);
+          }}
+          placeholder="you@lab.org"
+          className="flex-1 bg-sakura-canvas border border-sakura-ink/10 rounded-xl px-4 py-2.5 font-mono text-sm text-sakura-ink focus:outline-none focus:ring-2 focus:ring-sakura-primary/40"
+        />
+        <button
+          onClick={handleVerify}
+          disabled={verifying}
+          className="bg-sakura-ink text-white rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+        >
+          {verifying ? 'Checking…' : 'Verify email'}
+        </button>
+      </div>
+      {verifyMsg && (
+        <div
+          className={`mt-2 text-sm font-medium ${
+            verifyMsg.tone === 'ok'
+              ? 'text-sakura-sage'
+              : verifyMsg.tone === 'pending'
+                ? 'text-sakura-deep'
+                : 'text-red-500'
+          }`}
+        >
+          {verifyMsg.text}
+        </div>
+      )}
+    </>
+  );
 
   // ---- PENDING STATE ----------------------------------------------------
   if (submitted) {
@@ -194,6 +247,39 @@ function GetAccess({
     );
   }
 
+  // ---- CLOSED INTAKE ----------------------------------------------------
+  // Capacity is limited, so an admin can close new requests. When closed we hide
+  // the payment form entirely (new + renewal submissions are blocked server-side
+  // too) and keep only the verify-email path for already-approved members.
+  if (!intakeLoading && !isIntakeOpen) {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-12 font-display">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 font-mono text-xs tracking-[0.04em] uppercase text-sakura-soft hover:text-sakura-deep transition-colors mb-6"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
+        </button>
+
+        <div className="flex items-start gap-3 bg-sakura-blush border border-sakura-edge rounded-2xl p-5">
+          <Lock className="w-5 h-5 text-sakura-primary shrink-0 mt-0.5" strokeWidth={2.2} />
+          <div>
+            <div className="text-lg font-extrabold tracking-[-0.02em] text-sakura-ink">
+              New access requests are closed
+            </div>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-sakura-muted">
+              We can only cater to a limited number of members per batch, so we've paused new and
+              renewal requests for now. If you're already an approved member, verify your email
+              below to unlock checkout.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6">{verifyPanel}</div>
+      </div>
+    );
+  }
+
   // ---- FORM -------------------------------------------------------------
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 font-display">
@@ -232,41 +318,7 @@ function GetAccess({
       </p>
 
       {/* Already paid? verify email */}
-      <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 bg-white border border-sakura-ink/10 rounded-2xl p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-sakura-ink shrink-0">
-          <ShieldCheck className="w-4 h-4 text-sakura-sage" /> Already approved?
-        </div>
-        <input
-          type="email"
-          value={verifyInput}
-          onChange={(e) => {
-            setVerifyInput(e.target.value);
-            setVerifyMsg(null);
-          }}
-          placeholder="you@lab.org"
-          className="flex-1 bg-sakura-canvas border border-sakura-ink/10 rounded-xl px-4 py-2.5 font-mono text-sm text-sakura-ink focus:outline-none focus:ring-2 focus:ring-sakura-primary/40"
-        />
-        <button
-          onClick={handleVerify}
-          disabled={verifying}
-          className="bg-sakura-ink text-white rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
-        >
-          {verifying ? 'Checking…' : 'Verify email'}
-        </button>
-      </div>
-      {verifyMsg && (
-        <div
-          className={`mt-2 text-sm font-medium ${
-            verifyMsg.tone === 'ok'
-              ? 'text-sakura-sage'
-              : verifyMsg.tone === 'pending'
-                ? 'text-sakura-deep'
-                : 'text-red-500'
-          }`}
-        >
-          {verifyMsg.text}
-        </div>
-      )}
+      <div className="mt-6">{verifyPanel}</div>
 
       <div className="grid md:grid-cols-2 gap-9 mt-10 items-start">
         {/* LEFT: tier choice + payment */}
@@ -286,7 +338,10 @@ function GetAccess({
                 return (
                   <button
                     key={tier.id}
-                    onClick={() => setSelectedTierId(tier.id)}
+                    onClick={() => {
+                      setSelectedTierId(tier.id);
+                      setTierConfirmed(false);
+                    }}
                     className={`text-left rounded-[18px] p-5 border-[1.5px] transition-colors ${
                       active
                         ? 'bg-sakura-blush border-sakura-primary'
@@ -423,11 +478,33 @@ function GetAccess({
             className="w-full bg-white border border-sakura-ink/10 rounded-xl px-4 py-3.5 font-mono text-sm text-sakura-ink placeholder:text-sakura-soft focus:outline-none focus:ring-2 focus:ring-sakura-primary/40"
           />
 
+          {selectedTier && (
+            <label className="mt-6 flex items-start gap-3 rounded-2xl border border-sakura-ink/10 bg-white p-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={tierConfirmed}
+                onChange={(e) => {
+                  setTierConfirmed(e.target.checked);
+                  setFormError(null);
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-sakura-primary"
+              />
+              <span className="text-[13px] leading-relaxed text-sakura-muted">
+                I confirm I'm purchasing{' '}
+                <strong className="text-sakura-ink">{selectedTier.name}</strong> for{' '}
+                <strong className="text-sakura-primary">{formatPrice(accessFee)}</strong>.
+                {selectedTier.isAllAccess
+                  ? ' This unlocks the entire catalog.'
+                  : ' Products outside this tier stay view-only.'}
+              </span>
+            </label>
+          )}
+
           {formError && <div className="mt-3 text-sm font-medium text-red-500">{formError}</div>}
 
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !tierConfirmed}
             className="mt-5 w-full flex items-center justify-center gap-2 bg-sakura-primary hover:bg-sakura-deep text-white rounded-full py-4 text-base font-semibold transition-colors disabled:opacity-60"
           >
             <Lock className="w-4 h-4" /> {submitting ? 'Submitting…' : 'Submit for review'}
