@@ -1,8 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { resolveMinOrder } from '../constants/order';
+import { mergeCarts, rehydrateCart, serializeCart } from '../utils/cart';
+import { fetchMemberCart, persistMemberCart } from '../utils/memberCartApi';
 import type { CartItem, Product, ProductVariation } from '../types';
 
 const CART_STORAGE_KEY = 'peptide_cart';
+
+// Debounce server writes so a burst of quantity taps collapses into one save.
+const CART_SYNC_DEBOUNCE_MS = 500;
+
+export interface UseCartOptions {
+  /** Verified member email; enables server-backed persistence when set. */
+  email?: string | null;
+  /** Live catalog, used to rebuild the server cart's references into cart lines. */
+  products?: Product[];
+}
 
 // Read the persisted cart synchronously so it is available on the first render.
 // Loading via an effect instead lets the save effect fire once with the initial
@@ -22,9 +34,17 @@ function loadCartFromStorage(): CartItem[] {
   }
 }
 
-export function useCart() {
+export function useCart(options?: UseCartOptions) {
+  const email = options?.email ?? null;
+  const products = options?.products;
+
   const [cartItems, setCartItems] = useState<CartItem[]>(loadCartFromStorage);
   const isInitialRender = useRef(true);
+  // The email whose server cart we've already loaded — dedupes the load effect
+  // (which re-runs as the catalog identity churns) and gates server writes so a
+  // pre-load render can't overwrite the server with a not-yet-merged local cart.
+  const startedEmailRef = useRef<string | null>(null);
+  const loadedEmailRef = useRef<string | null>(null);
 
   // Persist the cart whenever it changes, skipping the initial mount so the
   // freshly loaded cart is never overwritten by a redundant write.
@@ -35,6 +55,38 @@ export function useCart() {
     }
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
   }, [cartItems]);
+
+  // On verify, pull the member's server cart and UNION it with the local cart
+  // (higher quantity wins), so items added on another device — or surviving a
+  // localStorage eviction — reappear without clobbering anything added here.
+  useEffect(() => {
+    if (!email || !products || products.length === 0) return;
+    if (startedEmailRef.current === email) return;
+    startedEmailRef.current = email;
+
+    let active = true;
+    (async () => {
+      const stored = await fetchMemberCart(email);
+      if (!active) return;
+      const serverItems = rehydrateCart(stored, products);
+      setCartItems((prev) => mergeCarts(prev, serverItems));
+      loadedEmailRef.current = email;
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [email, products]);
+
+  // Mirror cart changes to the server once the initial load/merge for this email
+  // has completed. Debounced so rapid edits collapse into a single write.
+  useEffect(() => {
+    if (!email || loadedEmailRef.current !== email) return;
+    const handle = window.setTimeout(() => {
+      void persistMemberCart(email, serializeCart(cartItems));
+    }, CART_SYNC_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [cartItems, email]);
 
   const addToCart = (product: Product, variation?: ProductVariation, quantity: number = 1) => {
     // Check stock availability

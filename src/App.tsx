@@ -29,9 +29,11 @@ import { useMenu } from './hooks/useMenu';
 // import { useCOAPageSetting } from './hooks/useCOAPageSetting';
 
 function MainApp() {
-    const cart = useCart();
     const { menuItems, loading: menuLoading } = useMenu();
     const access = useAccess();
+    // Verified members get a server-backed cart (survives localStorage eviction
+    // and follows them across devices); the catalog rehydrates its references.
+    const cart = useCart({ email: access.email, products: menuItems });
     const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
 
