@@ -13,6 +13,7 @@ import {
   summarizeItemRevenue,
   ordersNeedingAction,
 } from '../utils/groupBuyOverview';
+import { topBuyersByEmail } from '../utils/batchMemberAnalytics';
 import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
 import type { OrderSequenceContext } from '../utils/batchOrderGroups';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
@@ -142,6 +143,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   // Per-item closeout (orders, units, gross vs collected revenue) derived from the
   // batch's own orders, so it stays correct once a batch is finalized/closed.
   const itemRevenue = useMemo(() => summarizeItemRevenue(orders), [orders]);
+  // Leaderboard of who spent the most on products this batch, grouped by email.
+  const topBuyers = useMemo(() => topBuyersByEmail(orders), [orders]);
 
   // Live progress is only fetched for the open/finalizing batch, so on a
   // closed/finalized batch `progress.items` still holds the previous batch's
@@ -477,6 +480,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 onReload={reloadMembers}
                 tiers={tierCatalog}
                 onSetTier={setTier}
+                topBuyers={topBuyers}
               />
             )}
 

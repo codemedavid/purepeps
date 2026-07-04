@@ -488,5 +488,35 @@ describe('useCart', () => {
       expect(saved).toHaveLength(1);
       expect(saved[0].product.id).toBe('prod-1');
     });
+
+    it('exposes saved items on the very first render (synchronous load)', () => {
+      const savedCart = [{ product: mockProduct, quantity: 2 }];
+      localStorage.setItem('peptide_cart', JSON.stringify(savedCart));
+
+      let firstRenderLength = -1;
+      renderHook(() => {
+        const cart = useCart();
+        if (firstRenderLength === -1) {
+          firstRenderLength = cart.cartItems.length;
+        }
+        return cart;
+      });
+
+      expect(firstRenderLength).toBe(1);
+    });
+
+    it('does not overwrite a saved cart with an empty array on mount', () => {
+      const savedCart = [{ product: mockProduct, quantity: 2 }];
+      localStorage.setItem('peptide_cart', JSON.stringify(savedCart));
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+      renderHook(() => useCart());
+
+      const wroteEmptyCart = setItemSpy.mock.calls.some(
+        ([key, value]) => key === 'peptide_cart' && value === '[]'
+      );
+      expect(wroteEmptyCart).toBe(false);
+      expect(JSON.parse(localStorage.getItem('peptide_cart') || '[]')).toHaveLength(1);
+    });
   });
 });

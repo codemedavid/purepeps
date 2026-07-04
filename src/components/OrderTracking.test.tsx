@@ -698,4 +698,89 @@ describe('OrderTracking', () => {
       });
     });
   });
+
+  // --- Email Search ---
+
+  describe('email search', () => {
+    /** Switch to the Email tab, type an address, and submit. */
+    async function searchByEmail(address: string) {
+      await userEvent.click(screen.getByRole('tab', { name: /Email/i }));
+      await userEvent.type(screen.getByPlaceholderText(/email you ordered with/i), address);
+      await userEvent.click(screen.getByText('Find My Orders'));
+    }
+
+    it('calls get_orders_by_email with the trimmed email', async () => {
+      mockBundleOnce([mockRoot]);
+      render(<OrderTracking />);
+
+      await searchByEmail('  buyer@example.com  ');
+
+      await waitFor(() => {
+        expect(mockRpc).toHaveBeenCalledWith('get_orders_by_email', {
+          email_input: 'buyer@example.com',
+        });
+      });
+    });
+
+    it('loads the order directly when the email has a single order', async () => {
+      mockBundleOnce([mockRoot]);
+      render(<OrderTracking />);
+
+      await searchByEmail('buyer@example.com');
+
+      await waitFor(() => {
+        expect(screen.getByText('Order Status')).toBeInTheDocument();
+        expect(screen.getByText('TBS-1234')).toBeInTheDocument();
+      });
+    });
+
+    it('shows a picker when the email has several orders and loads the chosen one', async () => {
+      const secondRoot = {
+        ...mockRoot,
+        id: 'order-uuid-999',
+        order_number: 'TBS-5678',
+        created_at: '2025-02-01T10:00:00Z',
+      };
+      // Rows span two bundles (newest first), grouped by root on the client.
+      mockBundleOnce([secondRoot, mockRoot]);
+      render(<OrderTracking />);
+
+      await searchByEmail('buyer@example.com');
+
+      // Picker lists both orders; the status card is not shown yet.
+      await waitFor(() => {
+        expect(screen.getByText(/We found 2 orders/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Order Status')).not.toBeInTheDocument();
+
+      // Choosing one loads it into the tracking card.
+      await userEvent.click(screen.getByText('TBS-5678'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Order Status')).toBeInTheDocument();
+      });
+    });
+
+    it('shows a friendly message when no orders match the email', async () => {
+      mockBundleOnce([]);
+      render(<OrderTracking />);
+
+      await searchByEmail('nobody@example.com');
+
+      await waitFor(() => {
+        expect(screen.getByText(/No orders found for that email/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows a generic error when the email lookup fails', async () => {
+      mockRpc.mockRejectedValueOnce(new Error('Network failure'));
+      render(<OrderTracking />);
+
+      await searchByEmail('buyer@example.com');
+
+      await waitFor(() => {
+        expect(screen.getByText(/An error occurred while fetching your orders/)).toBeInTheDocument();
+      });
+    });
+  });
 });

@@ -1,25 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MIN_ORDER_QUANTITY } from '../constants/order';
 import type { CartItem, Product, ProductVariation } from '../types';
 
+const CART_STORAGE_KEY = 'peptide_cart';
+
+// Read the persisted cart synchronously so it is available on the first render.
+// Loading via an effect instead lets the save effect fire once with the initial
+// empty array and clobber the stored cart before the load lands.
+function loadCartFromStorage(): CartItem[] {
+  const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+  if (!savedCart) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(savedCart);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Error loading cart from localStorage:', error);
+    return [];
+  }
+}
+
 export function useCart() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(loadCartFromStorage);
+  const isInitialRender = useRef(true);
 
-  // Load cart from localStorage on mount
+  // Persist the cart whenever it changes, skipping the initial mount so the
+  // freshly loaded cart is never overwritten by a redundant write.
   useEffect(() => {
-    const savedCart = localStorage.getItem('peptide_cart');
-    if (savedCart) {
-      try {
-        setCartItems(JSON.parse(savedCart));
-      } catch (error) {
-        console.error('Error loading cart from localStorage:', error);
-      }
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
     }
-  }, []);
-
-  // Save cart to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('peptide_cart', JSON.stringify(cartItems));
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
   }, [cartItems]);
 
   const addToCart = (product: Product, variation?: ProductVariation, quantity: number = 1) => {
@@ -106,7 +120,7 @@ export function useCart() {
 
   const clearCart = () => {
     setCartItems([]);
-    localStorage.removeItem('peptide_cart');
+    localStorage.removeItem(CART_STORAGE_KEY);
   };
 
   const getTotalPrice = () => {

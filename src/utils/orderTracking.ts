@@ -188,6 +188,34 @@ export function sequenceBundleOrders(bundle: readonly OrderBundleRow[]): Sequenc
   }));
 }
 
+/**
+ * Split a flat list of order rows (as returned by get_orders_by_email, which
+ * spans several bundles) into one array per bundle, keyed by root order.
+ *
+ * A bundle's root is the row with no parent; its repeats and claim add-ons carry
+ * parent_order_id pointing at that root. Rows arrive already ordered newest
+ * bundle first, so first-seen order is preserved — the returned bundles stay in
+ * that order and each inner array keeps its incoming root -> repeats -> claims
+ * sequence, ready to hand straight to sequenceBundleOrders / the tracking card.
+ */
+export function groupBundlesByRoot(rows: readonly OrderBundleRow[]): OrderBundleRow[][] {
+  const order: string[] = [];
+  const byRoot = new Map<string, OrderBundleRow[]>();
+
+  for (const row of rows) {
+    const rootId = row.parent_order_id ?? row.id;
+    const existing = byRoot.get(rootId);
+    if (existing) {
+      existing.push(row);
+    } else {
+      byRoot.set(rootId, [row]);
+      order.push(rootId);
+    }
+  }
+
+  return order.map((rootId) => byRoot.get(rootId) as OrderBundleRow[]);
+}
+
 export function computeTrackingStep(
   orderStatus: string | null | undefined,
   fulfillmentStage: string | null | undefined,

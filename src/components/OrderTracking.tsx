@@ -1,16 +1,28 @@
 import React, { useCallback, useState } from 'react';
-import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload } from 'lucide-react';
+import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
 import { useImageUpload } from '../hooks/useImageUpload';
 import posthog from '../lib/posthog';
-import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders } from '../utils/orderTracking';
+import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders, groupBundlesByRoot } from '../utils/orderTracking';
 import type { OrderBundleRow } from '../types';
 import LeftoverClaimPanel from './groupbuy/LeftoverClaimPanel';
 
 type TrackingOrder = OrderBundleRow;
 
+type SearchMode = 'orderNumber' | 'email';
+
+/** The root (Order 1) row of a bundle, used to label it in the email-results picker. */
+function bundleRoot(bundle: readonly TrackingOrder[]): TrackingOrder {
+    return bundle.find((row) => !row.is_claim && row.parent_order_id == null) ?? bundle[0];
+}
+
 const OrderTracking: React.FC = () => {
+    const [searchMode, setSearchMode] = useState<SearchMode>('orderNumber');
+    const [email, setEmail] = useState('');
+    // Bundles returned by an email lookup, newest first. Shown as a picker when
+    // the customer has more than one; picking one loads it into the card below.
+    const [emailBundles, setEmailBundles] = useState<TrackingOrder[][]>([]);
     const [orderId, setOrderId] = useState('');
     // The full bundle: the root order first, then any linked claim/add-on orders.
     const [bundle, setBundle] = useState<TrackingOrder[]>([]);
@@ -80,6 +92,73 @@ const OrderTracking: React.FC = () => {
         void trackOrder(orderId);
     };
 
+    // Load a chosen bundle (root + repeats + add-ons) into the status card. Used
+    // when the customer taps one of their bundles in the email-results picker.
+    const selectBundle = useCallback((rows: TrackingOrder[]) => {
+        if (rows.length === 0) return;
+        setBundle(rows);
+        const root = bundleRoot(rows);
+        setSelectedOrderId(root.id);
+        setError(null);
+    }, []);
+
+    // Look up every order placed under an email via the secure RPC, then group
+    // the flat rows back into per-bundle groups. One bundle auto-loads; several
+    // render a picker the customer chooses from.
+    const trackByEmail = useCallback(async (rawEmail: string) => {
+        const trimmedEmail = rawEmail.trim();
+        if (!trimmedEmail) return;
+
+        setLoading(true);
+        setError(null);
+        setHasSearched(true);
+
+        try {
+            const { data, error } = await supabase.rpc('get_orders_by_email', {
+                email_input: trimmedEmail,
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            const rows = Array.isArray(data) ? (data as TrackingOrder[]) : [];
+            const bundles = groupBundlesByRoot(rows);
+
+            if (bundles.length === 0) {
+                setBundle([]);
+                setEmailBundles([]);
+                setSelectedOrderId(null);
+                setError('No orders found for that email. Please check the address and try again.');
+                return;
+            }
+
+            posthog.capture('tbs_orders_email_lookup', { bundle_count: bundles.length });
+
+            if (bundles.length === 1) {
+                // Only one order group — behave exactly like an order-number lookup.
+                setEmailBundles([]);
+                selectBundle(bundles[0]);
+                return;
+            }
+
+            // Several groups — let the customer pick which one to view.
+            setEmailBundles(bundles);
+            setBundle([]);
+            setSelectedOrderId(null);
+        } catch (err) {
+            console.error('Error fetching orders by email:', err);
+            setError('An error occurred while fetching your orders. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    }, [selectBundle]);
+
+    const handleTrackByEmail = (e: React.FormEvent) => {
+        e.preventDefault();
+        void trackByEmail(email);
+    };
+
     // Upload a fresh receipt for the balance owed after items were added, then
     // re-fetch so the banner updates to "under review". The order number is the
     // auth token; submit_additional_payment only accepts it when a balance is due.
@@ -147,40 +226,100 @@ const OrderTracking: React.FC = () => {
 
                 <div className="text-center mb-10">
                     <h1 className="text-3xl font-bold text-navy-900 mb-4">Track Your Order</h1>
-                    <p className="text-gray-600">Enter your Order Number to check the current status of your package.</p>
+                    <p className="text-gray-600">Enter your Order Number or email to check the current status of your package.</p>
                 </div>
 
                 {/* Search Box */}
                 <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-8 border-2 border-navy-700/30">
-                    <form onSubmit={handleTrack} className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                            <input
-                                type="text"
-                                value={orderId}
-                                onChange={(e) => setOrderId(e.target.value)}
-                                placeholder="Enter Order Number (e.g., TBS-1234)"
-                                className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-navy-900 focus:ring-2 focus:ring-gold-500/20 outline-none transition-all text-lg text-gray-900"
-                            />
-                        </div>
+                    {/* Search mode toggle — look up by Order Number or by email. */}
+                    <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl" role="tablist">
                         <button
-                            type="submit"
-                            disabled={loading || !orderId.trim()}
-                            className="bg-teal-500 hover:bg-teal-600 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="button"
+                            role="tab"
+                            aria-selected={searchMode === 'orderNumber'}
+                            onClick={() => { setSearchMode('orderNumber'); setError(null); }}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                                searchMode === 'orderNumber' ? 'bg-white text-navy-900 shadow-sm' : 'text-gray-500 hover:text-navy-900'
+                            }`}
                         >
-                            {loading ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Searching...
-                                </>
-                            ) : (
-                                <>
-                                    Track Order
-                                    <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
+                            <Search className="w-4 h-4" />
+                            Order Number
                         </button>
-                    </form>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={searchMode === 'email'}
+                            onClick={() => { setSearchMode('email'); setError(null); }}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                                searchMode === 'email' ? 'bg-white text-navy-900 shadow-sm' : 'text-gray-500 hover:text-navy-900'
+                            }`}
+                        >
+                            <Mail className="w-4 h-4" />
+                            Email
+                        </button>
+                    </div>
+
+                    {searchMode === 'orderNumber' ? (
+                        <form onSubmit={handleTrack} className="flex flex-col md:flex-row gap-4">
+                            <div className="flex-1 relative">
+                                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input
+                                    type="text"
+                                    value={orderId}
+                                    onChange={(e) => setOrderId(e.target.value)}
+                                    placeholder="Enter Order Number (e.g., TBS-1234)"
+                                    className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-navy-900 focus:ring-2 focus:ring-gold-500/20 outline-none transition-all text-lg text-gray-900"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading || !orderId.trim()}
+                                className="bg-teal-500 hover:bg-teal-600 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Searching...
+                                    </>
+                                ) : (
+                                    <>
+                                        Track Order
+                                        <ArrowRight className="w-5 h-5" />
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleTrackByEmail} className="flex flex-col md:flex-row gap-4">
+                            <div className="flex-1 relative">
+                                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Enter the email you ordered with"
+                                    className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-navy-900 focus:ring-2 focus:ring-gold-500/20 outline-none transition-all text-lg text-gray-900"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading || !email.trim()}
+                                className="bg-teal-500 hover:bg-teal-600 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Searching...
+                                    </>
+                                ) : (
+                                    <>
+                                        Find My Orders
+                                        <ArrowRight className="w-5 h-5" />
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    )}
                 </div>
 
                 {/* Your recent orders — saved on this device for one-tap tracking */}
@@ -220,6 +359,51 @@ const OrderTracking: React.FC = () => {
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700 animate-fade-in">
                         <AlertCircle className="w-5 h-5" />
                         <p>{error}</p>
+                    </div>
+                )}
+
+                {/* Email lookup found several orders — let the customer pick one. */}
+                {emailBundles.length > 0 && (
+                    <div className="bg-white rounded-2xl shadow-md p-5 md:p-6 mb-8 border border-gray-100 animate-fade-in">
+                        <h2 className="text-sm font-bold text-navy-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Package className="w-4 h-4 text-gold-600" />
+                            We found {emailBundles.length} orders — pick one to track
+                        </h2>
+                        <div className="space-y-2">
+                            {emailBundles.map((emailBundle) => {
+                                const rootRow = bundleRoot(emailBundle);
+                                const itemCount = emailBundle
+                                    .flatMap((row) => row.order_items)
+                                    .reduce((sum, item) => sum + item.quantity, 0);
+                                const isActive = bundle.some((row) => row.id === rootRow.id);
+                                return (
+                                    <button
+                                        key={rootRow.id}
+                                        type="button"
+                                        onClick={() => selectBundle(emailBundle)}
+                                        aria-pressed={isActive}
+                                        className={`w-full flex items-center justify-between gap-3 text-left px-4 py-3 rounded-xl border transition-all ${
+                                            isActive
+                                                ? 'bg-gold-50/40 border-navy-900 ring-2 ring-gold-500/20'
+                                                : 'border-gray-200 hover:border-navy-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="font-mono font-bold text-navy-900">
+                                                {rootRow.order_number || rootRow.id.slice(0, 8).toUpperCase()}
+                                            </p>
+                                            <p className="text-xs text-gray-500 truncate">
+                                                {itemCount} item{itemCount === 1 ? '' : 's'} · {orderStatusLabel(rootRow.order_status)}
+                                            </p>
+                                        </div>
+                                        <span className="flex items-center gap-1 text-sm font-semibold text-teal-600 shrink-0">
+                                            Track
+                                            <ArrowRight className="w-4 h-4" />
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

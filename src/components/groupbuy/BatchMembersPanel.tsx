@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Users, RefreshCw, Search, X, Clock, CheckCircle2, Layers, Check } from 'lucide-react';
+import { Users, RefreshCw, Search, X, Clock, CheckCircle2, Layers, Check, Trophy } from 'lucide-react';
 import type { AccessRequest, AccessStatus } from '../../utils/access';
 import type { CatalogTier } from '../../hooks/useTierCatalog';
+import { uniqueMembersByEmail } from '../../utils/batchMemberAnalytics';
+import type { BuyerSpend } from '../../utils/batchMemberAnalytics';
 import { formatPrice } from '../../utils/currency';
 import { peso } from './orderStatusStyles';
 
@@ -14,6 +16,8 @@ interface BatchMembersPanelProps {
   tiers?: CatalogTier[];
   /** Applies a tier change to a member's request. Omit to render the roster read-only. */
   onSetTier?: (id: string, tierId: string, tierName: string) => Promise<{ success: boolean; error?: string }>;
+  /** Top buyers by total product spend for this batch. Omit to hide the leaderboard. */
+  topBuyers?: BuyerSpend[];
 }
 
 type MemberFilter = 'all' | Extract<AccessStatus, 'approved' | 'pending'>;
@@ -43,6 +47,7 @@ export function BatchMembersPanel({
   onReload,
   tiers,
   onSetTier,
+  topBuyers,
 }: BatchMembersPanelProps) {
   const [filter, setFilter] = useState<MemberFilter>('all');
   const [query, setQuery] = useState('');
@@ -72,24 +77,28 @@ export function BatchMembersPanel({
     onReload();
   };
 
+  // Collapse duplicate emails so the roster shows one row per real person and the
+  // counts reflect unique members, not raw access-request rows.
+  const uniqueMembers = useMemo(() => uniqueMembersByEmail(members), [members]);
+
   const counts = useMemo(() => {
     let approved = 0;
     let pending = 0;
-    for (const m of members) {
+    for (const m of uniqueMembers) {
       if (m.status === 'approved') approved += 1;
       else if (m.status === 'pending') pending += 1;
     }
-    return { approved, pending };
-  }, [members]);
+    return { total: uniqueMembers.length, approved, pending };
+  }, [uniqueMembers]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return members.filter((m) => {
+    return uniqueMembers.filter((m) => {
       if (filter !== 'all' && m.status !== filter) return false;
       if (q && !m.email.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [members, filter, query]);
+  }, [uniqueMembers, filter, query]);
 
   return (
     <div className="space-y-4">
@@ -101,6 +110,7 @@ export function BatchMembersPanel({
           <div>
             <h3 className="text-sm font-bold text-gray-900">Batch #{batchNumber} members</h3>
             <p className="text-xs text-gray-500">
+              {counts.total} unique {counts.total === 1 ? 'member' : 'members'} ·{' '}
               {counts.approved} unlocked · {counts.pending} awaiting review
             </p>
           </div>
@@ -113,6 +123,36 @@ export function BatchMembersPanel({
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
+
+      {topBuyers && topBuyers.length > 0 && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
+          <div className="mb-2 flex items-center gap-1.5">
+            <Trophy className="h-4 w-4 text-amber-500" />
+            <h4 className="text-xs font-bold uppercase tracking-wide text-amber-700">
+              Top buyers
+            </h4>
+          </div>
+          <ol className="space-y-1">
+            {topBuyers.map((buyer, index) => (
+              <li key={buyer.email} className="flex items-center gap-2 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-gray-900">{buyer.name}</p>
+                  <p className="truncate text-[11px] text-gray-500">{buyer.email}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-bold text-gray-900">{peso(buyer.totalSpend)}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {buyer.orderCount} {buyer.orderCount === 1 ? 'order' : 'orders'}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (

@@ -7,6 +7,7 @@ import {
   fulfillmentStageLabel,
   orderStatusLabel,
   sequenceBundleOrders,
+  groupBundlesByRoot,
 } from './orderTracking';
 import type { OrderBundleRow } from '../types';
 
@@ -216,5 +217,52 @@ describe('sequenceBundleOrders — numbering repeat orders from the same custome
 
     expect(result).toHaveLength(1);
     expect(result[0].order.id).toBe('root');
+  });
+});
+
+describe('groupBundlesByRoot — splitting an email lookup into per-bundle groups', () => {
+  it('returns an empty array for no rows', () => {
+    expect(groupBundlesByRoot([])).toEqual([]);
+  });
+
+  it('keeps a single standalone order as one bundle', () => {
+    const root = makeRow({ id: 'root', parent_order_id: null });
+
+    const result = groupBundlesByRoot([root]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].map((r) => r.id)).toEqual(['root']);
+  });
+
+  it('groups a root with its repeats and claim add-ons into one bundle', () => {
+    const root = makeRow({ id: 'root', parent_order_id: null });
+    const repeat = makeRow({ id: 'repeat', parent_order_id: 'root' });
+    const claim = makeRow({ id: 'claim', parent_order_id: 'root', is_claim: true });
+
+    const result = groupBundlesByRoot([root, repeat, claim]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].map((r) => r.id)).toEqual(['root', 'repeat', 'claim']);
+  });
+
+  it('separates orders from different roots into their own bundles', () => {
+    const rootA = makeRow({ id: 'a', parent_order_id: null });
+    const repeatA = makeRow({ id: 'a2', parent_order_id: 'a' });
+    const rootB = makeRow({ id: 'b', parent_order_id: null });
+
+    const result = groupBundlesByRoot([rootA, repeatA, rootB]);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].map((r) => r.id)).toEqual(['a', 'a2']);
+    expect(result[1].map((r) => r.id)).toEqual(['b']);
+  });
+
+  it('preserves the incoming (newest-bundle-first) order of the bundles', () => {
+    const newest = makeRow({ id: 'newest', parent_order_id: null });
+    const older = makeRow({ id: 'older', parent_order_id: null });
+
+    const result = groupBundlesByRoot([newest, older]);
+
+    expect(result.map((bundle) => bundle[0].id)).toEqual(['newest', 'older']);
   });
 });
