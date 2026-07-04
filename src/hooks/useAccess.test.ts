@@ -143,6 +143,33 @@ describe('useAccess', () => {
     expect(localStorage.getItem('pp_access_email')).toBeNull();
   });
 
+  it('keeps the cached verified email when the RPC errors on mount', async () => {
+    // A transient RPC/network hiccup must NOT be treated as a definitive
+    // rejection: an already-approved member who reloads during a blip should
+    // keep their cached email so the next successful check restores access,
+    // instead of being silently and permanently signed out.
+    localStorage.setItem('pp_access_email', 'member@example.com');
+    mockRpc.mockResolvedValue({ data: null, error: new Error('rpc down') });
+
+    const { result } = renderHook(() => useAccess());
+    await waitFor(() => expect(result.current.checking).toBe(false));
+
+    expect(localStorage.getItem('pp_access_email')).toBe('member@example.com');
+    expect(result.current.needsRenewal).toBe(false);
+  });
+
+  it('keeps watching a pending email when the RPC errors on mount', async () => {
+    // Same fail-safe for a paid-but-unapproved email: an error must not forget
+    // it, or the member loses the automatic unlock once approval lands.
+    localStorage.setItem('pp_pending_email', 'paid@example.com');
+    mockRpc.mockResolvedValue({ data: null, error: new Error('rpc down') });
+
+    const { result } = renderHook(() => useAccess());
+    await waitFor(() => expect(result.current.checking).toBe(false));
+
+    expect(localStorage.getItem('pp_pending_email')).toBe('paid@example.com');
+  });
+
   it('reports renew for a member approved on a prior batch but not the open one', async () => {
     mockRpc.mockResolvedValue(grant({ status: 'renew' }));
 

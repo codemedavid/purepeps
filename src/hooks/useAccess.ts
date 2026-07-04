@@ -14,6 +14,13 @@ export interface VerifyResult {
   ok: boolean;
   status: AccessGateStatus;
   grant: AccessGrant;
+  /**
+   * True when the check could not complete (RPC/network error) rather than
+   * returning a definitive status. Callers must NOT treat this as a rejection:
+   * an approved member reloading during a transient blip should keep their
+   * cached access, not be silently signed out.
+   */
+  errored: boolean;
 }
 
 const EMPTY_GRANT: AccessGrant = {
@@ -67,19 +74,28 @@ export function useAccess() {
 
   const lookup = useCallback(async (candidate: string): Promise<VerifyResult> => {
     const normalized = candidate.trim().toLowerCase();
-    if (!isValidEmail(normalized)) return { ok: false, status: 'none', grant: EMPTY_GRANT };
+    if (!isValidEmail(normalized)) {
+      return { ok: false, status: 'none', grant: EMPTY_GRANT, errored: false };
+    }
 
     // get_access_grant is a SECURITY DEFINER RPC returning this email's decisive
     // status for the open batch plus the categories its approved tier unlocks.
     const { data, error } = await supabase.rpc('get_access_grant', { p_email: normalized });
 
     if (error) {
+      // A transient failure is NOT a rejection — flag it so callers preserve any
+      // cached/pending email instead of evicting an approved member on a blip.
       console.error('Error checking access:', error);
-      return { ok: false, status: 'none', grant: EMPTY_GRANT };
+      return { ok: false, status: 'none', grant: EMPTY_GRANT, errored: true };
     }
 
     const resolved = normalizeGrant((data ?? null) as RawGrant | null);
-    return { ok: resolved.status === 'approved', status: resolved.status, grant: resolved };
+    return {
+      ok: resolved.status === 'approved',
+      status: resolved.status,
+      grant: resolved,
+      errored: false,
+    };
   }, []);
 
   /** Cache an approved email as the verified member and stop watching it as pending. */
@@ -107,6 +123,9 @@ export function useAccess() {
       }
 
       const result = await lookup(normalized);
+      // The check couldn't complete — keep watching rather than forgetting a
+      // paid email over a transient error.
+      if (result.errored) return;
       switch (resolvePendingStatus(result.status)) {
         case 'promote':
           promote(normalized, result.grant);
@@ -142,6 +161,14 @@ export function useAccess() {
         if (result.ok) {
           setEmail(cached);
           setGrant(result.grant);
+          setChecking(false);
+          return;
+        }
+        // Transient failure: leave the cache intact and re-check it in the
+        // background (focus + poll) so access is restored automatically once the
+        // RPC recovers, instead of silently signing the member out.
+        if (result.errored) {
+          setPendingEmail(cached.trim().toLowerCase());
           setChecking(false);
           return;
         }
