@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useEffect } from 'react';
+import { Suspense, lazy, useCallback, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { usePostHog } from 'posthog-js/react';
 import { useCart } from './hooks/useCart';
@@ -13,6 +13,7 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useAccess } from './hooks/useAccess';
+import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
 import { filterPasaloProducts } from './utils/groupBuy';
 
@@ -31,7 +32,25 @@ function MainApp() {
     const cart = useCart();
     const { menuItems, loading: menuLoading } = useMenu();
     const access = useAccess();
+    const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
+
+    // Single access gate for the whole storefront: a category is orderable when it
+    // is free (open to everyone) OR the verified member's tier unlocks it. Threaded
+    // to the SubNav, Menu, and Checkout so the UI and the server agree on access.
+    const canAccessCategory = useCallback(
+        (categoryId: string | null | undefined): boolean =>
+            (!!categoryId && freeCategoryIds.has(categoryId)) || access.canAccessCategory(categoryId),
+        [freeCategoryIds, access.canAccessCategory],
+    );
+
+    // Whether the current cart can be checked out without paid access — i.e. every
+    // item sits in a category the shopper can already order (free items for visitors,
+    // tier items for members). Lets unverified visitors buy free-only carts.
+    const cartAllAccessible =
+        cart.cartItems.length > 0 &&
+        cart.cartItems.every((item) => canAccessCategory(item.product.category));
+    const canCheckoutNow = access.isVerified || cartAllAccessible;
     // While progress is still loading we don't yet know if a batch is open; assume
     // open so we don't flash a "closed" state on first paint. The server trigger is
     // the authoritative gate and the UI corrects once the RPC resolves.
@@ -40,8 +59,9 @@ function MainApp() {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
     const handleViewChange = (view: 'menu' | 'cart' | 'checkout' | 'access') => {
-        // Checkout is members-only: route unverified members to Get Access first.
-        const target = view === 'checkout' && !access.isVerified ? 'access' : view;
+        // Checkout needs access — but a cart of only free items can check out
+        // without paying. Route to Get Access only when something in the cart is gated.
+        const target = view === 'checkout' && !canCheckoutNow ? 'access' : view;
         setCurrentView(target);
         // Scroll to top when changing views
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -79,7 +99,7 @@ function MainApp() {
                     selectedCategory={selectedCategory}
                     onCategoryClick={handleCategoryClick}
                     isVerified={access.isVerified}
-                    canAccessCategory={access.canAccessCategory}
+                    canAccessCategory={canAccessCategory}
                 />
             )}
 
@@ -92,7 +112,7 @@ function MainApp() {
                         cartItems={cart.cartItems}
                         updateQuantity={cart.updateQuantity}
                         isVerified={access.isVerified}
-                        canAccessCategory={access.canAccessCategory}
+                        canAccessCategory={canAccessCategory}
                         tierName={access.tierName}
                         onGetAccess={() => handleViewChange('access')}
                         groupBuyItems={groupBuy.items}
@@ -128,14 +148,14 @@ function MainApp() {
                     />
                 )}
 
-                {currentView === 'checkout' && access.isVerified && (
+                {currentView === 'checkout' && canCheckoutNow && (
                     <Checkout
                         cartItems={cart.cartItems}
                         totalPrice={cart.getTotalPrice()}
                         onBack={() => handleViewChange('cart')}
                         defaultEmail={access.email ?? ''}
                         lockEmail={Boolean(access.email)}
-                        canAccessCategory={access.canAccessCategory}
+                        canAccessCategory={canAccessCategory}
                         products={menuItems}
                         isBatchOpen={isBatchOpen}
                         batchId={groupBuy.batch?.id ?? null}

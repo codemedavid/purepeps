@@ -195,8 +195,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </div>
         )}
 
-        {/* CTA — gated on access. Verified-but-out-of-tier = browse only. */}
-        {isVerified && !canCheckout ? (
+        {/* CTA — gated on access. Free categories are orderable by everyone; other
+            categories need a tier. Verified-but-out-of-tier = browse only. */}
+        {!canCheckout ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -204,9 +205,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             }}
             className="mt-4 w-full flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold bg-[#F2EFED] text-[#A89098] hover:text-sakura-deep transition-colors"
           >
-            <Lock className="w-4 h-4" /> Not in your tier
+            <Lock className="w-4 h-4" /> {isVerified ? 'Not in your tier' : 'Members only'}
           </button>
-        ) : isVerified ? (
+        ) : (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -225,16 +226,6 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             }`}
           >
             <ShoppingBag className="w-4 h-4" /> {ctaLabel}
-          </button>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onGetAccess?.();
-            }}
-            className="mt-4 w-full flex items-center justify-center gap-2 rounded-full py-3 text-sm font-semibold bg-[#F2EFED] text-[#A89098] hover:text-sakura-deep transition-colors"
-          >
-            <Lock className="w-4 h-4" /> Members only
           </button>
         )}
 

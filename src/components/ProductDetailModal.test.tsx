@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProductDetailModal from './ProductDetailModal';
 import { MIN_ORDER_QUANTITY } from '../constants/order';
-import type { Product } from '../types';
+import type { Product, ProductVariation } from '../types';
 
 const mockProduct: Product = {
   id: 'prod-1',
@@ -68,5 +68,37 @@ describe('ProductDetailModal quantity', () => {
     const { onAddToCart } = renderModal();
     fireEvent.click(screen.getByRole('button', { name: /add to cart/i }));
     expect(onAddToCart).toHaveBeenCalledWith(mockProduct, undefined, MIN_ORDER_QUANTITY);
+  });
+
+  it('starts at the per-product minimum when it exceeds the default', () => {
+    const product = { ...mockProduct, minimum_order_quantity: 3 };
+    renderModal({ product });
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('3');
+  });
+
+  it('uses the selected variation minimum and floors decrement at it', () => {
+    const variation: ProductVariation = {
+      id: 'var-1',
+      product_id: 'prod-1',
+      name: '5mg',
+      quantity_mg: 5,
+      price: 1500,
+      disposable_pen_price: null,
+      reusable_pen_price: null,
+      discount_price: null,
+      discount_active: false,
+      stock_quantity: 10,
+      minimum_order_quantity: 4,
+      created_at: '2025-01-01',
+    };
+    const product = { ...mockProduct, variations: [variation] };
+    renderModal({ product });
+
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('4');
+
+    const decrement = screen.getByRole('button', { name: /decrease quantity/i });
+    fireEvent.click(decrement);
+    fireEvent.click(decrement);
+    expect(screen.getByTestId('quantity-value')).toHaveTextContent('4');
   });
 });

@@ -28,15 +28,24 @@ const sortByFeaturedThenName = (a: Product, b: Product): number => {
  * category's configured `sort_order`. Empty categories are skipped. Products whose
  * category is unknown (deleted or inactive) are collected into a trailing "Other"
  * section so nothing silently disappears from the catalog.
+ *
+ * When `canAccessCategory` is provided, categories the shopper can actually order
+ * (free categories for everyone; tier-included categories for members) are floated
+ * to the top — so the "All Peptides" view leads with what they can buy. Locked
+ * categories still appear below. With no predicate the order is `sort_order` only.
  */
 export function groupProductsIntoSections(
   products: Product[],
   categories: Category[],
+  canAccessCategory?: (categoryId: string | null | undefined) => boolean,
 ): CatalogSection[] {
+  const accessRank = (category: Category): number =>
+    canAccessCategory && canAccessCategory(category.id) ? 0 : 1;
+
   const orderedCategories = categories
     .filter((category) => category.id !== ALL_CATEGORY_ID)
     .slice()
-    .sort((a, b) => a.sort_order - b.sort_order);
+    .sort((a, b) => accessRank(a) - accessRank(b) || a.sort_order - b.sort_order);
 
   const sections: CatalogSection[] = [];
 

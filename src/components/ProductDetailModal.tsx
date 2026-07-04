@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Package, Beaker, ShoppingCart, Plus, Minus, Sparkles, ArrowLeft, Lock } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { remainingAfterCart } from '../utils/groupBuy';
-import { MIN_ORDER_QUANTITY } from '../constants/order';
+import { resolveMinOrder } from '../constants/order';
 
 interface ProductDetailModalProps {
   product: Product;
@@ -39,7 +39,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | undefined>(
     getFirstAvailableVariation()
   );
-  const [quantity, setQuantity] = useState(MIN_ORDER_QUANTITY);
+  const minOrder = resolveMinOrder(product, selectedVariation);
+  const [quantity, setQuantity] = useState(() =>
+    resolveMinOrder(product, getFirstAvailableVariation())
+  );
 
   const hasDiscount = product.discount_active && product.discount_price;
 
@@ -66,9 +69,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const overCap = capRemaining != null && quantity > capRemaining;
 
   const incrementQuantity = () =>
-    setQuantity(prev => (capRemaining != null ? Math.min(prev + 1, Math.max(MIN_ORDER_QUANTITY, capRemaining)) : prev + 1));
+    setQuantity(prev => (capRemaining != null ? Math.min(prev + 1, Math.max(minOrder, capRemaining)) : prev + 1));
   const decrementQuantity = () =>
-    setQuantity(prev => (prev > MIN_ORDER_QUANTITY ? prev - 1 : MIN_ORDER_QUANTITY));
+    setQuantity(prev => (prev > minOrder ? prev - 1 : minOrder));
 
   const handleAddToCart = () => {
     if (!isBatchOpen || capReached || overCap) return;
@@ -242,6 +245,9 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             onClick={() => {
                               if (variation.stock_quantity > 0) {
                                 setSelectedVariation(variation);
+                                // Keep the quantity at or above the new format's minimum.
+                                const nextMin = resolveMinOrder(product, variation);
+                                setQuantity(prev => Math.max(prev, nextMin));
                               }
                             }}
                             disabled={isOutOfStock}
@@ -341,16 +347,17 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Add to Cart Button — gated on members-only + per-tier access */}
-                {isVerified && !canCheckout ? (
+                {/* Add to Cart Button — free categories are orderable by everyone;
+                    other categories need a tier. Verified-but-out-of-tier = view only. */}
+                {!canCheckout ? (
                   <button
                     onClick={() => { onClose(); onGetAccess?.(); }}
                     className="w-full btn-primary py-3 md:py-4 text-sm md:text-base flex items-center justify-center gap-2"
                   >
                     <Lock className="w-5 h-5" />
-                    Not in your tier — view only
+                    {isVerified ? 'Not in your tier — view only' : 'Members only — get access'}
                   </button>
-                ) : isVerified ? (
+                ) : (
                   <button
                     onClick={handleAddToCart}
                     disabled={!product.available || !hasAnyStock || (selectedVariation && selectedVariation.stock_quantity === 0) || (!selectedVariation && product.stock_quantity === 0) || !isBatchOpen || capReached || overCap}
@@ -366,14 +373,6 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           : capReached
                             ? 'Group limit reached'
                             : 'Add to Cart'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => { onClose(); onGetAccess?.(); }}
-                    className="w-full btn-primary py-3 md:py-4 text-sm md:text-base flex items-center justify-center gap-2"
-                  >
-                    <Lock className="w-5 h-5" />
-                    Members only — get access
                   </button>
                 )}
 

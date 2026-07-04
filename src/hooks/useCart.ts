@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MIN_ORDER_QUANTITY } from '../constants/order';
+import { resolveMinOrder } from '../constants/order';
 import type { CartItem, Product, ProductVariation } from '../types';
 
 const CART_STORAGE_KEY = 'peptide_cart';
@@ -72,7 +72,7 @@ export function useCart() {
       setCartItems(updatedItems);
     } else {
       // Add new item - enforce the per-product minimum order, then check stock
-      quantity = Math.max(quantity, MIN_ORDER_QUANTITY);
+      quantity = Math.max(quantity, resolveMinOrder(product, variation));
 
       if (quantity > availableStock) {
         alert(`Only ${availableStock} item(s) available in stock. Added ${availableStock} to your cart.`);
@@ -94,13 +94,14 @@ export function useCart() {
       return;
     }
 
-    // Keep the line at or above the per-product minimum order
-    if (quantity < MIN_ORDER_QUANTITY) {
-      quantity = MIN_ORDER_QUANTITY;
+    // Keep the line at or above its resolved minimum order
+    const item = cartItems[index];
+    const minOrder = resolveMinOrder(item.product, item.variation);
+    if (quantity < minOrder) {
+      quantity = minOrder;
     }
 
     // Check stock availability
-    const item = cartItems[index];
     const availableStock = item.variation ? item.variation.stock_quantity : item.product.stock_quantity;
 
     if (quantity > availableStock) {

@@ -53,8 +53,9 @@ const Menu: React.FC<MenuProps> = ({
   );
 
   // Split the catalog into headed sections by category so each group reads as its
-  // own block. Sorting (featured-first, then alphabetical) happens per section.
-  const sections = groupProductsIntoSections(filteredProducts, categories);
+  // own block. Sorting (featured-first, then alphabetical) happens per section, and
+  // categories the shopper can order (free for everyone, or in their tier) lead.
+  const sections = groupProductsIntoSections(filteredProducts, categories, canAccessCategory);
   const visibleCount = sections.reduce((sum, section) => sum + section.products.length, 0);
 
   const getCartQuantity = (productId: string) =>
@@ -118,10 +119,10 @@ const Menu: React.FC<MenuProps> = ({
                 </span>
                 <div>
                   <div className="text-[15px] font-semibold tracking-[-0.01em]">
-                    Checkout is members only
+                    Free items are open to all
                   </div>
                   <div className="font-mono text-[11.5px] tracking-[0.03em] text-sakura-soft">
-                    Pay the one-time access fee to join group buys.
+                    Pay the one-time access fee to unlock the rest.
                   </div>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { createSharedResource } from '../lib/sharedResource';
 import { useSharedResource } from './useSharedResource';
@@ -8,6 +9,8 @@ export interface Category {
   icon: string;
   sort_order: number;
   active: boolean;
+  /** When true, products in this category are free for everyone to order — no paid access. */
+  is_free: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -18,6 +21,7 @@ const ALL_CATEGORY: Category = {
   icon: 'Grid',
   sort_order: 0,
   active: true,
+  is_free: false,
   created_at: '1970-01-01T00:00:00.000Z',
   updated_at: '1970-01-01T00:00:00.000Z',
 };
@@ -63,6 +67,7 @@ const addCategory = async (category: Omit<Category, 'created_at' | 'updated_at'>
       icon: category.icon,
       sort_order: category.sort_order,
       active: category.active,
+      is_free: category.is_free ?? false,
     })
     .select()
     .single();
@@ -84,6 +89,7 @@ const updateCategory = async (id: string, updates: Partial<Category>) => {
       icon: updates.icon,
       sort_order: updates.sort_order,
       active: updates.active,
+      is_free: updates.is_free,
     })
     .eq('id', id);
 
@@ -146,8 +152,15 @@ const reorderCategories = async (reorderedCategories: Category[]) => {
 export const useCategories = () => {
   const { data: categories, loading, error } = useSharedResource(categoriesResource);
 
+  // Stable lookup set of category ids that are free for everyone to order.
+  const freeCategoryIds = useMemo(
+    () => new Set(categories.filter((cat) => cat.is_free).map((cat) => cat.id)),
+    [categories],
+  );
+
   return {
     categories,
+    freeCategoryIds,
     loading,
     error,
     addCategory,

@@ -22,7 +22,8 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
     price: product.base_price,
     discount_price: null as number | null,
     discount_active: false,
-    stock_quantity: 0
+    stock_quantity: 0,
+    minimum_order_quantity: 2
   });
 
   const [editingVariation, setEditingVariation] = useState({
@@ -31,7 +32,8 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
     price: product.base_price,
     discount_price: null as number | null,
     discount_active: false,
-    stock_quantity: 0
+    stock_quantity: 0,
+    minimum_order_quantity: 2
   });
 
   const handleAddVariation = async () => {
@@ -49,7 +51,8 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
         price: newVariation.price,
         discount_price: newVariation.discount_price,
         discount_active: newVariation.discount_active,
-        stock_quantity: newVariation.stock_quantity
+        stock_quantity: newVariation.stock_quantity,
+        minimum_order_quantity: newVariation.minimum_order_quantity
       });
 
       if (result.success) {
@@ -59,7 +62,8 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
           price: product.base_price,
           discount_price: null,
           discount_active: false,
-          stock_quantity: 0
+          stock_quantity: 0,
+          minimum_order_quantity: 2
         });
         setIsAdding(false);
         alert('Variation added successfully!');
@@ -82,7 +86,8 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
       price: variation.price,
       discount_price: variation.discount_price,
       discount_active: variation.discount_active,
-      stock_quantity: variation.stock_quantity
+      stock_quantity: variation.stock_quantity,
+      minimum_order_quantity: variation.minimum_order_quantity ?? 2
     });
     setIsAdding(false);
   };
@@ -225,6 +230,19 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                               type="number"
                               value={editingVariation.stock_quantity}
                               onChange={(e) => setEditingVariation({ ...editingVariation, stock_quantity: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                              Minimum Order *
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={editingVariation.minimum_order_quantity}
+                              onChange={(e) => setEditingVariation({ ...editingVariation, minimum_order_quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                               className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                             />
                           </div>
@@ -391,6 +409,20 @@ const VariationManager: React.FC<VariationManagerProps> = ({ product, onClose, o
                       type="number"
                       value={newVariation.stock_quantity}
                       onChange={(e) => setNewVariation({ ...newVariation, stock_quantity: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                      Minimum Order *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={newVariation.minimum_order_quantity}
+                      onChange={(e) => setNewVariation({ ...newVariation, minimum_order_quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                      placeholder="2"
                       className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                     />
                   </div>

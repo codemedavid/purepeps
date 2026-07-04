@@ -23,6 +23,10 @@ export interface Product {
   available: boolean;
   featured: boolean;
 
+  // Minimum vials a shopper must order for this product (default 2). A selected
+  // variation's own minimum overrides this — see resolveMinOrder().
+  minimum_order_quantity?: number;
+
   // Images and metadata
   image_url: string | null;
   safety_sheet_url: string | null;
@@ -46,6 +50,9 @@ export interface ProductVariation {
   discount_price: number | null;
   discount_active: boolean;
   stock_quantity: number;
+  // Minimum vials a shopper must order for this variation (default 2). Overrides
+  // the parent product's minimum when this variation is selected.
+  minimum_order_quantity?: number;
   created_at: string;
 }
 
@@ -55,6 +62,8 @@ export interface Category {
   icon: string;
   sort_order: number;
   active: boolean;
+  /** When true, products in this category are free for everyone to order — no paid access. */
+  is_free: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -3,12 +3,13 @@ import { groupProductsIntoSections, OTHER_SECTION_ID } from './catalogSections';
 import type { Product } from '../types';
 import type { Category } from '../hooks/useCategories';
 
-const category = (id: string, name: string, sort_order: number): Category => ({
+const category = (id: string, name: string, sort_order: number, is_free = false): Category => ({
   id,
   name,
   icon: 'Grid',
   sort_order,
   active: true,
+  is_free,
   created_at: '1970-01-01T00:00:00.000Z',
   updated_at: '1970-01-01T00:00:00.000Z',
 });
@@ -104,5 +105,45 @@ describe('groupProductsIntoSections', () => {
 
   it('returns an empty array when there are no products', () => {
     expect(groupProductsIntoSections([], categories)).toEqual([]);
+  });
+
+  describe('accessible-first ordering (prioritize available access)', () => {
+    const products = [
+      product({ id: '1', name: 'BPC-157', category: 'research' }),
+      product({ id: '2', name: 'GHK-Cu', category: 'cosmetic' }),
+    ];
+
+    it('floats categories the shopper can order above locked ones', () => {
+      // Unverified shopper: only 'cosmetic' is accessible (e.g. a free category).
+      const canAccess = (id: string | null | undefined) => id === 'cosmetic';
+
+      const sections = groupProductsIntoSections(products, categories, canAccess);
+
+      expect(sections.map((s) => s.id)).toEqual(['cosmetic', 'research']);
+    });
+
+    it('keeps sort_order as the tie-breaker among accessible categories', () => {
+      const cats: Category[] = [
+        category('all', 'All Peptides', 0),
+        category('free-late', 'Free Late', 5, true),
+        category('free-early', 'Free Early', 1, true),
+        category('gated', 'Gated', 3),
+      ];
+      const prods = [
+        product({ id: 'a', name: 'A', category: 'free-late' }),
+        product({ id: 'b', name: 'B', category: 'free-early' }),
+        product({ id: 'c', name: 'C', category: 'gated' }),
+      ];
+      const canAccess = (id: string | null | undefined) => id?.startsWith('free') ?? false;
+
+      const sections = groupProductsIntoSections(prods, cats, canAccess);
+
+      expect(sections.map((s) => s.id)).toEqual(['free-early', 'free-late', 'gated']);
+    });
+
+    it('preserves sort_order when no predicate is supplied', () => {
+      const sections = groupProductsIntoSections(products, categories);
+      expect(sections.map((s) => s.id)).toEqual(['research', 'cosmetic']);
+    });
   });
 });

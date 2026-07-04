@@ -17,7 +17,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
     name: '',
     icon: '☕',
     sort_order: 0,
-    active: true
+    active: true,
+    is_free: false
   });
 
   // Fetch product counts for each category
@@ -54,7 +55,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
       name: '',
       icon: '☕',
       sort_order: nextSortOrder,
-      active: true
+      active: true,
+      is_free: false
     });
     setCurrentView('add');
   };
@@ -66,7 +68,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
       name: category.name,
       icon: category.icon,
       sort_order: category.sort_order,
-      active: category.active
+      active: category.active,
+      is_free: category.is_free ?? false
     });
     setCurrentView('edit');
   };
@@ -255,6 +258,25 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   </span>
                 </label>
               </div>
+
+              <div className="pt-1 sm:pt-2">
+                <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_free}
+                    onChange={(e) => setFormData({ ...formData, is_free: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 sm:w-5 sm:h-5 text-gold-600 rounded border-gray-300 focus:ring-2 focus:ring-gold-500 focus:ring-offset-2 cursor-pointer"
+                  />
+                  <span>
+                    <span className="block text-xs sm:text-sm font-semibold text-gray-900 group-hover:text-gray-700">
+                      Free for everyone
+                    </span>
+                    <span className="block text-[10px] sm:text-xs text-gray-500 mt-0.5">
+                      Products in this category can be ordered by anyone — no paid access required.
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -362,6 +384,11 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-2 flex-shrink-0 sm:border-l sm:border-gray-200 sm:pl-3 sm:ml-1">
+                      {category.is_free && !isAllCategory && (
+                        <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-semibold whitespace-nowrap bg-sky-50 text-sky-700 border border-sky-200">
+                          Free
+                        </span>
+                      )}
                       <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-semibold transition-colors whitespace-nowrap ${category.active
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : 'bg-red-50 text-red-700 border border-red-200'

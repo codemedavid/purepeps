@@ -320,6 +320,27 @@ function GetAccess({
       {/* Already paid? verify email */}
       <div className="mt-6">{verifyPanel}</div>
 
+      {/* Free access — categories anyone can order without paying the access fee. */}
+      {(() => {
+        const freeCategories = categories.filter((c) => c.is_free && c.id !== 'all');
+        if (freeCategories.length === 0) return null;
+        return (
+          <div className="mt-6 rounded-[18px] border border-sakura-sage/30 bg-sakura-sage-soft px-5 py-4">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <div className="text-[15px] font-semibold text-sakura-ink">Free access — no payment needed</div>
+              <div className="font-mono text-[11px] uppercase tracking-[0.06em] text-sakura-sage">Free</div>
+            </div>
+            <p className="mt-1 text-[13px] text-sakura-muted">
+              Everyone can order from{' '}
+              <span className="font-semibold text-sakura-ink">
+                {freeCategories.map((c) => c.name).join(', ')}
+              </span>{' '}
+              — just add to cart and check out. A paid tier below unlocks the rest.
+            </p>
+          </div>
+        );
+      })()}
+
       <div className="grid md:grid-cols-2 gap-9 mt-10 items-start">
         {/* LEFT: tier choice + payment */}
         <div>

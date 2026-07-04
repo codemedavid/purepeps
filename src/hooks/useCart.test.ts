@@ -261,6 +261,43 @@ describe('useCart', () => {
 
       expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY);
     });
+
+    it('adds a new item at the per-product minimum when it exceeds the default', () => {
+      const product = { ...mockProduct, minimum_order_quantity: 3 };
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(product, undefined, 1);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(3);
+    });
+
+    it('uses the selected variation minimum over the product minimum', () => {
+      const product = { ...mockProduct, minimum_order_quantity: 3 };
+      const variation = { ...mockVariation, minimum_order_quantity: 4, stock_quantity: 10 };
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(product, variation, 1);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(4);
+    });
+
+    it('clamps updateQuantity to the per-product minimum', () => {
+      const product = { ...mockProduct, minimum_order_quantity: 3 };
+      const { result } = renderHook(() => useCart());
+
+      act(() => {
+        result.current.addToCart(product, undefined, 5);
+      });
+      act(() => {
+        result.current.updateQuantity(0, 1);
+      });
+
+      expect(result.current.cartItems[0].quantity).toBe(3);
+    });
   });
 
   // --- updateQuantity ---

@@ -73,6 +73,7 @@ const AdminDashboard: React.FC = () => {
     sequence: '',
     storage_conditions: 'Store at -20°C',
     stock_quantity: 0,
+    minimum_order_quantity: 2,
     image_url: null,
     discount_active: false,
     inclusions: null
@@ -102,6 +103,7 @@ const AdminDashboard: React.FC = () => {
       sequence: '',
       storage_conditions: 'Store at -20°C',
       stock_quantity: 0,
+      minimum_order_quantity: 2,
       image_url: null,
       discount_active: false,
       inclusions: null
@@ -231,6 +233,7 @@ const AdminDashboard: React.FC = () => {
           'sequence',
           'storage_conditions',
           'stock_quantity',
+          'minimum_order_quantity',
           'available',
           'featured',
           'image_url',
@@ -768,6 +771,19 @@ const AdminDashboard: React.FC = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
                       placeholder="0"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Minimum Order Quantity</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formData.minimum_order_quantity ?? ''}
+                      onChange={(e) => setFormData({ ...formData, minimum_order_quantity: Math.max(1, Number(e.target.value) || 1) })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
+                      placeholder="2"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">Shoppers must order at least this many. Variations can override this.</p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 pt-0 sm:pt-6">
