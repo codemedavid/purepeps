@@ -19,6 +19,7 @@ import {
   isVariationSoldOut,
   isCartLineSoldOut,
   partitionCartAvailability,
+  combinedVariationCaps,
 } from './groupBuy';
 import type {
   GroupBuyProgressItem,
@@ -660,5 +661,50 @@ describe('partitionCartAvailability', () => {
     const snapshot = [...lines];
     partitionCartAvailability(lines, items);
     expect(lines).toEqual(snapshot);
+  });
+});
+
+describe('combinedVariationCaps', () => {
+  it('returns null when the item is missing', () => {
+    expect(combinedVariationCaps(undefined)).toBeNull();
+  });
+
+  it('returns null when the product itself is capped (product bar owns that case)', () => {
+    const capped = item({
+      cap_quantity: 20,
+      total_quantity: 5,
+      variations: [variation({ variation_id: 'x', cap_quantity: 8, total_quantity: 2 })],
+    });
+    expect(combinedVariationCaps(capped)).toBeNull();
+  });
+
+  it('returns null when no variation carries its own cap (fully unlimited)', () => {
+    const uncapped = item({
+      cap_quantity: null,
+      variations: [variation({ variation_id: 'x' }), variation({ variation_id: 'y' })],
+    });
+    expect(combinedVariationCaps(uncapped)).toBeNull();
+  });
+
+  it('sums cap, reserved, and remaining across capped variations, ignoring uncapped ones', () => {
+    // No product cap, two capped variations (10−3=7 left, 5−1=4 left) and one
+    // uncapped variation that must not contribute to the combined totals.
+    const i = item({
+      cap_quantity: null,
+      variations: [
+        variation({ variation_id: 'a', cap_quantity: 10, total_quantity: 3 }),
+        variation({ variation_id: 'b', cap_quantity: 5, total_quantity: 1 }),
+        variation({ variation_id: 'c', cap_quantity: null, total_quantity: 99 }),
+      ],
+    });
+    expect(combinedVariationCaps(i)).toEqual({ cap: 15, reserved: 4, remaining: 11 });
+  });
+
+  it('clamps an oversold variation so remaining floors at 0 and the bar never exceeds its cap', () => {
+    const i = item({
+      cap_quantity: null,
+      variations: [variation({ variation_id: 'a', cap_quantity: 4, total_quantity: 9 })],
+    });
+    expect(combinedVariationCaps(i)).toEqual({ cap: 4, reserved: 4, remaining: 0 });
   });
 });

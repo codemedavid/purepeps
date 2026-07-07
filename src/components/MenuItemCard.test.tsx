@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MenuItemCard from './MenuItemCard';
-import type { Product, ProductVariation } from '../types';
+import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 
 const baseProduct: Product = {
   id: 'prod-1',
@@ -102,5 +102,65 @@ describe('MenuItemCard add-to-cart with variations', () => {
 
     expect(onAddToCart).toHaveBeenCalledWith(product, undefined, 1);
     expect(onProductClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('MenuItemCard combined variation caps (no product cap)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows the combined remaining across capped variations when the product has no product-level cap', () => {
+    const product = {
+      ...baseProduct,
+      variations: [
+        makeVariation({ id: 'var-1', name: '5mg' }),
+        makeVariation({ id: 'var-2', name: '10mg', price: 2500 }),
+      ],
+    };
+    // No product cap, but each variation is capped: 10−3=7 and 5−1=4 → 11 left of 15.
+    const groupBuyItem: GroupBuyProgressItem = {
+      product_id: product.id,
+      product_name: product.name,
+      total_quantity: 4,
+      confirmed_quantity: 0,
+      order_count: 2,
+      cancelled_quantity: 0,
+      cap_quantity: null,
+      variations: [
+        { variation_id: 'var-1', variation_name: '5mg', total_quantity: 3, cap_quantity: 10 },
+        { variation_id: 'var-2', variation_name: '10mg', total_quantity: 1, cap_quantity: 5 },
+      ],
+    };
+
+    renderCard({ product, groupBuyItem });
+
+    // The shopper sees the pooled remaining so they know slots are still open.
+    expect(screen.getByText(/11 left/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 \/ 15 reserved/i)).toBeInTheDocument();
+  });
+
+  it('falls back to the plain group-orders line when no variation is capped', () => {
+    const product = {
+      ...baseProduct,
+      variations: [makeVariation({ id: 'var-1', name: '5mg' })],
+    };
+    const groupBuyItem: GroupBuyProgressItem = {
+      product_id: product.id,
+      product_name: product.name,
+      total_quantity: 6,
+      confirmed_quantity: 0,
+      order_count: 3,
+      cancelled_quantity: 0,
+      cap_quantity: null,
+      variations: [
+        { variation_id: 'var-1', variation_name: '5mg', total_quantity: 6, cap_quantity: null },
+      ],
+    };
+
+    renderCard({ product, groupBuyItem });
+
+    expect(screen.queryByText(/left/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/6 reserved/i)).toBeInTheDocument();
   });
 });
