@@ -26,6 +26,8 @@ interface BatchOverviewTabProps {
   onFinalize: (batchId: string) => void;
   onReopen: (batchId: string) => void;
   onClose: (batchId: string) => void;
+  /** True when this CLOSED batch is the latest and may be reopened. */
+  canReopenClosed?: boolean;
   onViewOrder: (order: BatchOrder) => void;
   onGoToOrders: () => void;
   /** Opens the edit-settings modal; only offered while the batch is open. */
@@ -54,6 +56,7 @@ export function BatchOverviewTab({
   onFinalize,
   onReopen,
   onClose,
+  canReopenClosed = false,
   onViewOrder,
   onGoToOrders,
   onEditSettings,
@@ -72,6 +75,7 @@ export function BatchOverviewTab({
       <BatchLifecycleBar
         batch={batch}
         busy={busy}
+        canReopenClosed={canReopenClosed}
         requestConfirm={requestConfirm}
         onOpenBatch={onOpenBatch}
         onOpenNewBatch={onOpenNewBatch}

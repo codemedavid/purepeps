@@ -15,6 +15,7 @@ import {
 } from '../utils/groupBuyOverview';
 import { topBuyersByEmail } from '../utils/batchMemberAnalytics';
 import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
+import { canReopenClosedBatch } from '../utils/groupBuy';
 import type { OrderSequenceContext } from '../utils/batchOrderGroups';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
 import { BatchKpiStrip } from './groupbuy/BatchKpiStrip';
@@ -342,6 +343,9 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
 
   const isOpenBatchSelected = activeBatch != null && selectedBatch?.id === activeBatch.id;
   const isFinalizing = selectedBatch?.status === 'finalizing';
+  // Reopen is offered for a CLOSED batch only when it is the latest one, so old
+  // archived batches stay archived (the RPC enforces the same rule server-side).
+  const canReopenClosed = selectedBatch != null && canReopenClosedBatch(selectedBatch, batches);
   const combinedError = actionError || error || ordersError;
   const tabBadges: Partial<Record<GroupBuyTab, number>> = {
     overview: kpis.toConfirmCount,
@@ -452,6 +456,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 itemRevenue={itemRevenue}
                 needsAction={needsAction}
                 busy={busy}
+                canReopenClosed={canReopenClosed}
                 onViewOrder={handleViewOrder}
                 onGoToOrders={() => setActiveTab('orders')}
                 onEditSettings={handleEditSettings}

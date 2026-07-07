@@ -13,6 +13,12 @@ import { formatDateTime } from './orderStatusStyles';
 interface BatchLifecycleBarProps {
   batch: GroupBuyBatch | null;
   busy: boolean;
+  /**
+   * True only when this batch is CLOSED and is the latest batch, so the admin
+   * may revive it. Computed by the parent via canReopenClosedBatch; the RPC
+   * enforces the same rule server-side.
+   */
+  canReopenClosed?: boolean;
   requestConfirm: RequestConfirm;
   onOpenBatch: () => void;
   onOpenNewBatch: () => void;
@@ -39,6 +45,7 @@ const STATUS_PILL: Readonly<
 export function BatchLifecycleBar({
   batch,
   busy,
+  canReopenClosed = false,
   requestConfirm,
   onOpenBatch,
   onOpenNewBatch,
@@ -203,15 +210,28 @@ export function BatchLifecycleBar({
           )}
 
           {status === 'closed' && (
-            <button
-              type="button"
-              onClick={onOpenBatch}
-              disabled={busy}
-              className="bg-gray-900 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Unlock className="h-3.5 w-3.5" />
-              Open a Batch
-            </button>
+            <>
+              {canReopenClosed && (
+                <button
+                  type="button"
+                  onClick={handleReopen}
+                  disabled={busy}
+                  className="bg-white text-gray-700 border border-gray-300 hover:border-indigo-400 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reopen
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenBatch}
+                disabled={busy}
+                className="bg-gray-900 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Unlock className="h-3.5 w-3.5" />
+                Open a Batch
+              </button>
+            </>
           )}
         </div>
       </div>

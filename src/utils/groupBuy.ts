@@ -1,4 +1,4 @@
-import type { GroupBuyProgressItem } from '../types';
+import type { GroupBuyProgressItem, GroupBuyBatch } from '../types';
 
 /**
  * Pure helpers for group-buy cap math, shared by the storefront (cap display +
@@ -104,6 +104,38 @@ export function pendingUnits(item: GroupBuyProgressItem): number {
  */
 export function resellableUnits(item: GroupBuyProgressItem): number | null {
   return remainingForProduct(item);
+}
+
+/** A batch identified by its number, the minimum needed for latest-batch math. */
+type NumberedBatch = Pick<GroupBuyBatch, 'batch_number'>;
+
+/**
+ * The "latest" batch is the one with the highest batch_number. Pure and total:
+ * an empty list has no latest batch (returns false). Reused by the reopen rule
+ * so only the most recent batch can be revived.
+ */
+export function isLatestBatch(
+  batch: NumberedBatch,
+  batches: readonly NumberedBatch[],
+): boolean {
+  if (batches.length === 0) return false;
+  const maxBatchNumber = Math.max(...batches.map((b) => b.batch_number));
+  return batch.batch_number === maxBatchNumber;
+}
+
+/**
+ * Whether the admin may reopen a CLOSED batch. Only the latest (highest
+ * batch_number) batch qualifies, so an older archived batch stays archived once
+ * a newer one exists. Non-closed batches follow the normal lifecycle
+ * transitions, not this rule, so they always return false here. The
+ * reopen_group_buy_batch RPC enforces the same constraint server-side — this
+ * only drives whether the UI offers the button.
+ */
+export function canReopenClosedBatch(
+  batch: Pick<GroupBuyBatch, 'batch_number' | 'status'>,
+  batches: readonly NumberedBatch[],
+): boolean {
+  return batch.status === 'closed' && isLatestBatch(batch, batches);
 }
 
 /** Group-buy lifecycle phase that drives which headline number the board shows. */

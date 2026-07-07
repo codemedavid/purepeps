@@ -19,7 +19,10 @@ function batch(overrides: Partial<GroupBuyBatch> = {}): GroupBuyBatch {
   };
 }
 
-function setup(overrides: Partial<GroupBuyBatch> | null = {}) {
+function setup(
+  overrides: Partial<GroupBuyBatch> | null = {},
+  { canReopenClosed = false }: { canReopenClosed?: boolean } = {},
+) {
   const handlers = {
     onOpenBatch: vi.fn(),
     onOpenNewBatch: vi.fn(),
@@ -36,6 +39,7 @@ function setup(overrides: Partial<GroupBuyBatch> | null = {}) {
     <BatchLifecycleBar
       batch={overrides === null ? null : batch(overrides)}
       busy={false}
+      canReopenClosed={canReopenClosed}
       requestConfirm={requestConfirm}
       {...handlers}
     />,
@@ -73,5 +77,26 @@ describe('BatchLifecycleBar', () => {
 
     expect(handlers.onOpenBatch).toHaveBeenCalledTimes(1);
     expect(requestConfirm).not.toHaveBeenCalled();
+  });
+
+  it('offers Reopen on the latest closed batch and routes it through requestConfirm', async () => {
+    const { handlers, getRequest } = setup(
+      { status: 'closed' },
+      { canReopenClosed: true },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Reopen/ }));
+    expect(handlers.onReopen).not.toHaveBeenCalled();
+
+    getRequest()?.onConfirm();
+    expect(handlers.onReopen).toHaveBeenCalledWith('b1');
+  });
+
+  it('hides Reopen on a closed batch that is not the latest', () => {
+    setup({ status: 'closed' }, { canReopenClosed: false });
+
+    expect(screen.queryByRole('button', { name: /Reopen/ })).not.toBeInTheDocument();
+    // The archive escape hatch (open a fresh batch) stays available.
+    expect(screen.getByRole('button', { name: /Open a Batch/ })).toBeInTheDocument();
   });
 });

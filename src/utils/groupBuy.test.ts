@@ -12,8 +12,10 @@ import {
   productDemandState,
   isPasaloEligible,
   filterPasaloProducts,
+  isLatestBatch,
+  canReopenClosedBatch,
 } from './groupBuy';
-import type { GroupBuyProgressItem } from '../types';
+import type { GroupBuyProgressItem, GroupBuyBatch, GroupBuyStatus } from '../types';
 
 const item = (over: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem => ({
   product_id: 'p1',
@@ -285,5 +287,60 @@ describe('filterPasaloProducts', () => {
     const input = [...products];
     filterPasaloProducts(input, items);
     expect(input).toEqual(products);
+  });
+});
+
+const batch = (over: Partial<GroupBuyBatch> = {}): GroupBuyBatch => ({
+  id: 'b1',
+  batch_number: 1,
+  status: 'closed' as GroupBuyStatus,
+  name: null,
+  opened_at: '2026-06-01T00:00:00Z',
+  closed_at: '2026-06-10T00:00:00Z',
+  finalized_at: null,
+  fulfillment_stage: null,
+  ...over,
+});
+
+describe('isLatestBatch', () => {
+  it('is true when the batch has the highest batch_number', () => {
+    const target = batch({ id: 'b3', batch_number: 3 });
+    const all = [batch({ id: 'b1', batch_number: 1 }), batch({ id: 'b2', batch_number: 2 }), target];
+    expect(isLatestBatch(target, all)).toBe(true);
+  });
+
+  it('is false when a newer batch exists', () => {
+    const target = batch({ id: 'b2', batch_number: 2 });
+    const all = [target, batch({ id: 'b3', batch_number: 3 })];
+    expect(isLatestBatch(target, all)).toBe(false);
+  });
+
+  it('is false when the batch list is empty', () => {
+    expect(isLatestBatch(batch({ batch_number: 1 }), [])).toBe(false);
+  });
+
+  it('handles a single-batch list', () => {
+    const only = batch({ id: 'b1', batch_number: 1 });
+    expect(isLatestBatch(only, [only])).toBe(true);
+  });
+});
+
+describe('canReopenClosedBatch', () => {
+  it('allows reopening the latest batch when it is closed', () => {
+    const target = batch({ id: 'b3', batch_number: 3, status: 'closed' });
+    const all = [batch({ id: 'b2', batch_number: 2 }), target];
+    expect(canReopenClosedBatch(target, all)).toBe(true);
+  });
+
+  it('refuses an older closed batch when a newer one exists', () => {
+    const target = batch({ id: 'b2', batch_number: 2, status: 'closed' });
+    const all = [target, batch({ id: 'b3', batch_number: 3, status: 'open' })];
+    expect(canReopenClosedBatch(target, all)).toBe(false);
+  });
+
+  it('refuses a batch that is not closed even if it is the latest', () => {
+    const target = batch({ id: 'b3', batch_number: 3, status: 'finalized' });
+    const all = [batch({ id: 'b2', batch_number: 2 }), target];
+    expect(canReopenClosedBatch(target, all)).toBe(false);
   });
 });
