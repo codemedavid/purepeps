@@ -94,3 +94,22 @@ export function mergeCarts(a: CartItem[], b: CartItem[]): CartItem[] {
 
   return [...merged.values()];
 }
+
+/**
+ * Effective per-unit price for a cart line: the variation price when a variation
+ * is selected, otherwise the product's active discount price (when discounting)
+ * or its base price. Single-sourced so the cart summary and the persisted total
+ * can never drift apart.
+ */
+export function cartLineUnitPrice(item: CartItem): number {
+  if (item.variation) return item.variation.price;
+  if (item.product.discount_active && item.product.discount_price != null) {
+    return item.product.discount_price;
+  }
+  return item.product.base_price;
+}
+
+/** Sum of every line's unit price times its quantity. Pure; 0 for an empty cart. */
+export function cartSubtotal(items: CartItem[]): number {
+  return items.reduce((total, item) => total + cartLineUnitPrice(item) * item.quantity, 0);
+}

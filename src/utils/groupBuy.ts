@@ -133,6 +133,51 @@ export function isPasaloEligible(item: GroupBuyProgressItem | undefined): boolea
   });
 }
 
+/** Minimal cart-line shape the availability helpers read: a product plus its
+ * optional variation. Kept structural so callers can pass full CartItems (or any
+ * superset) without this module depending on the cart's concrete type. */
+interface CartLineRef {
+  product: { id: string };
+  variation?: { id: string } | null;
+}
+
+/**
+ * True when a cart line can no longer be ordered under the current batch caps —
+ * its resolved variation/product headroom is exhausted (remaining ≤ 0). Lines
+ * with no cap (unlimited) are never sold out. This is the "no longer available"
+ * signal the cart uses to exclude filled items from checkout while letting the
+ * still-available lines through.
+ */
+export function isCartLineSoldOut(
+  line: CartLineRef,
+  items: GroupBuyProgressItem[],
+): boolean {
+  const variationId = line.variation?.id ?? null;
+  const remaining = remainingForVariation(findProgressItem(items, line.product.id), variationId);
+  return remaining != null && remaining <= 0;
+}
+
+/**
+ * Split cart lines into the subset still orderable under the batch caps and the
+ * sold-out remainder. Pure: returns new arrays, preserves order, never mutates
+ * the input. With no caps (empty `items`) every line is available.
+ */
+export function partitionCartAvailability<T extends CartLineRef>(
+  lines: readonly T[],
+  items: GroupBuyProgressItem[],
+): { available: T[]; unavailable: T[] } {
+  const available: T[] = [];
+  const unavailable: T[] = [];
+  for (const line of lines) {
+    if (isCartLineSoldOut(line, items)) {
+      unavailable.push(line);
+    } else {
+      available.push(line);
+    }
+  }
+  return { available, unavailable };
+}
+
 /**
  * Filters a product list to the pasalo-eligible subset: capped products with
  * remaining capacity in the current batch. Pure — returns a new array and never

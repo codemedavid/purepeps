@@ -107,7 +107,9 @@ describe('Cart — group-buy availability', () => {
 
     renderCart({ cartItems: [available, soldOut], groupBuyItems });
 
-    expect(screen.getByText(/no longer available/i)).toBeInTheDocument();
+    // Shown both as a per-line badge and in the order-summary notice.
+    expect(screen.getAllByText(/no longer available/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Filled Peptide/).length).toBeGreaterThan(0);
   });
 
   it('excludes sold-out items from the order subtotal', () => {
@@ -126,9 +128,12 @@ describe('Cart — group-buy availability', () => {
 
     renderCart({ cartItems: [available, soldOut], groupBuyItems });
 
-    // Only the available line (500 x 2 = 1000) counts — the sold-out 999 x 3 is dropped.
-    expect(screen.getByText('₱1,000')).toBeInTheDocument();
-    expect(screen.queryByText(/2,997/)).not.toBeInTheDocument();
+    // Only the available line (500 x 2 = 1000) counts toward subtotal + total.
+    // Both the "Subtotal" and "Total Estimate" rows read ₱1,000, so it appears at
+    // least twice; the combined 3,997 (which would include the sold-out 999 x 3)
+    // must never appear.
+    expect(screen.getAllByText('₱1,000').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/3,997/)).not.toBeInTheDocument();
   });
 
   it('disables checkout when every item is sold out', () => {

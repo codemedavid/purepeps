@@ -15,7 +15,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useAccess } from './hooks/useAccess';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
-import { filterPasaloProducts } from './utils/groupBuy';
+import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
 
 // Lazy load route components
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
@@ -86,6 +86,11 @@ function MainApp() {
         ? filterPasaloProducts(filteredProducts, groupBuy.items)
         : filteredProducts;
 
+    // Only the group-buy-available lines may be checked out — a batch cap that
+    // filled up while the item sat in the cart makes it "no longer available", so
+    // it is dropped from the order the Checkout screen submits (and its total).
+    const availableCartItems = partitionCartAvailability(cart.cartItems, groupBuy.items).available;
+
     return (
         <div className="min-h-screen bg-white font-inter flex flex-col">
             <Header
@@ -142,7 +147,6 @@ function MainApp() {
                         updateQuantity={cart.updateQuantity}
                         removeFromCart={cart.removeFromCart}
                         clearCart={cart.clearCart}
-                        getTotalPrice={cart.getTotalPrice}
                         onContinueShopping={() => handleViewChange('menu')}
                         onCheckout={() => handleViewChange('checkout')}
                         isBatchOpen={isBatchOpen}
@@ -152,8 +156,8 @@ function MainApp() {
 
                 {currentView === 'checkout' && canCheckoutNow && (
                     <Checkout
-                        cartItems={cart.cartItems}
-                        totalPrice={cart.getTotalPrice()}
+                        cartItems={availableCartItems}
+                        totalPrice={cart.getTotalPrice(availableCartItems)}
                         onBack={() => handleViewChange('cart')}
                         defaultEmail={access.email ?? ''}
                         lockEmail={Boolean(access.email)}

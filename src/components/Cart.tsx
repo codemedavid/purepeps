@@ -1,14 +1,14 @@
 import React from 'react';
 import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity, Lock } from 'lucide-react';
 import type { CartItem, GroupBuyProgressItem } from '../types';
-import { findProgressItem, remainingForVariation } from '../utils/groupBuy';
+import { findProgressItem, isCartLineSoldOut, remainingForVariation } from '../utils/groupBuy';
+import { cartSubtotal } from '../utils/cart';
 
 interface CartProps {
   cartItems: CartItem[];
   updateQuantity: (index: number, quantity: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
-  getTotalPrice: () => number;
   onContinueShopping: () => void;
   onCheckout: () => void;
   isBatchOpen?: boolean;
@@ -20,7 +20,6 @@ const Cart: React.FC<CartProps> = ({
   updateQuantity,
   removeFromCart,
   clearCart,
-  getTotalPrice,
   onContinueShopping,
   onCheckout,
   isBatchOpen = true,
@@ -53,16 +52,24 @@ const Cart: React.FC<CartProps> = ({
     );
   }
 
-  const totalPrice = getTotalPrice();
+  // Group-buy availability: a line whose batch cap is fully filled is "no longer
+  // available" and is excluded from checkout, so the shopper can still order the
+  // remaining available items instead of being blocked by one sold-out line.
+  const soldOutItems = cartItems.filter((item) => isCartLineSoldOut(item, groupBuyItems));
+  const availableItems = cartItems.filter((item) => !isCartLineSoldOut(item, groupBuyItems));
+  const hasSoldOutItems = soldOutItems.length > 0;
+
+  // Only the available lines contribute to the order total and to checkout.
+  const totalPrice = cartSubtotal(availableItems);
   // Shipping fee will be discussed via chat
   const finalTotal = totalPrice;
 
-  // Group-buy gating: block checkout if no batch is open, or if a cart line's
+  // Group-buy gating: among the still-available lines, block checkout if a line's
   // quantity exceeds what its batch cap still allows. Caps are resolved per
   // variation (a variation cap overrides the product cap; otherwise the variation
   // falls back to the product's shared pool). The database trigger is the
   // authoritative backstop; this is the friendly, pre-submit guard.
-  const cartQtyByVariation = cartItems.reduce<
+  const cartQtyByVariation = availableItems.reduce<
     Record<string, { productId: string; variationId: string | null; qty: number; name: string }>
   >((acc, item) => {
     const variationId = item.variation?.id ?? null;
@@ -80,7 +87,9 @@ const Cart: React.FC<CartProps> = ({
     })
     .map(({ name }) => name);
   const capBlocked = overCapProducts.length > 0;
-  const checkoutDisabled = !isBatchOpen || capBlocked;
+  // Nothing left to buy once every line is sold out.
+  const noAvailableItems = availableItems.length === 0;
+  const checkoutDisabled = !isBatchOpen || capBlocked || noAvailableItems;
 
   return (
     <div className="min-h-screen bg-white py-6 md:py-8">
@@ -116,10 +125,16 @@ const Cart: React.FC<CartProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {cartItems.map((item, index) => (
+            {cartItems.map((item, index) => {
+              const soldOut = isCartLineSoldOut(item, groupBuyItems);
+              return (
               <div
                 key={index}
-                className="bg-white rounded p-4 md:p-6 border border-gray-100 shadow-sm transition-all hover:border-charcoal-200 hover:shadow-clinical"
+                className={`bg-white rounded p-4 md:p-6 border shadow-sm transition-all ${
+                  soldOut
+                    ? 'border-red-200 bg-red-50/40'
+                    : 'border-gray-100 hover:border-charcoal-200 hover:shadow-clinical'
+                }`}
               >
                 <div className="flex gap-6">
                   {/* Product Image */}
@@ -151,6 +166,12 @@ const Cart: React.FC<CartProps> = ({
                             <span className="text-emerald-600 font-medium flex items-center gap-1 bg-emerald-600/10 px-2 py-0.5 rounded">
                               <Sparkles className="w-3 h-3" />
                               {item.product.purity_percentage}% Purity
+                            </span>
+                          )}
+                          {soldOut && (
+                            <span className="text-red-600 font-semibold flex items-center gap-1 bg-red-100 px-2 py-0.5 rounded">
+                              <Lock className="w-3 h-3" />
+                              No longer available
                             </span>
                           )}
 
@@ -187,7 +208,7 @@ const Cart: React.FC<CartProps> = ({
                             }
                             updateQuantity(index, item.quantity + 1);
                           }}
-                          disabled={(() => {
+                          disabled={soldOut || (() => {
                             const availableStock = item.variation ? item.variation.stock_quantity : item.product.stock_quantity;
                             return item.quantity >= availableStock;
                           })()}
@@ -238,7 +259,8 @@ const Cart: React.FC<CartProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Order Summary */}
@@ -278,6 +300,16 @@ const Cart: React.FC<CartProps> = ({
                 <div className="mb-3 flex items-start gap-2 rounded bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
                   <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>No group buy is open right now. Checkout will reopen once the next batch starts.</span>
+                </div>
+              )}
+              {isBatchOpen && hasSoldOutItems && (
+                <div className="mb-3 rounded bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+                  {soldOutItems.map((item) => item.product.name).join(', ')}{' '}
+                  {soldOutItems.length > 1 ? 'are' : 'is'} no longer available and{' '}
+                  {soldOutItems.length > 1 ? 'have' : 'has'} been left out of your order.
+                  {noAvailableItems
+                    ? ' Remove them or continue browsing to keep shopping.'
+                    : ' You can still check out the remaining items.'}
                 </div>
               )}
               {isBatchOpen && capBlocked && (

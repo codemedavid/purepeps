@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { resolveMinOrder } from '../constants/order';
-import { mergeCarts, rehydrateCart, serializeCart } from '../utils/cart';
+import { cartSubtotal, mergeCarts, rehydrateCart, serializeCart } from '../utils/cart';
 import { fetchMemberCart, persistMemberCart } from '../utils/memberCartApi';
 import type { CartItem, Product, ProductVariation } from '../types';
 
@@ -176,12 +176,9 @@ export function useCart(options?: UseCartOptions) {
     localStorage.removeItem(CART_STORAGE_KEY);
   };
 
-  const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => {
-      const price = item.variation ? item.variation.price : (item.product.discount_active && item.product.discount_price ? item.product.discount_price : item.product.base_price);
-      return total + (price * item.quantity);
-    }, 0);
-  };
+  // Defaults to the whole cart; pass a subset (e.g. only the group-buy-available
+  // lines) to total just those items.
+  const getTotalPrice = (items: CartItem[] = cartItems) => cartSubtotal(items);
 
   const getTotalItems = () => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
