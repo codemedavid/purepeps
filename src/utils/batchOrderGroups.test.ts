@@ -94,6 +94,37 @@ describe('groupBatchOrders', () => {
     expect(group.allOrders).toHaveLength(2);
   });
 
+  it('excludes cancelled orders from the group total', () => {
+    // The reference header total must reflect what the customer actually owes,
+    // not inflate it with cancelled orders (which free their units back).
+    const root = makeOrder({
+      id: 'root',
+      order_number: 'PP-0001',
+      total_price: 2157.2,
+      created_at: '2025-01-01T00:00:00Z',
+    });
+    const cancelled = makeOrder({
+      id: 'cancelled',
+      parent_order_id: 'root',
+      total_price: 2791.2,
+      order_status: 'cancelled',
+      created_at: '2025-01-02T00:00:00Z',
+    });
+    const active = makeOrder({
+      id: 'active',
+      parent_order_id: 'root',
+      total_price: 1700,
+      created_at: '2025-01-03T00:00:00Z',
+    });
+
+    const [group] = groupBatchOrders([root, cancelled, active]);
+
+    // 2157.2 + 1700 — the cancelled 2791.2 is left out.
+    expect(group.groupTotal).toBeCloseTo(3857.2, 2);
+    // The cancelled order is still part of the group (shown, just not billed).
+    expect(group.allOrders).toHaveLength(3);
+  });
+
   it('separates claim add-ons from the numbered sequence', () => {
     const root = makeOrder({ id: 'root', order_number: 'PP-0001' });
     const claim = makeOrder({
