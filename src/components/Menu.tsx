@@ -22,6 +22,8 @@ interface MenuProps {
   onGetAccess: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
+  /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
+  isViewOnly?: boolean;
   batchNumber?: number | null;
   batchStartsAt?: string | null;
   batchEndsAt?: string | null;
@@ -37,6 +39,7 @@ const Menu: React.FC<MenuProps> = ({
   onGetAccess,
   groupBuyItems = [],
   isBatchOpen = true,
+  isViewOnly = false,
   batchNumber = null,
   batchStartsAt = null,
   batchEndsAt = null,
@@ -75,6 +78,7 @@ const Menu: React.FC<MenuProps> = ({
       onGetAccess={onGetAccess}
       groupBuyItem={findProgressItem(groupBuyItems, product.id)}
       isBatchOpen={isBatchOpen}
+      isViewOnly={isViewOnly}
     />
   );
 
@@ -96,6 +100,7 @@ const Menu: React.FC<MenuProps> = ({
           groupBuyItem={findProgressItem(groupBuyItems, selectedProduct.id)}
           cartQuantity={getCartQuantity(selectedProduct.id)}
           isBatchOpen={isBatchOpen}
+          isViewOnly={isViewOnly}
         />
       )}
 

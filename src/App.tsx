@@ -86,6 +86,11 @@ function MainApp() {
         ? filterPasaloProducts(filteredProducts, groupBuy.items)
         : filteredProducts;
 
+    // "View-only mode" (per open batch): products stay browsable but Add-to-Cart is
+    // disabled until the admin flips it off ("allow adding now"). Gated on an open
+    // batch so no-batch / flag-off / still-loading never mis-gate. See MenuItemCard.
+    const viewOnly = !groupBuy.loading && groupBuy.isBatchOpen && (groupBuy.batch?.view_only_mode ?? false);
+
     // Only the group-buy-available lines may be checked out — a batch cap that
     // filled up while the item sat in the cart makes it "no longer available", so
     // it is dropped from the order the Checkout screen submits (and its total).
@@ -124,6 +129,7 @@ function MainApp() {
                         onGetAccess={() => handleViewChange('access')}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
+                        isViewOnly={viewOnly}
                         batchNumber={groupBuy.batch?.batch_number ?? null}
                         batchStartsAt={groupBuy.batch?.starts_at ?? null}
                         batchEndsAt={groupBuy.batch?.ends_at ?? null}

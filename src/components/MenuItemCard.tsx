@@ -16,6 +16,8 @@ interface MenuItemCardProps {
   onGetAccess?: () => void;
   groupBuyItem?: GroupBuyProgressItem;
   isBatchOpen?: boolean;
+  /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
+  isViewOnly?: boolean;
 }
 
 const MenuItemCard: React.FC<MenuItemCardProps> = ({
@@ -28,6 +30,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   onGetAccess,
   groupBuyItem,
   isBatchOpen = true,
+  isViewOnly = false,
 }) => {
   const [imageError, setImageError] = useState(false);
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | undefined>(
@@ -65,14 +68,16 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     product.variations && product.variations.length > 0 && selectedVariation
       ? isVariationSoldOut(groupBuyItem, selectedVariation.id)
       : isCapSoldOut(groupBuyItem);
-  const canAdd = !soldOut && !capReached && isBatchOpen;
-  const ctaLabel = !isBatchOpen
-    ? 'Group buy closed'
-    : soldOut
-      ? 'Sold out'
-      : capReached
-        ? 'Group limit reached'
-        : 'Add to cart';
+  const canAdd = !soldOut && !capReached && isBatchOpen && !isViewOnly;
+  const ctaLabel = isViewOnly
+    ? 'Coming soon'
+    : !isBatchOpen
+      ? 'Group buy closed'
+      : soldOut
+        ? 'Sold out'
+        : capReached
+          ? 'Group limit reached'
+          : 'Add to cart';
 
   return (
     <div

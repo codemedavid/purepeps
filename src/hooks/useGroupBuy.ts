@@ -144,6 +144,21 @@ export const useGroupBuy = () => {
     [refresh],
   );
 
+  // Toggle "view-only mode" on a batch: when on, the storefront still shows this
+  // batch's products (browsable) but Add-to-Cart is disabled everywhere until the
+  // admin flips it off ("allow adding now"). Mirrors setPasaloMode.
+  const setViewOnlyMode = useCallback(
+    async (batchId: string, enabled: boolean) => {
+      const { error: rpcError } = await supabase.rpc('set_group_buy_view_only_mode', {
+        p_id: batchId,
+        p_enabled: enabled,
+      });
+      if (rpcError) throw rpcError;
+      await refresh();
+    },
+    [refresh],
+  );
+
   // Active tiers the admin may offer on a batch (id, name, price), ordered for
   // display. The storefront get_access_tiers RPC only returns the OPEN batch's
   // offered tiers, so the editor reads the full active set directly instead.
@@ -338,6 +353,7 @@ export const useGroupBuy = () => {
     openBatch,
     setSchedule,
     setPasaloMode,
+    setViewOnlyMode,
     fetchOfferableTiers,
     fetchBatchTierIds,
     updateBatchSettings,

@@ -15,6 +15,8 @@ interface ProductDetailModalProps {
   groupBuyItem?: GroupBuyProgressItem;
   cartQuantity?: number;
   isBatchOpen?: boolean;
+  /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
+  isViewOnly?: boolean;
 }
 
 const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -27,6 +29,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   groupBuyItem,
   cartQuantity = 0,
   isBatchOpen = true,
+  isViewOnly = false,
 }) => {
   // Select first available variation, or first variation if all are out of stock
   const getFirstAvailableVariation = () => {
@@ -91,7 +94,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     setQuantity(prev => (prev > minOrder ? prev - 1 : minOrder));
 
   const handleAddToCart = () => {
-    if (!isBatchOpen || capReached || overCap) return;
+    if (isViewOnly || !isBatchOpen || capReached || overCap) return;
     onAddToCart(product, selectedVariation, quantity);
     onClose();
   };
@@ -377,11 +380,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 ) : (
                   <button
                     onClick={handleAddToCart}
-                    disabled={!product.available || !hasAnyStock || (selectedVariation && selectedVariation.stock_quantity === 0) || (!selectedVariation && product.stock_quantity === 0) || !isBatchOpen || capReached || overCap}
+                    disabled={isViewOnly || !product.available || !hasAnyStock || (selectedVariation && selectedVariation.stock_quantity === 0) || (!selectedVariation && product.stock_quantity === 0) || !isBatchOpen || capReached || overCap}
                     className="w-full btn-primary py-3 md:py-4 text-sm md:text-base flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ShoppingCart className="w-5 h-5" />
-                    {!isBatchOpen
+                    {isViewOnly
+                      ? 'Coming soon'
+                      : !isBatchOpen
                       ? 'Group buy closed'
                       : !product.available
                         ? 'Unavailable'

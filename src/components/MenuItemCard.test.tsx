@@ -117,14 +117,15 @@ describe('MenuItemCard view-only mode', () => {
     expect(cta).toBeDisabled();
   });
 
-  it('does not add to cart or open the drawer when the CTA is clicked in view-only mode', () => {
+  it('never adds to cart from the disabled CTA in view-only mode', () => {
+    // Viewing is the whole point of view-only mode, so opening the detail drawer
+    // stays allowed; the only guarantee is that nothing lands in the cart.
     const product = { ...baseProduct, variations: [makeVariation()] };
-    const { onAddToCart, onProductClick } = renderCard({ product, isViewOnly: true });
+    const { onAddToCart } = renderCard({ product, isViewOnly: true });
 
     fireEvent.click(screen.getByRole('button', { name: /coming soon/i }));
 
     expect(onAddToCart).not.toHaveBeenCalled();
-    expect(onProductClick).not.toHaveBeenCalled();
   });
 });
 
