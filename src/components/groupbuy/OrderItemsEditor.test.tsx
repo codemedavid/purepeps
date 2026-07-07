@@ -51,8 +51,22 @@ function product(overrides: Partial<Product> = {}): Product {
 
 function setup(products: Product[], items: OrderLineItem[] = []) {
   const onSave = vi.fn();
-  render(<OrderItemsEditor items={items} products={products} onSave={onSave} />);
+  render(<OrderItemsEditor orderId="o1" items={items} products={products} onSave={onSave} />);
   return { onSave };
+}
+
+// A concrete line item factory for the order-switch tests below.
+function line(overrides: Partial<OrderLineItem> = {}): OrderLineItem {
+  return {
+    product_id: 'p1',
+    product_name: 'Retatrutide',
+    variation_id: null,
+    variation_name: null,
+    quantity: 1,
+    price: 1000,
+    total: 1000,
+    ...overrides,
+  };
 }
 
 describe('OrderItemsEditor — adding with variations', () => {
@@ -160,6 +174,7 @@ describe('OrderItemsEditor — added vs kept split', () => {
     const onSave = vi.fn();
     render(
       <OrderItemsEditor
+        orderId="o1"
         items={[existing]}
         products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
         onSave={onSave}
@@ -185,6 +200,7 @@ describe('OrderItemsEditor — added vs kept split', () => {
     const onSave = vi.fn().mockResolvedValue(false);
     render(
       <OrderItemsEditor
+        orderId="o1"
         items={[existing]}
         products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
         onSave={onSave}
@@ -207,6 +223,7 @@ describe('OrderItemsEditor — added vs kept split', () => {
     const onSave = vi.fn().mockResolvedValue(true);
     render(
       <OrderItemsEditor
+        orderId="o1"
         items={[existing]}
         products={[product({ id: 'p2', name: 'AHK-CU', base_price: 400 })]}
         onSave={onSave}
@@ -225,6 +242,7 @@ describe('OrderItemsEditor — added vs kept split', () => {
   it('hides the add-product control when adding is not allowed', () => {
     render(
       <OrderItemsEditor
+        orderId="o1"
         items={[existing]}
         products={[product({ id: 'p2', name: 'AHK-CU' })]}
         canAddProducts={false}
@@ -233,5 +251,80 @@ describe('OrderItemsEditor — added vs kept split', () => {
     );
 
     expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('OrderItemsEditor — switching between a customer\'s linked orders', () => {
+  const products = [
+    product({ id: 'p1', name: 'Retatrutide', base_price: 1000 }),
+    product({ id: 'p2', name: 'GHK-CU', base_price: 200 }),
+  ];
+
+  // Bug repro: the admin opens Order A, then navigates to sibling Order B. The
+  // editor must show Order B's items — not carry Order A's draft over — or a
+  // save on B would persist A's items onto B and spawn a bogus linked order.
+  it('reseeds the draft when the edited order changes', () => {
+    const orderA = [line({ product_id: 'p1', product_name: 'Retatrutide', quantity: 2, total: 2000 })];
+    const orderB = [line({ product_id: 'p2', product_name: 'GHK-CU', price: 200, quantity: 5, total: 1000 })];
+
+    const { rerender } = render(
+      <OrderItemsEditor orderId="A" items={orderA} products={products} onSave={vi.fn()} />,
+    );
+    expect(screen.getByText('Retatrutide')).toBeInTheDocument();
+
+    // Navigate to a different linked order (new id + its own items).
+    rerender(<OrderItemsEditor orderId="B" items={orderB} products={products} onSave={vi.fn()} />);
+
+    expect(screen.getByText('GHK-CU')).toBeInTheDocument();
+    expect(screen.queryByText('Retatrutide')).not.toBeInTheDocument();
+  });
+
+  // A save on order B must split against B's own items, never A's leftover draft.
+  it('saves the current order\'s items after switching orders', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(true);
+    const orderA = [line({ product_id: 'p1', product_name: 'Retatrutide', quantity: 2, total: 2000 })];
+    const orderB = [line({ product_id: 'p2', product_name: 'GHK-CU', price: 200, quantity: 5, total: 1000 })];
+
+    const { rerender } = render(
+      <OrderItemsEditor orderId="A" items={orderA} products={products} onSave={onSave} />,
+    );
+    rerender(<OrderItemsEditor orderId="B" items={orderB} products={products} onSave={onSave} />);
+
+    // The first spinbutton is the line-item quantity (the second is the
+    // add-product form's qty). Bump it so the draft is dirty and Save enables.
+    const qty = screen.getAllByRole('spinbutton')[0];
+    await user.type(qty, '1'); // 5 -> 51, just needs to differ from the seed
+    await user.click(screen.getByRole('button', { name: /save items/i }));
+
+    // The saved line must be B's product (p2) at B's price — A's p1 must never
+    // leak in. Its total tracks B's unit price, proving we split against B.
+    const [keptItems, addedItems] = onSave.mock.calls.at(-1)!;
+    expect(addedItems).toEqual([]);
+    expect(keptItems).toHaveLength(1);
+    expect(keptItems[0]).toMatchObject({ product_id: 'p2', price: 200, quantity: 51, total: 10200 });
+  });
+
+  // Guard against over-resetting: a same-order reload (same id, fresh array
+  // identity after a save) must NOT wipe an in-progress edit.
+  it('preserves an in-progress edit when the same order reloads', async () => {
+    const user = userEvent.setup();
+    const order = [line({ product_id: 'p1', product_name: 'Retatrutide', quantity: 2, total: 2000 })];
+
+    const { rerender } = render(
+      <OrderItemsEditor orderId="A" items={order} products={products} onSave={vi.fn()} />,
+    );
+
+    const qty = screen.getAllByRole('spinbutton')[0];
+    await user.type(qty, '9'); // 2 -> 29
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(29);
+
+    // Same order id, new array identity (e.g. parent re-fetched) — keep the edit.
+    rerender(
+      <OrderItemsEditor orderId="A" items={[...order]} products={products} onSave={vi.fn()} />,
+    );
+
+    // The in-progress edit survives — the draft was NOT reseeded to 2.
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(29);
   });
 });

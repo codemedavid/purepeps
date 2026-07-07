@@ -68,6 +68,8 @@ const chain: Record<string, ReturnType<typeof vi.fn>> & {
   in: vi.fn(() => chain),
   update: vi.fn(() => chain),
   insert: vi.fn(() => chain),
+  // insert(...).select('id').single() resolves to the new row's id.
+  single: vi.fn(async () => ({ data: { id: 'new-order-id' }, error: null })),
 };
 
 const mockFrom = vi.fn(() => chain);
@@ -205,6 +207,15 @@ describe('useBatchOrders.addLinkedOrder — new order sequence for added items',
     // Customer identity is copied so the new order stays under the same person.
     expect(payload.customer_name).toBe(parent.customer_name);
     expect(payload.customer_email).toBe(parent.customer_email);
+  });
+
+  it('returns the new order id so the caller can navigate to it', async () => {
+    const result = await mountLoaded();
+    let returned: string | null = null;
+    await act(async () => {
+      returned = await result.current.addLinkedOrder(SEED[0], ADDED);
+    });
+    expect(returned).toBe('new-order-id');
   });
 
   it('links to the ultimate root when the parent is itself a child order', async () => {
