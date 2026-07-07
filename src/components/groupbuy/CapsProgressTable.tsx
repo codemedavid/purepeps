@@ -36,6 +36,13 @@ interface CapsProgressTableProps {
   readOnly?: boolean;
 }
 
+/** Order filter chips: "All" shows every product, "With orders" narrows to
+ * products that have at least one non-cancelled order in the batch. */
+const FILTER_CHIPS: ReadonlyArray<{ label: string; onlyWithOrders: boolean }> = [
+  { label: 'All', onlyWithOrders: false },
+  { label: 'With orders', onlyWithOrders: true },
+];
+
 /** Draft key for a cap input: product-level uses the bare product id; a variation
  * cap namespaces under it. Shared with GroupBuyManager so seeding + writes agree. */
 export function capDraftKey(productId: string, variationId?: string | null): string {
@@ -141,9 +148,14 @@ export function CapsProgressTable({
   readOnly = false,
 }: CapsProgressTableProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [onlyWithOrders, setOnlyWithOrders] = useState(false);
 
   const toggle = (productId: string) =>
     setExpanded((prev) => ({ ...prev, [productId]: !prev[productId] }));
+
+  const hasOrders = (productId: string) => (findProgressItem(items, productId)?.order_count ?? 0) > 0;
+  const withOrdersCount = rows.filter((product) => hasOrders(product.id)).length;
+  const visibleRows = onlyWithOrders ? rows.filter((product) => hasOrders(product.id)) : rows;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -154,6 +166,27 @@ export function CapsProgressTable({
           can be ordered. Expand a product to cap individual variations — a variation cap overrides
           the product cap for that variation. Cancelled units are freed back as claimable leftovers.
         </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {FILTER_CHIPS.map((chip) => {
+            const isActive = onlyWithOrders === chip.onlyWithOrders;
+            const count = chip.onlyWithOrders ? withOrdersCount : rows.length;
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setOnlyWithOrders(chip.onlyWithOrders)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                  isActive
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                {chip.label} ({count})
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -170,7 +203,7 @@ export function CapsProgressTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {rows.map((product) => {
+            {visibleRows.map((product) => {
               const item = findProgressItem(items, product.id);
               const total = item?.total_quantity ?? 0;
               const confirmed = item ? confirmedUnits(item) : 0;
@@ -282,10 +315,10 @@ export function CapsProgressTable({
                 </Fragment>
               );
             })}
-            {rows.length === 0 && (
+            {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-6 text-center text-xs text-gray-400">
-                  No products found.
+                  {onlyWithOrders ? 'No items with orders yet.' : 'No products found.'}
                 </td>
               </tr>
             )}

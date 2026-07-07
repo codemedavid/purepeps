@@ -41,6 +41,59 @@ describe('capDraftKey', () => {
   });
 });
 
+const twoProductProps = {
+  ...baseProps,
+  rows: [
+    { id: 'p1', name: 'Retatrutide' },
+    { id: 'p2', name: 'Tirzepatide' },
+  ],
+  items: [
+    item({ product_id: 'p1', product_name: 'Retatrutide', order_count: 3, total_quantity: 5 }),
+    item({ product_id: 'p2', product_name: 'Tirzepatide', order_count: 0, total_quantity: 0 }),
+  ],
+  variationsByProduct: {},
+};
+
+describe('CapsProgressTable order filter', () => {
+  it('shows all products by default, including those with no orders', () => {
+    render(<CapsProgressTable {...twoProductProps} />);
+    expect(screen.getByText('Retatrutide')).toBeInTheDocument();
+    expect(screen.getByText('Tirzepatide')).toBeInTheDocument();
+  });
+
+  it('hides products with zero orders when the "with orders" filter is active', () => {
+    render(<CapsProgressTable {...twoProductProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /with orders/i }));
+    expect(screen.getByText('Retatrutide')).toBeInTheDocument();
+    expect(screen.queryByText('Tirzepatide')).not.toBeInTheDocument();
+  });
+
+  it('restores all products when switching back to the "all" filter', () => {
+    render(<CapsProgressTable {...twoProductProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /with orders/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^all/i }));
+    expect(screen.getByText('Tirzepatide')).toBeInTheDocument();
+  });
+
+  it('labels the "with orders" chip with the count of products that have orders', () => {
+    render(<CapsProgressTable {...twoProductProps} />);
+    expect(screen.getByRole('button', { name: /with orders \(1\)/i })).toBeInTheDocument();
+  });
+
+  it('shows an empty message when the filter hides every product', () => {
+    const noneWithOrders = {
+      ...twoProductProps,
+      items: [
+        item({ product_id: 'p1', order_count: 0 }),
+        item({ product_id: 'p2', order_count: 0 }),
+      ],
+    };
+    render(<CapsProgressTable {...noneWithOrders} />);
+    fireEvent.click(screen.getByRole('button', { name: /with orders/i }));
+    expect(screen.getByText(/no items with orders/i)).toBeInTheDocument();
+  });
+});
+
 describe('CapsProgressTable variation expansion', () => {
   it('hides variation rows until the product is expanded', () => {
     render(<CapsProgressTable {...baseProps} />);
