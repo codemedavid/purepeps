@@ -325,7 +325,13 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
         await saveItems(orderId, keptItems);
       }
       if (existing && addedItems.length > 0) {
-        await addLinkedOrder(existing, addedItems);
+        // Jump to the freshly created linked order so the admin can see it saved
+        // (and can confirm its payment) instead of being left on the parent with
+        // the added line silently gone.
+        const newOrderId = await addLinkedOrder(existing, addedItems);
+        if (newOrderId) {
+          setSelectedOrderId(newOrderId);
+        }
       }
     });
   const handleVerifyBalance = (orderId: string) =>

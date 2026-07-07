@@ -423,6 +423,7 @@ export function BatchOrderDetail({
         <div>
           <h3 className="font-bold text-gray-900 mb-2 text-sm">Order items</h3>
           <OrderItemsEditor
+            orderId={order.id}
             items={order.order_items}
             products={products}
             busy={busy}

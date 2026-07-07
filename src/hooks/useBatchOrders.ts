@@ -282,7 +282,7 @@ export function useBatchOrders(batchId: string | null) {
   // added units still count against the batch cap. Reloads so the new sequence
   // shows immediately.
   const addLinkedOrder = useCallback(
-    async (parentOrder: BatchOrder, items: OrderLineItem[]): Promise<void> => {
+    async (parentOrder: BatchOrder, items: OrderLineItem[]): Promise<string | null> => {
       try {
         const { data: generatedNumber, error: numErr } =
           await supabase.rpc('next_order_number');
@@ -326,9 +326,16 @@ export function useBatchOrders(batchId: string | null) {
           }.`,
         };
 
-        const { error: insertError } = await supabase.from('orders').insert([payload]);
+        // select('id').single() so the caller can navigate straight to the newly
+        // created order — otherwise the admin has no visible confirmation it saved.
+        const { data: inserted, error: insertError } = await supabase
+          .from('orders')
+          .insert([payload])
+          .select('id')
+          .single();
         if (insertError) throw insertError;
         await load();
+        return (inserted as { id: string } | null)?.id ?? null;
       } catch (err) {
         console.error('Error adding linked order:', err);
         throw err;

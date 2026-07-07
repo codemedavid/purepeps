@@ -4,6 +4,13 @@ import { splitEditedItems } from '../../utils/orderItemEdits';
 import type { OrderLineItem, Product, ProductVariation } from '../../types';
 
 interface OrderItemsEditorProps {
+  /**
+   * Identity of the order being edited. When it changes (admin navigates to a
+   * different linked order under the same customer), the draft is reseeded from
+   * that order's items — otherwise the previous order's edits would bleed over
+   * and get saved onto the wrong order.
+   */
+  orderId: string;
   items: OrderLineItem[];
   products: Product[];
   busy?: boolean;
@@ -48,6 +55,7 @@ function lineTotal(price: number, quantity: number): number {
  * recomputes each line total and hands the new array up to saveItems().
  */
 export function OrderItemsEditor({
+  orderId,
   items,
   products,
   busy = false,
@@ -58,6 +66,18 @@ export function OrderItemsEditor({
   const [addProductId, setAddProductId] = useState<string>('');
   const [addVariationId, setAddVariationId] = useState<string>('');
   const [addQty, setAddQty] = useState<string>('1');
+  // Track which order the draft was seeded from. Reseeding during render (the
+  // supported React pattern for resetting state on a prop change) keeps an
+  // in-progress edit while the SAME order reloads, but throws the draft away the
+  // moment the admin switches to a different order.
+  const [seededOrderId, setSeededOrderId] = useState<string>(orderId);
+  if (orderId !== seededOrderId) {
+    setSeededOrderId(orderId);
+    setDraft(items);
+    setAddProductId('');
+    setAddVariationId('');
+    setAddQty('1');
+  }
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === addProductId),
