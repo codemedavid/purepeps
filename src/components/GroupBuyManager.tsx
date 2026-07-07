@@ -16,6 +16,7 @@ import {
 import { topBuyersByEmail } from '../utils/batchMemberAnalytics';
 import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
 import { canReopenClosedBatch } from '../utils/groupBuy';
+import { getActionErrorMessage } from '../utils/errorMessage';
 import type { OrderSequenceContext } from '../utils/batchOrderGroups';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
 import { BatchKpiStrip } from './groupbuy/BatchKpiStrip';
@@ -209,7 +210,10 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
       return true;
     } catch (err) {
       console.error('Group buy action failed:', err);
-      setActionError(err instanceof Error ? err.message : 'Action failed');
+      // Supabase errors are plain objects (not Error instances), so surface their
+      // real message — e.g. the batch-cap trigger's "Group buy limit reached
+      // (cap X, already reserved Y, you requested Z)." — instead of a generic one.
+      setActionError(getActionErrorMessage(err));
       return false;
     } finally {
       setBusy(false);
