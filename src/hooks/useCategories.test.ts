@@ -141,12 +141,26 @@ describe('useCategories', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const newCat = { id: 'cat-3', name: 'Skin Care', icon: 'Star', sort_order: 3, active: true };
+      const newCat = { name: 'Skin Care', icon: 'Star', sort_order: 3, active: true, is_free: false };
       await result.current.addCategory(newCat);
 
       expect(mockInsert).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Skin Care', icon: 'Star' })
       );
+    });
+
+    it('does not send a client-supplied id — the DB generates the uuid primary key', async () => {
+      const { result } = renderHook(() => useCategories());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      await result.current.addCategory({ name: 'Skin Care', icon: 'Star', sort_order: 3, active: true, is_free: false });
+
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      const payload = mockInsert.mock.calls[0][0];
+      expect(payload).not.toHaveProperty('id');
     });
 
     it('throws on insert error', async () => {
@@ -159,7 +173,7 @@ describe('useCategories', () => {
       });
 
       await expect(
-        result.current.addCategory({ id: 'bad', name: 'Bad', icon: 'X', sort_order: 99, active: true })
+        result.current.addCategory({ name: 'Bad', icon: 'X', sort_order: 99, active: true, is_free: false })
       ).rejects.toThrow('Insert failed');
     });
   });
