@@ -131,6 +131,36 @@ describe('BatchCloseoutPanel', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
 
+  it('downloads the items-by-variation CSV when Items CSV is clicked', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn((blob: unknown) => {
+        created.push(blob);
+        return 'blob:mock';
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+
+    render(
+      <BatchCloseoutPanel
+        summary={summary()}
+        orders={[order({ order_items: [lineItem({ quantity: 30 })] })]}
+        fulfillmentStage={null}
+        batchNumber={7}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /items csv/i }));
+
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(created).toHaveLength(1);
+
+    vi.unstubAllGlobals();
+    clickSpy.mockRestore();
+  });
+
   it('shows units ordered in kits with vials as subtext', () => {
     render(
       <BatchCloseoutPanel

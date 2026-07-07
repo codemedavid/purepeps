@@ -104,6 +104,7 @@ export function BatchOverviewTab({
           summary={itemRevenue}
           orders={orders}
           fulfillmentStage={batch.fulfillment_stage ?? null}
+          batchNumber={batch?.batch_number}
         />
       )}
 

@@ -1,29 +1,13 @@
 import type { BatchOrder } from '../types';
 import type { ItemRevenue, ItemRevenueSummary } from './groupBuyOverview';
+import { csvRow, money, type Cell } from './csv';
 
 /**
  * Pure CSV builders for the end-of-group-buy closeout. Kept out of React so the
  * admin can copy a per-item breakdown (for supplier ordering and accounting) and
- * the full order list (for fulfilment) without any rendering concerns. RFC-4180
- * quoting: wrap a cell when it holds a comma, quote, or newline, doubling quotes.
+ * the full order list (for fulfilment) without any rendering concerns. Shares the
+ * RFC-4180 cell/row/money primitives with the other exports via ./csv.
  */
-
-type Cell = string | number | null | undefined;
-
-function csvCell(value: Cell): string {
-  const text = value == null ? '' : String(value);
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
-}
-
-function csvRow(cells: Cell[]): string {
-  return cells.map(csvCell).join(',');
-}
-
-/** Two-decimal plain number (no currency symbol) so the CSV stays spreadsheet-friendly. */
-function money(value: number): string {
-  return value.toFixed(2);
-}
 
 const ITEM_HEADER = [
   'Product',

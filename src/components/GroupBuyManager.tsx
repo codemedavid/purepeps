@@ -509,6 +509,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 tiers={tierCatalog}
                 onSetTier={setTier}
                 topBuyers={topBuyers}
+                orders={orders}
               />
             )}
 
@@ -564,6 +565,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                   summary={itemRevenue}
                   orders={orders}
                   fulfillmentStage={selectedBatch.fulfillment_stage ?? null}
+                  batchNumber={selectedBatch.batch_number}
                 />
               ) : (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center">

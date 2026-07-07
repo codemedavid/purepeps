@@ -1,9 +1,11 @@
 import { Fragment, useState } from 'react';
-import { ClipboardCheck, Copy, PackageCheck, Receipt, Truck } from 'lucide-react';
+import { ClipboardCheck, Copy, Download, PackageCheck, Receipt, Truck } from 'lucide-react';
 import type { BatchOrder, FulfillmentStage } from '../../types';
 import type { ItemRevenueSummary, VariationBreakdownRow } from '../../utils/groupBuyOverview';
 import { summarizeVariationBreakdown } from '../../utils/groupBuyOverview';
 import { buildBatchCloseoutCsv } from '../../utils/batchCloseoutExport';
+import { buildItemsByVariationCsv } from '../../utils/batchExports';
+import { downloadCsv } from '../../utils/downloadCsv';
 import { fulfillmentStageLabel } from '../../utils/orderTracking';
 import { peso } from './orderStatusStyles';
 import { KitCell } from './KitCell';
@@ -15,6 +17,8 @@ type Props = {
   orders: BatchOrder[];
   /** Batch-wide international shipping leg, shown as the headline shipping status. */
   fulfillmentStage: FulfillmentStage | null;
+  /** Batch number, used only to name the downloaded CSV file. */
+  batchNumber?: number;
 };
 
 const CANCELLED = 'cancelled';
@@ -67,18 +71,23 @@ async function copyToClipboard(text: string): Promise<boolean> {
  * one-click CSV copy for accounting and supplier ordering. Derived entirely from
  * the batch's orders so it stays accurate after the batch is finalized/closed.
  */
-export function BatchCloseoutPanel({ summary, orders, fulfillmentStage }: Props) {
+export function BatchCloseoutPanel({ summary, orders, fulfillmentStage, batchNumber }: Props) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
   if (summary.rows.length === 0) return null;
 
   const readiness = shipReadiness(orders);
   const variationsByProduct: Map<string, VariationBreakdownRow[]> = summarizeVariationBreakdown(orders);
+  const batchTag = batchNumber != null ? `-batch-${batchNumber}` : '';
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(buildBatchCloseoutCsv(summary, orders));
     setCopyState(ok ? 'copied' : 'error');
     window.setTimeout(() => setCopyState('idle'), 2500);
+  };
+
+  const handleDownloadItems = () => {
+    downloadCsv(`group-buy-items${batchTag}.csv`, buildItemsByVariationCsv(orders));
   };
 
   return (
@@ -88,23 +97,34 @@ export function BatchCloseoutPanel({ summary, orders, fulfillmentStage }: Props)
           <Receipt className="h-4 w-4 text-brand-400" />
           Group buy closeout
         </h3>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          {copyState === 'copied' ? (
-            <>
-              <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              {copyState === 'error' ? 'Copy failed' : 'Copy CSV'}
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDownloadItems}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            title="Download every product/variation with its kit total as a CSV"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Items CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {copyState === 'copied' ? (
+              <>
+                <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5" />
+                {copyState === 'error' ? 'Copy failed' : 'Copy CSV'}
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Shipping readiness — confirmed orders ready to fulfil vs still awaiting. */}

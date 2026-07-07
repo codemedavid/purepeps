@@ -176,4 +176,59 @@ describe('BatchMembersPanel', () => {
     expect(await screen.findByText('Tier not found')).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
+
+  it('hides the Export orders button when no orders are provided', () => {
+    render(
+      <BatchMembersPanel batchNumber={3} members={MEMBERS} loading={false} onReload={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: /export orders/i })).not.toBeInTheDocument();
+  });
+
+  it('downloads the members CSV when Export orders is clicked', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn((blob: unknown) => {
+        created.push(blob);
+        return 'blob:mock';
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const orders = [
+      {
+        id: 'o1',
+        order_number: 'PP-1',
+        customer_name: 'Alice',
+        customer_email: 'alice@example.com',
+        customer_phone: '0917',
+        order_items: [],
+        total_price: 1000,
+        payment_proof_url: 'https://cdn.example.com/a.jpg',
+        additional_payment_proof_url: null,
+        payment_status: 'paid',
+        order_status: 'confirmed',
+        created_at: '2026-07-01T00:00:00Z',
+      },
+    ] as unknown as import('../../types').BatchOrder[];
+
+    render(
+      <BatchMembersPanel
+        batchNumber={3}
+        members={MEMBERS}
+        loading={false}
+        onReload={vi.fn()}
+        orders={orders}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /export orders/i }));
+
+    expect(clickSpy).toHaveBeenCalledOnce();
+    expect(created).toHaveLength(1);
+
+    vi.unstubAllGlobals();
+    clickSpy.mockRestore();
+  });
 });

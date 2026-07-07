@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Users, RefreshCw, Search, X, Clock, CheckCircle2, Layers, Check, Trophy } from 'lucide-react';
+import { Users, RefreshCw, Search, X, Clock, CheckCircle2, Layers, Check, Trophy, Download } from 'lucide-react';
 import type { AccessRequest, AccessStatus } from '../../utils/access';
+import type { BatchOrder } from '../../types';
 import type { CatalogTier } from '../../hooks/useTierCatalog';
 import { uniqueMembersByEmail } from '../../utils/batchMemberAnalytics';
 import type { BuyerSpend } from '../../utils/batchMemberAnalytics';
+import { buildMembersExportCsv } from '../../utils/batchExports';
+import { downloadCsv } from '../../utils/downloadCsv';
 import { formatPrice } from '../../utils/currency';
 import { peso } from './orderStatusStyles';
 
@@ -18,6 +21,8 @@ interface BatchMembersPanelProps {
   onSetTier?: (id: string, tierId: string, tierName: string) => Promise<{ success: boolean; error?: string }>;
   /** Top buyers by total product spend for this batch. Omit to hide the leaderboard. */
   topBuyers?: BuyerSpend[];
+  /** Batch orders — enables the "Export orders" CSV (members + totals + payment proof links). */
+  orders?: BatchOrder[];
 }
 
 type MemberFilter = 'all' | Extract<AccessStatus, 'approved' | 'pending'>;
@@ -48,6 +53,7 @@ export function BatchMembersPanel({
   tiers,
   onSetTier,
   topBuyers,
+  orders,
 }: BatchMembersPanelProps) {
   const [filter, setFilter] = useState<MemberFilter>('all');
   const [query, setQuery] = useState('');
@@ -91,6 +97,12 @@ export function BatchMembersPanel({
     return { total: uniqueMembers.length, approved, pending };
   }, [uniqueMembers]);
 
+  const canExportOrders = Boolean(orders && orders.length > 0);
+  const handleExportOrders = () => {
+    if (!orders) return;
+    downloadCsv(`group-buy-members-batch-${batchNumber}.csv`, buildMembersExportCsv(orders));
+  };
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return uniqueMembers.filter((m) => {
@@ -115,13 +127,25 @@ export function BatchMembersPanel({
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onReload}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {canExportOrders && (
+            <button
+              type="button"
+              onClick={handleExportOrders}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              title="Download every member's orders, totals, and payment-proof links as a CSV"
+            >
+              <Download className="h-4 w-4" /> Export orders
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onReload}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {topBuyers && topBuyers.length > 0 && (
