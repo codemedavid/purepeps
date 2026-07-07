@@ -217,7 +217,11 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
             onClick={(e) => {
               e.stopPropagation();
               if (!canAdd) return;
-              if (product.variations && product.variations.length > 0 && !selectedVariation) {
+              // Products with variations must be configured in the bottom sheet
+              // drawer first so the shopper picks a format (and quantity) before
+              // anything lands in the cart. Only variation-less products add
+              // straight from the card.
+              if (product.variations && product.variations.length > 0) {
                 onProductClick?.(product);
                 return;
               }
