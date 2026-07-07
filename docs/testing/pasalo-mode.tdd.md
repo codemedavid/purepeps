@@ -41,3 +41,14 @@
 
 ## Follow-up
 - **Migration not yet applied to the remote Supabase project.** The feature is inert until `20260703000000_group_buy_pasalo_mode.sql` runs. Apply via `supabase db push` / MCP `apply_migration` before releasing.
+
+## Hotfix — 2026-07-07: `set_group_buy_pasalo_mode` 400 (42703)
+**Symptom:** Admin dashboard toggle failed with HTTP 400 / Postgres `42703: column "updated_at" of relation "group_buy_batches" does not exist`.
+**Root cause:** The setter's `UPDATE` set `updated_at = NOW()`, but `group_buy_batches` has no `updated_at` column (only `group_buy_caps` does — see `20260622000000_create_group_buy_batches.sql`).
+**Fix:** Dropped the `updated_at = NOW()` assignment from the setter; corrected function redeployed to the remote project via `execute_sql` and the migration file updated.
+
+| # | What is guaranteed | Validation | Type | Result | Evidence |
+|---|---|---|---|---|---|
+| 8 | Setter's old UPDATE (with `updated_at`) fails on live schema | `execute_sql` DO block with `SET pasalo_mode, updated_at = NOW()` | integration (RED) | FAIL (expected) | `ERROR: 42703 column "updated_at" ... does not exist` |
+| 9 | Corrected UPDATE toggles `pasalo_mode` true→false without error | `execute_sql` DO block with `ASSERT` on both toggles | integration (GREEN) | PASS | no error / no assert failure |
+| 10 | Deployed function has no `updated_at` assignment, still sets `pasalo_mode` | `pg_get_functiondef ~ 'SET\s+updated_at'` / `'SET\s+pasalo_mode'` | integration (GREEN) | PASS | `has_updated_at_assignment=false, sets_pasalo_mode=true` |

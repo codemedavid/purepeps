@@ -35,9 +35,10 @@ BEGIN
     RAISE EXCEPTION 'Not authorized to set pasalo mode.';
   END IF;
 
+  -- NOTE: group_buy_batches has no updated_at column (see the create migration),
+  -- so we must not touch it here — doing so raised 42703 and 400'd the RPC.
   UPDATE public.group_buy_batches
-     SET pasalo_mode = COALESCE(p_enabled, false),
-         updated_at  = NOW()
+     SET pasalo_mode = COALESCE(p_enabled, false)
    WHERE id = p_id
   RETURNING * INTO v_batch;
 
