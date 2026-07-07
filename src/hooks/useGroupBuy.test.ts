@@ -14,6 +14,7 @@ const chain: Record<string, ReturnType<typeof vi.fn>> & {
   select: vi.fn(() => chain),
   order: vi.fn(() => chain),
   eq: vi.fn(() => chain),
+  is: vi.fn(() => chain),
   update: vi.fn(() => chain),
   upsert: vi.fn(() => chain),
   delete: vi.fn(() => chain),
@@ -144,6 +145,83 @@ describe('useGroupBuy.updateBatchSettings', () => {
     });
 
     expect(chain.update).toHaveBeenCalledWith({ name: null });
+  });
+});
+
+describe('useGroupBuy.setCap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('writes a product-level cap (variation_id null) by replacing the existing row', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setCap('batch-1', 'prod-1', 10);
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith('group_buy_caps');
+    expect(chain.eq).toHaveBeenCalledWith('batch_id', 'batch-1');
+    expect(chain.eq).toHaveBeenCalledWith('product_id', 'prod-1');
+    expect(chain.is).toHaveBeenCalledWith('variation_id', null);
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batch_id: 'batch-1',
+        product_id: 'prod-1',
+        variation_id: null,
+        cap_quantity: 10,
+      }),
+    );
+  });
+
+  it('writes a variation cap scoped to the given variation_id', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setCap('batch-1', 'prod-1', 20, 'var-9');
+    });
+
+    expect(chain.eq).toHaveBeenCalledWith('variation_id', 'var-9');
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batch_id: 'batch-1',
+        product_id: 'prod-1',
+        variation_id: 'var-9',
+        cap_quantity: 20,
+      }),
+    );
+  });
+});
+
+describe('useGroupBuy.removeCap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('deletes the product-level cap using an IS NULL variation filter', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.removeCap('batch-1', 'prod-1');
+    });
+
+    expect(mockFrom).toHaveBeenCalledWith('group_buy_caps');
+    expect(chain.delete).toHaveBeenCalled();
+    expect(chain.is).toHaveBeenCalledWith('variation_id', null);
+  });
+
+  it('deletes a specific variation cap by variation_id', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.removeCap('batch-1', 'prod-1', 'var-9');
+    });
+
+    expect(chain.eq).toHaveBeenCalledWith('variation_id', 'var-9');
   });
 });
 

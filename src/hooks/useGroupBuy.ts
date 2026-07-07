@@ -253,32 +253,49 @@ export const useGroupBuy = () => {
     [],
   );
 
+  // Scope a cap query to either the product-level row (variation_id IS NULL) or a
+  // specific variation. The two partial unique indexes can't back a single upsert
+  // onConflict, so cap writes delete-then-insert to stay index-agnostic.
+  const scopeCap = (
+    query: ReturnType<ReturnType<typeof supabase.from>['delete']>,
+    batchId: string,
+    productId: string,
+    variationId: string | null,
+  ) => {
+    const scoped = query.eq('batch_id', batchId).eq('product_id', productId);
+    return variationId == null ? scoped.is('variation_id', null) : scoped.eq('variation_id', variationId);
+  };
+
   const setCap = useCallback(
-    async (batchId: string, productId: string, capQuantity: number) => {
-      const { error: upsertError } = await supabase
-        .from('group_buy_caps')
-        .upsert(
-          {
-            batch_id: batchId,
-            product_id: productId,
-            cap_quantity: capQuantity,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'batch_id,product_id' },
-        );
-      if (upsertError) throw upsertError;
+    async (batchId: string, productId: string, capQuantity: number, variationId: string | null = null) => {
+      const { error: deleteError } = await scopeCap(
+        supabase.from('group_buy_caps').delete(),
+        batchId,
+        productId,
+        variationId,
+      );
+      if (deleteError) throw deleteError;
+
+      const { error: insertError } = await supabase.from('group_buy_caps').insert({
+        batch_id: batchId,
+        product_id: productId,
+        variation_id: variationId,
+        cap_quantity: capQuantity,
+      });
+      if (insertError) throw insertError;
       await Promise.all([fetchCaps(batchId), fetchProgress(batchId)]);
     },
     [fetchCaps, fetchProgress],
   );
 
   const removeCap = useCallback(
-    async (batchId: string, productId: string) => {
-      const { error: deleteError } = await supabase
-        .from('group_buy_caps')
-        .delete()
-        .eq('batch_id', batchId)
-        .eq('product_id', productId);
+    async (batchId: string, productId: string, variationId: string | null = null) => {
+      const { error: deleteError } = await scopeCap(
+        supabase.from('group_buy_caps').delete(),
+        batchId,
+        productId,
+        variationId,
+      );
       if (deleteError) throw deleteError;
       await Promise.all([fetchCaps(batchId), fetchProgress(batchId)]);
     },
