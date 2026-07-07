@@ -4,6 +4,7 @@ import {
   rehydrateCart,
   mergeCarts,
   isValidStoredItem,
+  cartSubtotal,
   type StoredCartItem,
 } from './cart';
 import type { CartItem, Product, ProductVariation } from '../types';
@@ -180,5 +181,37 @@ describe('mergeCarts (union, max quantity)', () => {
     const ids = merged.map((i) => i.product.id).sort();
     expect(ids).toEqual(['prod-1', 'prod-2', 'prod-3']);
     expect(merged.find((i) => i.product.id === 'prod-2')?.quantity).toBe(4);
+  });
+});
+
+describe('cartSubtotal', () => {
+  it('is 0 for an empty cart', () => {
+    expect(cartSubtotal([])).toBe(0);
+  });
+
+  it('sums base price times quantity for products without a variation', () => {
+    const product = makeProduct({ base_price: 1000 });
+    expect(cartSubtotal([line(product, 3)])).toBe(3000);
+  });
+
+  it('uses the active product discount price when set', () => {
+    const product = makeProduct({
+      base_price: 1000,
+      discount_active: true,
+      discount_price: 800,
+    });
+    expect(cartSubtotal([line(product, 2)])).toBe(1600);
+  });
+
+  it('uses the variation price when a variation is selected', () => {
+    const product = makeProduct();
+    const variation = makeVariation({ price: 1200 });
+    expect(cartSubtotal([line(product, 2, variation)])).toBe(2400);
+  });
+
+  it('adds up multiple lines', () => {
+    const a = makeProduct({ id: 'a', base_price: 500 });
+    const b = makeProduct({ id: 'b', base_price: 250 });
+    expect(cartSubtotal([line(a, 2), line(b, 4)])).toBe(2000);
   });
 });

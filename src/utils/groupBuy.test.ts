@@ -17,6 +17,8 @@ import {
   remainingForVariation,
   remainingForVariationAfterCart,
   isVariationSoldOut,
+  isCartLineSoldOut,
+  partitionCartAvailability,
 } from './groupBuy';
 import type {
   GroupBuyProgressItem,
@@ -44,6 +46,19 @@ const variation = (
   total_quantity: 0,
   cap_quantity: null,
   ...over,
+});
+
+// Minimal cart line shape the availability helpers care about (product id +
+// optional variation id). Kept lightweight so these tests don't need a full
+// Product/ProductVariation snapshot.
+const line = (
+  productId: string,
+  variationId: string | null = null,
+  quantity = 1,
+) => ({
+  product: { id: productId },
+  variation: variationId ? { id: variationId } : null,
+  quantity,
 });
 
 describe('findProgressItem', () => {
@@ -563,5 +578,87 @@ describe('canReopenClosedBatch', () => {
   it('allows a lone closed batch', () => {
     const only = batch({ id: 'b1', batch_number: 1, status: 'closed' });
     expect(canReopenClosedBatch(only, [only])).toBe(true);
+  });
+});
+
+describe('isCartLineSoldOut', () => {
+  it('is false when there is no group-buy cap for the product (unlimited)', () => {
+    expect(isCartLineSoldOut(line('p1'), [])).toBe(false);
+  });
+
+  it('is false when a capped product still has remaining slots', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 10, total_quantity: 4 })];
+    expect(isCartLineSoldOut(line('p1'), items)).toBe(false);
+  });
+
+  it('is true when a capped product has no remaining slots', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 10, total_quantity: 10 })];
+    expect(isCartLineSoldOut(line('p1'), items)).toBe(true);
+  });
+
+  it('is true when the product is filled past its cap', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 10, total_quantity: 12 })];
+    expect(isCartLineSoldOut(line('p1'), items)).toBe(true);
+  });
+
+  it('resolves per variation: sold-out variation is unavailable', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        cap_quantity: null,
+        variations: [variation({ variation_id: 'v1', cap_quantity: 5, total_quantity: 5 })],
+      }),
+    ];
+    expect(isCartLineSoldOut(line('p1', 'v1'), items)).toBe(true);
+  });
+
+  it('resolves per variation: a sibling variation with room is still available', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        cap_quantity: null,
+        variations: [
+          variation({ variation_id: 'v1', cap_quantity: 5, total_quantity: 5 }),
+          variation({ variation_id: 'v2', cap_quantity: 5, total_quantity: 1 }),
+        ],
+      }),
+    ];
+    expect(isCartLineSoldOut(line('p1', 'v2'), items)).toBe(false);
+  });
+});
+
+describe('partitionCartAvailability', () => {
+  it('returns all lines as available when there are no caps', () => {
+    const lines = [line('p1'), line('p2')];
+    const { available, unavailable } = partitionCartAvailability(lines, []);
+    expect(available).toEqual(lines);
+    expect(unavailable).toEqual([]);
+  });
+
+  it('separates sold-out lines from available ones, preserving order', () => {
+    const items = [
+      item({ product_id: 'sold', cap_quantity: 4, total_quantity: 4 }),
+      item({ product_id: 'ok', cap_quantity: 10, total_quantity: 2 }),
+    ];
+    const okLine = line('ok');
+    const soldLine = line('sold');
+    const { available, unavailable } = partitionCartAvailability([okLine, soldLine], items);
+    expect(available).toEqual([okLine]);
+    expect(unavailable).toEqual([soldLine]);
+  });
+
+  it('marks every line as unavailable when the whole cart is sold out', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 2, total_quantity: 2 })];
+    const { available, unavailable } = partitionCartAvailability([line('p1')], items);
+    expect(available).toEqual([]);
+    expect(unavailable).toHaveLength(1);
+  });
+
+  it('does not mutate the input array', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 2, total_quantity: 2 })];
+    const lines = [line('p1'), line('p2')];
+    const snapshot = [...lines];
+    partitionCartAvailability(lines, items);
+    expect(lines).toEqual(snapshot);
   });
 });
