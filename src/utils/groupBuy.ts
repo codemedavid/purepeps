@@ -111,14 +111,26 @@ export function isVariationSoldOut(
 }
 
 /**
- * "Pasalo mode" eligibility: true only for products that have a batch cap AND
- * still have remaining slots. Uncapped (unlimited) and capped-but-full products
- * are excluded so the re-opening storefront shows only items still needing
- * orders. Reuses remainingForProduct so the math stays single-sourced.
+ * "Pasalo mode" eligibility: true for products that still have remaining slots
+ * under any cap — the product-level cap OR any per-variation cap. A product with
+ * no product cap but variation caps that still have room is eligible (its
+ * variation caps override/replace the product cap for those variations), and a
+ * product whose product pool is full stays eligible if a capped variation still
+ * has slots. Uncapped products and fully-capped products are excluded so the
+ * re-opening storefront shows only items still needing orders. Reuses
+ * remainingForProduct / remainingForVariation so the math stays single-sourced.
  */
 export function isPasaloEligible(item: GroupBuyProgressItem | undefined): boolean {
-  const remaining = remainingForProduct(item);
-  return remaining != null && remaining > 0;
+  if (!item) return false;
+
+  const productRemaining = remainingForProduct(item);
+  if (productRemaining != null && productRemaining > 0) return true;
+
+  return (item.variations ?? []).some((v) => {
+    if (v.cap_quantity == null) return false;
+    const remaining = remainingForVariation(item, v.variation_id);
+    return remaining != null && remaining > 0;
+  });
 }
 
 /**

@@ -278,6 +278,71 @@ describe('isPasaloEligible', () => {
   it('is false when there is no progress item for the product', () => {
     expect(isPasaloEligible(undefined)).toBe(false);
   });
+
+  // Regression: a product with NO product-level cap but WITH variation-level caps
+  // that still have remaining slots must appear in pasalo mode. This mirrors the
+  // "5-Amino-1MQ" case where each variation (5mg/10mg/50mg) is capped individually
+  // and only the parent product has "No cap".
+  it('is true when a variation-only-capped product has a variation with remaining slots', () => {
+    expect(
+      isPasaloEligible(
+        item({
+          cap_quantity: null,
+          total_quantity: 120,
+          variations: [
+            variation({ variation_id: '5mg', cap_quantity: 21, total_quantity: 17 }),
+            variation({ variation_id: '10mg', cap_quantity: 10, total_quantity: 6 }),
+            variation({ variation_id: '50mg', cap_quantity: 100, total_quantity: 97 }),
+          ],
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when every variation cap is full and there is no product cap', () => {
+    expect(
+      isPasaloEligible(
+        item({
+          cap_quantity: null,
+          total_quantity: 31,
+          variations: [
+            variation({ variation_id: '5mg', cap_quantity: 21, total_quantity: 21 }),
+            variation({ variation_id: '10mg', cap_quantity: 10, total_quantity: 10 }),
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false for an uncapped product whose variations are also uncapped', () => {
+    expect(
+      isPasaloEligible(
+        item({
+          cap_quantity: null,
+          variations: [
+            variation({ variation_id: '5mg', cap_quantity: null }),
+            variation({ variation_id: '10mg', cap_quantity: null }),
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('is true when the product cap is full but a variation cap still has slots', () => {
+    // Variation caps override the product cap for that variation, so a full product
+    // pool must not hide a variation that still has capacity.
+    expect(
+      isPasaloEligible(
+        item({
+          cap_quantity: 30,
+          total_quantity: 30,
+          variations: [
+            variation({ variation_id: '5mg', cap_quantity: 25, total_quantity: 10 }),
+          ],
+        }),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('filterPasaloProducts', () => {
@@ -305,6 +370,23 @@ describe('filterPasaloProducts', () => {
     const input = [...products];
     filterPasaloProducts(input, items);
     expect(input).toEqual(products);
+  });
+
+  it('keeps a variation-only-capped product with remaining variation slots', () => {
+    const withVariationCaps = [{ id: 'variation-capped' }];
+    const variationItems = [
+      item({
+        product_id: 'variation-capped',
+        cap_quantity: null,
+        total_quantity: 17,
+        variations: [
+          variation({ variation_id: '5mg', cap_quantity: 21, total_quantity: 17 }),
+        ],
+      }),
+    ];
+    expect(filterPasaloProducts(withVariationCaps, variationItems).map((p) => p.id)).toEqual([
+      'variation-capped',
+    ]);
   });
 });
 
