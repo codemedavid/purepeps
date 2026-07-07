@@ -104,7 +104,12 @@ function toGroup(rootId: string, members: BatchOrder[], byId: ReadonlyMap<string
     .filter((order) => order.is_claim)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  const groupTotal = members.reduce((sum, order) => sum + (order.total_price ?? 0), 0);
+  // Cancelled orders free their units back and are never billed, so they must
+  // not inflate the reference header total the admin reads as "what's owed".
+  const groupTotal = members.reduce(
+    (sum, order) => (order.order_status === 'cancelled' ? sum : sum + (order.total_price ?? 0)),
+    0,
+  );
   const latestActivityAt = members.reduce(
     (latest, order) => (order.created_at > latest ? order.created_at : latest),
     members[0]?.created_at ?? '',
