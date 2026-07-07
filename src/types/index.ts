@@ -199,9 +199,24 @@ export interface GroupBuyCap {
   id: string;
   batch_id: string;
   product_id: string;
+  // NULL = product-level cap (covers the product's uncapped variations as a shared
+  // pool). Non-null = a cap on that specific variation, which overrides the product
+  // cap for it. See remainingForVariation() for the resolution rule.
+  variation_id: string | null;
   cap_quantity: number;
   created_at: string;
   updated_at: string;
+}
+
+// Per-variation slice of a product's demand for a batch, emitted by
+// get_group_buy_progress. total_quantity counts non-cancelled units of that
+// variation; cap_quantity is the variation's own cap (null = no variation cap, so
+// it falls back to the product-level cap_quantity on the parent item).
+export interface GroupBuyProgressVariation {
+  variation_id: string;
+  variation_name: string | null;
+  total_quantity: number;
+  cap_quantity: number | null;
 }
 
 // Per-product aggregate returned by the get_group_buy_progress RPC. Totals count
@@ -215,6 +230,8 @@ export interface GroupBuyProgressItem {
   order_count: number;
   cancelled_quantity: number;
   cap_quantity: number | null;
+  /** Per-variation breakdown (present when the product has variation-level data). */
+  variations?: GroupBuyProgressVariation[];
 }
 
 export interface GroupBuyProgress {

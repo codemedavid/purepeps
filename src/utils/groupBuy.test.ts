@@ -13,8 +13,17 @@ import {
   isPasaloEligible,
   filterPasaloProducts,
   canReopenClosedBatch,
+  findVariationProgress,
+  remainingForVariation,
+  remainingForVariationAfterCart,
+  isVariationSoldOut,
 } from './groupBuy';
-import type { GroupBuyProgressItem, GroupBuyBatch, GroupBuyStatus } from '../types';
+import type {
+  GroupBuyProgressItem,
+  GroupBuyProgressVariation,
+  GroupBuyBatch,
+  GroupBuyStatus,
+} from '../types';
 
 const item = (over: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem => ({
   product_id: 'p1',
@@ -23,6 +32,16 @@ const item = (over: Partial<GroupBuyProgressItem> = {}): GroupBuyProgressItem =>
   confirmed_quantity: 0,
   order_count: 0,
   cancelled_quantity: 0,
+  cap_quantity: null,
+  ...over,
+});
+
+const variation = (
+  over: Partial<GroupBuyProgressVariation> = {},
+): GroupBuyProgressVariation => ({
+  variation_id: 'v1',
+  variation_name: '10mg',
+  total_quantity: 0,
   cap_quantity: null,
   ...over,
 });
@@ -286,6 +305,134 @@ describe('filterPasaloProducts', () => {
     const input = [...products];
     filterPasaloProducts(input, items);
     expect(input).toEqual(products);
+  });
+});
+
+// Per-variation caps. A variation's OWN cap overrides the product cap for that
+// variation. Variations without their own cap fall back to the product cap, which
+// they share as a single pool (product cap − units of the uncapped variations).
+// Neither cap set → unlimited. Backward compatible: a product cap with no variation
+// caps behaves exactly like remainingForProduct (a shared total across variations).
+describe('findVariationProgress', () => {
+  it('returns the matching variation row by id', () => {
+    const i = item({ variations: [variation({ variation_id: 'a' }), variation({ variation_id: 'b' })] });
+    expect(findVariationProgress(i, 'b')?.variation_id).toBe('b');
+  });
+
+  it('returns undefined when the item has no variations', () => {
+    expect(findVariationProgress(item(), 'a')).toBeUndefined();
+  });
+
+  it('returns undefined when no variation matches', () => {
+    expect(findVariationProgress(item({ variations: [variation({ variation_id: 'a' })] }), 'z')).toBeUndefined();
+  });
+
+  it('returns undefined when the item is missing', () => {
+    expect(findVariationProgress(undefined, 'a')).toBeUndefined();
+  });
+});
+
+describe('remainingForVariation', () => {
+  const mixed = item({
+    cap_quantity: 10, // product-level cap
+    total_quantity: 12, // capped 'x'(8) + uncapped 'y'(4)
+    variations: [
+      variation({ variation_id: 'x', cap_quantity: 20, total_quantity: 8 }),
+      variation({ variation_id: 'y', cap_quantity: null, total_quantity: 4 }),
+    ],
+  });
+
+  it('uses the variation cap when the variation has its own (override)', () => {
+    // 20 cap − 8 ordered = 12, independent of the product cap of 10.
+    expect(remainingForVariation(mixed, 'x')).toBe(12);
+  });
+
+  it('falls back to the shared product-cap pool for an uncapped variation', () => {
+    // product cap 10 − uncapped pool used (total 12 − capped 8 = 4) = 6.
+    expect(remainingForVariation(mixed, 'y')).toBe(6);
+  });
+
+  it('shares the fallback pool with variations that have no progress row', () => {
+    expect(remainingForVariation(mixed, 'not-present')).toBe(6);
+  });
+
+  it('returns null (unlimited) when neither variation nor product is capped', () => {
+    const uncapped = item({ cap_quantity: null, total_quantity: 4, variations: [variation({ variation_id: 'y' })] });
+    expect(remainingForVariation(uncapped, 'y')).toBeNull();
+  });
+
+  it('returns null when the item is missing', () => {
+    expect(remainingForVariation(undefined, 'y')).toBeNull();
+  });
+
+  it('never returns negative for an over-ordered variation cap', () => {
+    const over = item({ variations: [variation({ variation_id: 'x', cap_quantity: 5, total_quantity: 9 })] });
+    expect(remainingForVariation(over, 'x')).toBe(0);
+  });
+
+  it('never returns negative when the fallback pool is exhausted', () => {
+    const drained = item({
+      cap_quantity: 10,
+      total_quantity: 25, // pool used 25 − 8 capped = 17 > cap
+      variations: [variation({ variation_id: 'x', cap_quantity: 20, total_quantity: 8 })],
+    });
+    expect(remainingForVariation(drained, 'y')).toBe(0);
+  });
+
+  it('matches remainingForProduct when the product is capped and no variation is capped', () => {
+    const productOnly = item({ cap_quantity: 30, total_quantity: 18 });
+    expect(remainingForVariation(productOnly, null)).toBe(12);
+    expect(remainingForVariation(productOnly, null)).toBe(remainingForProduct(productOnly));
+  });
+});
+
+describe('remainingForVariationAfterCart', () => {
+  const mixed = item({
+    cap_quantity: 10,
+    total_quantity: 12,
+    variations: [
+      variation({ variation_id: 'x', cap_quantity: 20, total_quantity: 8 }),
+      variation({ variation_id: 'y', cap_quantity: null, total_quantity: 4 }),
+    ],
+  });
+
+  it('subtracts the in-cart quantity from the variation remaining', () => {
+    expect(remainingForVariationAfterCart(mixed, 'x', 5)).toBe(7);
+  });
+
+  it('never goes negative', () => {
+    expect(remainingForVariationAfterCart(mixed, 'y', 50)).toBe(0);
+  });
+
+  it('ignores negative cart quantities', () => {
+    expect(remainingForVariationAfterCart(mixed, 'x', -5)).toBe(12);
+  });
+
+  it('returns null when the variation is unlimited', () => {
+    const uncapped = item({ cap_quantity: null, variations: [variation({ variation_id: 'y' })] });
+    expect(remainingForVariationAfterCart(uncapped, 'y', 3)).toBeNull();
+  });
+});
+
+describe('isVariationSoldOut', () => {
+  it('is false when the variation is unlimited', () => {
+    const uncapped = item({ cap_quantity: null, variations: [variation({ variation_id: 'y' })] });
+    expect(isVariationSoldOut(uncapped, 'y')).toBe(false);
+  });
+
+  it('is true when the variation cap is reached', () => {
+    const full = item({ variations: [variation({ variation_id: 'x', cap_quantity: 20, total_quantity: 20 })] });
+    expect(isVariationSoldOut(full, 'x')).toBe(true);
+  });
+
+  it('is true when the shared fallback pool is exhausted', () => {
+    const drained = item({ cap_quantity: 10, total_quantity: 10 });
+    expect(isVariationSoldOut(drained, 'y')).toBe(true);
+  });
+
+  it('is false when the variation still has capacity', () => {
+    const open = item({ variations: [variation({ variation_id: 'x', cap_quantity: 20, total_quantity: 5 })] });
+    expect(isVariationSoldOut(open, 'x')).toBe(false);
   });
 });
 

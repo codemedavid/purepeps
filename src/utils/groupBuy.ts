@@ -1,4 +1,8 @@
-import type { GroupBuyProgressItem, GroupBuyBatch } from '../types';
+import type {
+  GroupBuyProgressItem,
+  GroupBuyProgressVariation,
+  GroupBuyBatch,
+} from '../types';
 
 /**
  * Pure helpers for group-buy cap math, shared by the storefront (cap display +
@@ -40,6 +44,69 @@ export function remainingAfterCart(
 /** True when a capped product has no remaining capacity in the current batch. */
 export function isSoldOut(item: GroupBuyProgressItem | undefined): boolean {
   const remaining = remainingForProduct(item);
+  return remaining != null && remaining <= 0;
+}
+
+/** The per-variation progress row for a product, or undefined when absent. */
+export function findVariationProgress(
+  item: GroupBuyProgressItem | undefined,
+  variationId: string | null,
+): GroupBuyProgressVariation | undefined {
+  return item?.variations?.find((v) => v.variation_id === variationId);
+}
+
+/**
+ * Units still orderable for a specific variation, honoring the cap resolution rule:
+ *   1. Variation cap set  → variation headroom (cap − variation total). Overrides
+ *      the product cap for that variation.
+ *   2. No variation cap, product capped → the SHARED fallback pool: the product cap
+ *      minus units already ordered against variations that lack their own cap
+ *      (product total − units of variation-capped variations). All uncapped
+ *      variations of the product draw from this one pool.
+ *   3. Neither capped → `null` (unlimited).
+ * Returns `null` when the item is missing. Never negative.
+ */
+export function remainingForVariation(
+  item: GroupBuyProgressItem | undefined,
+  variationId: string | null,
+): number | null {
+  if (!item) return null;
+
+  const variation = findVariationProgress(item, variationId);
+  if (variation && variation.cap_quantity != null) {
+    return Math.max(0, variation.cap_quantity - variation.total_quantity);
+  }
+
+  if (item.cap_quantity == null) return null;
+
+  const cappedVariationUnits = (item.variations ?? []).reduce(
+    (sum, v) => (v.cap_quantity != null ? sum + v.total_quantity : sum),
+    0,
+  );
+  const poolUsed = Math.max(0, item.total_quantity - cappedVariationUnits);
+  return Math.max(0, item.cap_quantity - poolUsed);
+}
+
+/**
+ * Variation remaining after accounting for units the shopper already has in their
+ * cart for this variation. Returns `null` when the variation is unlimited.
+ */
+export function remainingForVariationAfterCart(
+  item: GroupBuyProgressItem | undefined,
+  variationId: string | null,
+  inCartQuantity: number,
+): number | null {
+  const remaining = remainingForVariation(item, variationId);
+  if (remaining == null) return null;
+  return Math.max(0, remaining - Math.max(0, inCartQuantity));
+}
+
+/** True when a capped variation has no remaining capacity in the current batch. */
+export function isVariationSoldOut(
+  item: GroupBuyProgressItem | undefined,
+  variationId: string | null,
+): boolean {
+  const remaining = remainingForVariation(item, variationId);
   return remaining != null && remaining <= 0;
 }
 
