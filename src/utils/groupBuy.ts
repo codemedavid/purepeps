@@ -101,6 +101,44 @@ export function remainingForVariationAfterCart(
   return Math.max(0, remaining - Math.max(0, inCartQuantity));
 }
 
+/** Combined cap picture across a product's own-capped variations. */
+export interface CombinedVariationCaps {
+  /** Sum of the per-variation caps. */
+  cap: number;
+  /** Units reserved against those caps, clamped so it never exceeds `cap`. */
+  reserved: number;
+  /** Combined headroom still orderable across the capped variations. */
+  remaining: number;
+}
+
+/**
+ * Rolls up the caps of a product that has NO product-level cap but whose
+ * variations carry their own caps. Sums each capped variation's cap and its
+ * remaining headroom (via remainingForVariation, so oversold variations floor at
+ * 0 and never push the bar past its cap), and derives reserved as cap − remaining.
+ * Uncapped variations are ignored — they draw from an unlimited pool, so they have
+ * no cap to combine. Returns `null` when the item is missing, when the product has
+ * its own cap (use remainingForProduct there), or when no variation is capped
+ * (fully unlimited). Lets the storefront card show "still X left" for products
+ * whose only limits live on the variations.
+ */
+export function combinedVariationCaps(
+  item: GroupBuyProgressItem | undefined,
+): CombinedVariationCaps | null {
+  if (!item || item.cap_quantity != null) return null;
+
+  const cappedVariations = (item.variations ?? []).filter((v) => v.cap_quantity != null);
+  if (cappedVariations.length === 0) return null;
+
+  let cap = 0;
+  let remaining = 0;
+  for (const v of cappedVariations) {
+    cap += v.cap_quantity as number;
+    remaining += remainingForVariation(item, v.variation_id) ?? 0;
+  }
+  return { cap, reserved: cap - remaining, remaining };
+}
+
 /** True when a capped variation has no remaining capacity in the current batch. */
 export function isVariationSoldOut(
   item: GroupBuyProgressItem | undefined,

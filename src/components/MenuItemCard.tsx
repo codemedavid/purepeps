@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, ShoppingBag } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { formatPrice } from '../utils/currency';
-import { isSoldOut as isCapSoldOut, isVariationSoldOut } from '../utils/groupBuy';
+import { isSoldOut as isCapSoldOut, isVariationSoldOut, combinedVariationCaps } from '../utils/groupBuy';
 
 interface MenuItemCardProps {
   product: Product;
@@ -58,6 +58,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   const capQuantity = groupBuyItem?.cap_quantity ?? null;
   const capReserved = groupBuyItem?.total_quantity ?? 0;
   const orderCount = groupBuyItem?.order_count ?? 0;
+  // Products with no product-level cap but capped variations: pool the variation
+  // caps into one "still X left" figure so the card surfaces that slots remain.
+  const variationCaps = capQuantity == null ? combinedVariationCaps(groupBuyItem) : null;
   const capReached =
     product.variations && product.variations.length > 0 && selectedVariation
       ? isVariationSoldOut(groupBuyItem, selectedVariation.id)
@@ -190,8 +193,30 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </div>
         )}
 
-        {/* Uncapped items still surface live demand so shoppers see what's been ordered. */}
-        {capQuantity == null && capReserved > 0 && (
+        {/* No product cap, but capped variations: pool their remaining into one
+            "still X left" bar so shoppers see slots are open on those formats. */}
+        {capQuantity == null && variationCaps != null && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[11px] font-mono mb-1">
+              <span className="text-sakura-soft uppercase tracking-[0.06em]">Group limit</span>
+              <span className={variationCaps.remaining <= 0 ? 'text-sakura-primary font-semibold' : 'text-sakura-muted'}>
+                {variationCaps.reserved} / {variationCaps.cap} reserved
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-[#F2EFED] overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${variationCaps.remaining <= 0 ? 'bg-sakura-primary' : 'bg-sakura-sage'}`}
+                style={{ width: `${Math.min(100, Math.round((variationCaps.reserved / variationCaps.cap) * 100))}%` }}
+              />
+            </div>
+            <div className="mt-1 text-[11px] font-mono text-sakura-sage">
+              {variationCaps.remaining} left across formats
+            </div>
+          </div>
+        )}
+
+        {/* Fully uncapped items still surface live demand so shoppers see what's been ordered. */}
+        {capQuantity == null && variationCaps == null && capReserved > 0 && (
           <div className="mt-3 flex items-center justify-between text-[11px] font-mono">
             <span className="text-sakura-soft uppercase tracking-[0.06em]">Group orders</span>
             <span className="text-sakura-muted">
