@@ -27,7 +27,7 @@ import { BatchOrdersPanel } from './groupbuy/BatchOrdersPanel';
 import { BatchMembersPanel } from './groupbuy/BatchMembersPanel';
 import { BatchOrderDetail } from './groupbuy/BatchOrderDetail';
 import { BatchLeftoverPanel } from './groupbuy/BatchLeftoverPanel';
-import { CapsProgressTable } from './groupbuy/CapsProgressTable';
+import { CapsProgressTable, capDraftKey } from './groupbuy/CapsProgressTable';
 import { BatchCloseoutPanel } from './groupbuy/BatchCloseoutPanel';
 import { OpenBatchModal } from './groupbuy/OpenBatchModal';
 import type { OpenBatchValues } from './groupbuy/OpenBatchModal';
@@ -163,13 +163,21 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     setCapDrafts({});
   }, [activeBatch?.id]);
 
-  // Seed cap drafts from server caps without clobbering a value being typed.
+  // Seed cap drafts from server caps (product- and variation-level) without
+  // clobbering a value being typed.
   useEffect(() => {
     setCapDrafts((prev) => {
       const next = { ...prev };
       for (const item of progress.items) {
-        if (item.cap_quantity != null && !(item.product_id in next)) {
-          next[item.product_id] = String(item.cap_quantity);
+        const productKey = capDraftKey(item.product_id);
+        if (item.cap_quantity != null && !(productKey in next)) {
+          next[productKey] = String(item.cap_quantity);
+        }
+        for (const variation of item.variations ?? []) {
+          const variationKey = capDraftKey(item.product_id, variation.variation_id);
+          if (variation.cap_quantity != null && !(variationKey in next)) {
+            next[variationKey] = String(variation.cap_quantity);
+          }
         }
       }
       return next;
@@ -246,24 +254,26 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   const handleClose = (batchId: string) => void runAction(() => closeBatch(batchId));
 
   // ---- Cap handlers (open batch only) ----
-  const handleCapDraftChange = (productId: string, value: string) => {
-    setCapDrafts((prev) => ({ ...prev, [productId]: value }));
+  // variationId null/undefined = product-level cap; a value = that variation's cap.
+  const handleCapDraftChange = (productId: string, value: string, variationId?: string | null) => {
+    const key = capDraftKey(productId, variationId);
+    setCapDrafts((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSaveCap = (productId: string) => {
+  const handleSaveCap = (productId: string, variationId?: string | null) => {
     if (!activeBatch) return;
-    const raw = (capDrafts[productId] ?? '').trim();
+    const raw = (capDrafts[capDraftKey(productId, variationId)] ?? '').trim();
     const value = Number(raw);
     if (!raw || !Number.isFinite(value) || value <= 0) {
       setActionError('Cap must be a whole number greater than 0.');
       return;
     }
-    void runAction(() => setCap(activeBatch.id, productId, Math.floor(value)));
+    void runAction(() => setCap(activeBatch.id, productId, Math.floor(value), variationId ?? null));
   };
 
-  const handleRemoveCap = (productId: string) => {
+  const handleRemoveCap = (productId: string, variationId?: string | null) => {
     if (!activeBatch) return;
-    void runAction(() => removeCap(activeBatch.id, productId));
+    void runAction(() => removeCap(activeBatch.id, productId, variationId ?? null));
   };
 
   const handleTogglePasaloMode = () => {
@@ -340,6 +350,19 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     }
     return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [products, progress.items]);
+
+  // Variations per catalog product, so the caps table can expand a product to cap
+  // its variations. Only products with 2+ variations are worth expanding.
+  const variationsByProduct = useMemo(() => {
+    const map: Record<string, { id: string; name: string }[]> = {};
+    for (const product of products) {
+      const variations = product.variations ?? [];
+      if (variations.length > 0) {
+        map[product.id] = variations.map((v) => ({ id: v.id, name: v.name }));
+      }
+    }
+    return map;
+  }, [products]);
 
   const isOpenBatchSelected = activeBatch != null && selectedBatch?.id === activeBatch.id;
   const isFinalizing = selectedBatch?.status === 'finalizing';
@@ -524,6 +547,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                   <CapsProgressTable
                     rows={rows}
                     items={progress.items}
+                    variationsByProduct={variationsByProduct}
                     capDrafts={capDrafts}
                     busy={busy}
                     onCapDraftChange={handleCapDraftChange}
