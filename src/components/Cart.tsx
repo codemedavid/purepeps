@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity, Lock } from 'lucide-react';
 import type { CartItem, GroupBuyProgressItem } from '../types';
-import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
+import { findProgressItem, remainingForVariation } from '../utils/groupBuy';
 
 interface CartProps {
   cartItems: CartItem[];
@@ -57,20 +57,28 @@ const Cart: React.FC<CartProps> = ({
   // Shipping fee will be discussed via chat
   const finalTotal = totalPrice;
 
-  // Group-buy gating: block checkout if no batch is open, or if a product's
-  // total quantity in the cart exceeds what its batch cap still allows. The
-  // database trigger is the authoritative backstop; this is the friendly,
-  // pre-submit guard.
-  const cartQtyByProduct = cartItems.reduce<Record<string, number>>((acc, item) => {
-    acc[item.product.id] = (acc[item.product.id] || 0) + item.quantity;
+  // Group-buy gating: block checkout if no batch is open, or if a cart line's
+  // quantity exceeds what its batch cap still allows. Caps are resolved per
+  // variation (a variation cap overrides the product cap; otherwise the variation
+  // falls back to the product's shared pool). The database trigger is the
+  // authoritative backstop; this is the friendly, pre-submit guard.
+  const cartQtyByVariation = cartItems.reduce<
+    Record<string, { productId: string; variationId: string | null; qty: number; name: string }>
+  >((acc, item) => {
+    const variationId = item.variation?.id ?? null;
+    const key = variationId ? `${item.product.id}:${variationId}` : item.product.id;
+    if (!acc[key]) {
+      acc[key] = { productId: item.product.id, variationId, qty: 0, name: item.product.name };
+    }
+    acc[key].qty += item.quantity;
     return acc;
   }, {});
-  const overCapProducts = Object.entries(cartQtyByProduct)
-    .filter(([productId, qty]) => {
-      const remaining = remainingForProduct(findProgressItem(groupBuyItems, productId));
+  const overCapProducts = Object.values(cartQtyByVariation)
+    .filter(({ productId, variationId, qty }) => {
+      const remaining = remainingForVariation(findProgressItem(groupBuyItems, productId), variationId);
       return remaining != null && qty > remaining;
     })
-    .map(([productId]) => cartItems.find((i) => i.product.id === productId)?.product.name || 'an item');
+    .map(({ name }) => name);
   const capBlocked = overCapProducts.length > 0;
   const checkoutDisabled = !isBatchOpen || capBlocked;
 

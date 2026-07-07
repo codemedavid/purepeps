@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, ShoppingBag } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { formatPrice } from '../utils/currency';
-import { isSoldOut as isCapSoldOut } from '../utils/groupBuy';
+import { isSoldOut as isCapSoldOut, isVariationSoldOut } from '../utils/groupBuy';
 
 interface MenuItemCardProps {
   product: Product;
@@ -52,11 +52,16 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
       : product.stock_quantity > 0;
   const soldOut = !product.available || !hasAnyStock;
 
-  // Group-buy cap (per product, across the whole batch). cap_quantity null = no cap.
+  // Group-buy cap. The product-level cap drives the progress bar; the add button
+  // is gated on the SELECTED variation's cap (a variation cap overrides the product
+  // cap; otherwise the variation falls back to the product's shared pool).
   const capQuantity = groupBuyItem?.cap_quantity ?? null;
   const capReserved = groupBuyItem?.total_quantity ?? 0;
   const orderCount = groupBuyItem?.order_count ?? 0;
-  const capReached = isCapSoldOut(groupBuyItem);
+  const capReached =
+    product.variations && product.variations.length > 0 && selectedVariation
+      ? isVariationSoldOut(groupBuyItem, selectedVariation.id)
+      : isCapSoldOut(groupBuyItem);
   const canAdd = !soldOut && !capReached && isBatchOpen;
   const ctaLabel = !isBatchOpen
     ? 'Group buy closed'

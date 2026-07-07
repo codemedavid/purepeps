@@ -102,3 +102,66 @@ describe('ProductDetailModal quantity', () => {
     expect(screen.getByTestId('quantity-value')).toHaveTextContent('4');
   });
 });
+
+describe('ProductDetailModal variation cap', () => {
+  const variation: ProductVariation = {
+    id: 'var-1',
+    product_id: 'prod-1',
+    name: '10mg',
+    quantity_mg: 10,
+    price: 1500,
+    disposable_pen_price: null,
+    reusable_pen_price: null,
+    discount_price: null,
+    discount_active: false,
+    stock_quantity: 50,
+    created_at: '2025-01-01',
+  };
+  const product = { ...mockProduct, variations: [variation] };
+
+  it("shows the variation's own cap, overriding the product cap", () => {
+    renderModal({
+      product,
+      groupBuyItem: {
+        product_id: 'prod-1',
+        product_name: 'BPC-157',
+        total_quantity: 90,
+        confirmed_quantity: 0,
+        order_count: 5,
+        cancelled_quantity: 0,
+        cap_quantity: 100, // product cap would leave 10
+        variations: [
+          { variation_id: 'var-1', variation_name: '10mg', total_quantity: 3, cap_quantity: 5 },
+        ],
+      },
+    });
+
+    // Variation cap governs: 3 / 5 reserved, not the product's 90 / 100.
+    expect(screen.getByText(/3 \/ 5 reserved/)).toBeInTheDocument();
+    expect(screen.queryByText(/90 \/ 100 reserved/)).not.toBeInTheDocument();
+    // 2 units left under the variation cap.
+    expect(screen.getByText(/2 more available for you to order/)).toBeInTheDocument();
+  });
+
+  it('blocks add-to-cart when the variation cap is full even if the product has room', () => {
+    const { onAddToCart } = renderModal({
+      product,
+      groupBuyItem: {
+        product_id: 'prod-1',
+        product_name: 'BPC-157',
+        total_quantity: 10,
+        confirmed_quantity: 0,
+        order_count: 1,
+        cancelled_quantity: 0,
+        cap_quantity: 100, // lots of product room
+        variations: [
+          { variation_id: 'var-1', variation_name: '10mg', total_quantity: 5, cap_quantity: 5 },
+        ],
+      },
+    });
+
+    const addButton = screen.getByRole('button', { name: /group limit reached/i });
+    fireEvent.click(addButton);
+    expect(onAddToCart).not.toHaveBeenCalled();
+  });
+});

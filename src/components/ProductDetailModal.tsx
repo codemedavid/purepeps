@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Package, Beaker, ShoppingCart, Plus, Minus, Sparkles, ArrowLeft, Lock } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
-import { remainingAfterCart } from '../utils/groupBuy';
+import { remainingAfterCart, remainingForVariationAfterCart, findVariationProgress } from '../utils/groupBuy';
 import { resolveMinOrder } from '../constants/order';
 
 interface ProductDetailModalProps {
@@ -60,11 +60,28 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     ? product.variations.some(v => v.stock_quantity > 0)
     : product.stock_quantity > 0;
 
-  // Group-buy cap: how many more units this shopper can still order, factoring
-  // in what is already in their cart. null = no cap on this product.
-  const capQuantity = groupBuyItem?.cap_quantity ?? null;
-  const capReserved = groupBuyItem?.total_quantity ?? 0;
-  const capRemaining = remainingAfterCart(groupBuyItem, cartQuantity);
+  // Group-buy cap: how many more units this shopper can still order, factoring in
+  // what is already in their cart. When a variation is selected we resolve the
+  // variation cap (which overrides the product cap; otherwise it falls back to the
+  // product's shared pool). null = no cap governs this variation/product.
+  const hasVariations = !!product.variations && product.variations.length > 0;
+  const selectedVariationRow = selectedVariation
+    ? findVariationProgress(groupBuyItem, selectedVariation.id)
+    : undefined;
+  // Bar shows the governing cap: the variation's own cap when set, else the
+  // product-level cap (the shared pool the uncapped variation draws from).
+  const capQuantity =
+    (selectedVariationRow?.cap_quantity ?? null) !== null
+      ? selectedVariationRow!.cap_quantity
+      : groupBuyItem?.cap_quantity ?? null;
+  const capReserved =
+    (selectedVariationRow?.cap_quantity ?? null) !== null
+      ? selectedVariationRow!.total_quantity
+      : groupBuyItem?.total_quantity ?? 0;
+  const capRemaining =
+    hasVariations && selectedVariation
+      ? remainingForVariationAfterCart(groupBuyItem, selectedVariation.id, cartQuantity)
+      : remainingAfterCart(groupBuyItem, cartQuantity);
   const capReached = capRemaining != null && capRemaining <= 0;
   const overCap = capRemaining != null && quantity > capRemaining;
 
