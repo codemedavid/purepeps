@@ -225,6 +225,40 @@ describe('useGroupBuy.removeCap', () => {
   });
 });
 
+describe('useGroupBuy.setViewOnlyMode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('enables view-only mode via the set_group_buy_view_only_mode RPC', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setViewOnlyMode('batch-1', true);
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('set_group_buy_view_only_mode', {
+      p_id: 'batch-1',
+      p_enabled: true,
+    });
+  });
+
+  it('disables view-only mode ("allow adding now")', async () => {
+    const { result } = renderHook(() => useGroupBuy());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setViewOnlyMode('batch-1', false);
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('set_group_buy_view_only_mode', {
+      p_id: 'batch-1',
+      p_enabled: false,
+    });
+  });
+});
+
 describe('useGroupBuy.openBatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();

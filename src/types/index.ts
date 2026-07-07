@@ -193,6 +193,12 @@ export interface GroupBuyBatch {
    * shoppers see only items still needing orders. Default false.
    */
   pasalo_mode?: boolean;
+  /**
+   * "View-only mode": when true, the storefront still shows this batch's products
+   * (browsable, drawer openable) but Add-to-Cart is disabled everywhere — a
+   * pre-launch/preview phase. Flip it off to "allow adding now". Default false.
+   */
+  view_only_mode?: boolean;
 }
 
 export interface GroupBuyCap {
@@ -248,6 +254,7 @@ export interface GroupBuyProgress {
     | 'starts_at'
     | 'ends_at'
     | 'pasalo_mode'
+    | 'view_only_mode'
   > | null;
   items: GroupBuyProgressItem[];
 }

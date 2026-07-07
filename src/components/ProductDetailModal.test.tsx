@@ -103,6 +103,24 @@ describe('ProductDetailModal quantity', () => {
   });
 });
 
+describe('ProductDetailModal view-only mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('disables the add button and labels it "Coming soon" when view-only is on', () => {
+    renderModal({ isViewOnly: true });
+    const addButton = screen.getByRole('button', { name: /coming soon/i });
+    expect(addButton).toBeDisabled();
+  });
+
+  it('does not add to cart when the button is clicked in view-only mode', () => {
+    const { onAddToCart } = renderModal({ isViewOnly: true });
+    fireEvent.click(screen.getByRole('button', { name: /coming soon/i }));
+    expect(onAddToCart).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProductDetailModal variation cap', () => {
   const variation: ProductVariation = {
     id: 'var-1',

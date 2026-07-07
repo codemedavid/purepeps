@@ -105,6 +105,29 @@ describe('MenuItemCard add-to-cart with variations', () => {
   });
 });
 
+describe('MenuItemCard view-only mode', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('disables the CTA and labels it "Coming soon" when view-only is on', () => {
+    renderCard({ isViewOnly: true });
+
+    const cta = screen.getByRole('button', { name: /coming soon/i });
+    expect(cta).toBeDisabled();
+  });
+
+  it('does not add to cart or open the drawer when the CTA is clicked in view-only mode', () => {
+    const product = { ...baseProduct, variations: [makeVariation()] };
+    const { onAddToCart, onProductClick } = renderCard({ product, isViewOnly: true });
+
+    fireEvent.click(screen.getByRole('button', { name: /coming soon/i }));
+
+    expect(onAddToCart).not.toHaveBeenCalled();
+    expect(onProductClick).not.toHaveBeenCalled();
+  });
+});
+
 describe('MenuItemCard combined variation caps (no product cap)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
