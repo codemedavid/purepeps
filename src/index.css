@@ -201,13 +201,17 @@
   margin-top: 16px;
 }
 
-/* The waybill sheet itself — strong borders + dark text for paper legibility. */
+/* The waybill sheet itself — strong borders + dark text for paper legibility.
+   print-color-adjust:exact forces the dark header/table backgrounds to paint on
+   paper even when the browser's "Print backgrounds" option is off. */
 .wb-sheet {
   background: #fff;
   color: #111827;
   border: 2px solid #111827;
   font-size: 12px;
   line-height: 1.35;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .wb-header {
@@ -382,6 +386,14 @@
     visibility: hidden !important;
   }
 
+  /* Hide the admin chrome first, then reveal the waybill LAST so the reveal wins
+     the cascade on equal specificity even if a `wb-no-print` ancestor is ever
+     reintroduced above the print area. */
+  .wb-no-print,
+  .wb-no-print * {
+    visibility: hidden !important;
+  }
+
   .waybill-print-area,
   .waybill-print-area * {
     visibility: visible !important;
@@ -394,11 +406,6 @@
     width: 100%;
     padding: 0;
     background: #fff;
-  }
-
-  .wb-no-print,
-  .wb-no-print * {
-    visibility: hidden !important;
   }
 
   .wb-page {

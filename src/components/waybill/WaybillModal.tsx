@@ -30,8 +30,11 @@ export function WaybillModal({ waybills, onClose }: Props) {
   const count = waybills.length;
 
   const overlay = (
+    // The overlay must NOT carry `wb-no-print`: it wraps `.waybill-print-area`,
+    // and the print rule `.wb-no-print *` would then hide the waybill itself and
+    // print blank pages. The `body *` print rule already hides this backdrop.
     <div
-      className="wb-overlay wb-no-print"
+      className="wb-overlay"
       role="dialog"
       aria-modal="true"
       aria-label="Printable waybill"
