@@ -14,7 +14,11 @@ import {
   ordersNeedingAction,
 } from '../utils/groupBuyOverview';
 import { topBuyersByEmail } from '../utils/batchMemberAnalytics';
-import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
+import {
+  groupBatchOrders,
+  buildOrderSequenceContext,
+  printableGroupOrders,
+} from '../utils/batchOrderGroups';
 import { canReopenClosedBatch } from '../utils/groupBuy';
 import { formatBatchLabel } from '../utils/waybill';
 import { getActionErrorMessage } from '../utils/errorMessage';
@@ -140,6 +144,16 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     );
     if (!group || !group.isMulti) return null;
     return buildOrderSequenceContext(group, selectedOrder.id);
+  }, [orders, selectedOrder]);
+
+  // Every printable order the open order's customer placed in this batch, so the
+  // detail view's "Print waybill" consolidates them all onto one sheet.
+  const selectedWaybillOrders = useMemo(() => {
+    if (!selectedOrder) return [];
+    const group = groupBatchOrders(orders).find((g) =>
+      g.allOrders.some((o) => o.id === selectedOrder.id),
+    );
+    return group ? printableGroupOrders(group) : [];
   }, [orders, selectedOrder]);
 
   const kpis = useMemo(() => computeBatchKpis(orders), [orders]);
@@ -454,6 +468,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
             adminFee={selectedBatch?.access_fee ?? null}
             batchLabel={formatBatchLabel(selectedBatch?.batch_number, selectedBatch?.name)}
             sequence={orderSequence}
+            waybillOrders={selectedWaybillOrders}
             onSelectSibling={setSelectedOrderId}
             canAddOrder={isOpenBatchSelected}
             requestConfirm={requestConfirm}

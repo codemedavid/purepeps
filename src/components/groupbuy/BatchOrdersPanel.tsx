@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { ShoppingCart, RefreshCw, CheckSquare, Users, Search, X, Printer } from 'lucide-react';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
 import { filterBatchOrders } from '../../utils/groupBuyOverview';
-import { groupBatchOrders } from '../../utils/batchOrderGroups';
+import { groupBatchOrders, printableGroupOrders } from '../../utils/batchOrderGroups';
 import type { BatchOrder } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { peso } from './orderStatusStyles';
 import { BatchOrderRow } from './BatchOrderRow';
-import { buildWaybillData, canPrintWaybill } from '../../utils/waybill';
+import { buildGroupWaybillData } from '../../utils/waybill';
 import { WaybillModal } from '../waybill/WaybillModal';
 
 interface BatchOrdersPanelProps {
@@ -65,13 +65,15 @@ export function BatchOrdersPanel({
   const [bulkTarget, setBulkTarget] = useState<string>('packing');
   const [showAllWaybills, setShowAllWaybills] = useState(false);
 
-  // Every confirmed (or later-stage) order in the batch, as printable waybills.
-  // Drives the "Print all confirmed waybills" action; cancelled/new are excluded.
+  // One consolidated waybill per customer: every confirmed (or later-stage) order
+  // a customer placed in this batch prints on a single sheet. Cancelled/new are
+  // excluded; a customer with no printable order contributes no waybill.
   const confirmedWaybills = useMemo(
     () =>
-      orders
-        .filter((order) => canPrintWaybill(order.order_status))
-        .map((order) => buildWaybillData(order, { adminFee, batchLabel })),
+      groupBatchOrders(orders)
+        .map((group) => printableGroupOrders(group))
+        .filter((groupOrders) => groupOrders.length > 0)
+        .map((groupOrders) => buildGroupWaybillData(groupOrders, { adminFee, batchLabel })),
     [orders, adminFee, batchLabel],
   );
 

@@ -46,12 +46,17 @@ export function Waybill({ data }: Props) {
             </span>
             <span>Confirmed: {data.dateLabel}</span>
             {data.batchLabel && <span>{data.batchLabel}</span>}
+            {data.orderCount > 1 && (
+              <span className="wb-tag">
+                {data.orderCount} orders · {data.orderNumbers.join(', ')}
+              </span>
+            )}
             {data.isClaim && <span className="wb-tag">CLAIM ADD-ON</span>}
           </div>
         </div>
         <div className="wb-qr">
           <QRCodeSVG value={data.qrValue} size={92} level="M" />
-          <span className="wb-qr-caption">{data.orderNumber}</span>
+          <span className="wb-qr-caption">Scan to track</span>
         </div>
       </header>
 
