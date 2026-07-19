@@ -16,6 +16,7 @@ import {
 import { topBuyersByEmail } from '../utils/batchMemberAnalytics';
 import { groupBatchOrders, buildOrderSequenceContext } from '../utils/batchOrderGroups';
 import { canReopenClosedBatch } from '../utils/groupBuy';
+import { formatBatchLabel } from '../utils/waybill';
 import { getActionErrorMessage } from '../utils/errorMessage';
 import type { OrderSequenceContext } from '../utils/batchOrderGroups';
 import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
@@ -450,6 +451,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
             order={selectedOrder}
             products={products}
             busy={busy}
+            adminFee={selectedBatch?.access_fee ?? null}
+            batchLabel={formatBatchLabel(selectedBatch?.batch_number, selectedBatch?.name)}
             sequence={orderSequence}
             onSelectSibling={setSelectedOrderId}
             canAddOrder={isOpenBatchSelected}
@@ -509,6 +512,8 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                 orders={orders}
                 loading={ordersLoading}
                 busy={busy}
+                adminFee={selectedBatch.access_fee ?? null}
+                batchLabel={formatBatchLabel(selectedBatch.batch_number, selectedBatch.name)}
                 requestConfirm={requestConfirm}
                 onReload={reloadOrders}
                 onSelectOrder={handleViewOrder}
