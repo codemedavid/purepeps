@@ -570,4 +570,60 @@ describe('Checkout', () => {
       expect(screen.queryByText('Payment & Verification')).not.toBeInTheDocument();
     });
   });
+
+  // --- Repeat order in the same open batch waives shipping ---
+  // A customer's 2nd+ order in the same batch ships together with their first, so
+  // we neither ask for a courier/region again nor charge a second shipping fee.
+
+  describe('repeat order shipping waiver', () => {
+    it('hides the courier/region selectors and waives the fee for a repeat order', async () => {
+      // Repeat order (has_open_batch_order), and missing courier/region so it does
+      // not auto-skip — landing us on the details form to inspect it.
+      mockRpc.mockResolvedValue({
+        data: [{ ...completePrefillRow, courier_id: null, shipping_location: null, has_open_batch_order: true }],
+        error: null,
+      });
+
+      render(<Checkout {...verifiedProps} />);
+
+      // Lands on details, prefilled.
+      expect(await screen.findByDisplayValue('Maria Santos')).toBeInTheDocument();
+      // No shipping selection is requested.
+      expect(screen.queryByText(/Select Courier Provider/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Choose Shipping Region/i)).not.toBeInTheDocument();
+      // A note explains shipping is already covered by the first order.
+      expect(screen.getByText(/shipping.*already (covered|paid)/i)).toBeInTheDocument();
+      // The summary charges no shipping and the total excludes it (subtotal 3000).
+      expect(screen.getByText('₱3,000')).toBeInTheDocument();
+      // Even without a courier/region, checkout can proceed.
+      expect(screen.getByText('Proceed to Payment').closest('button')).not.toBeDisabled();
+    });
+
+    it('still asks for shipping when the customer has no order in the open batch yet', async () => {
+      // Returning customer but NOT a repeat in this batch => normal shipping flow.
+      mockRpc.mockResolvedValue({
+        data: [{ ...completePrefillRow, shipping_location: null, has_open_batch_order: false }],
+        error: null,
+      });
+
+      render(<Checkout {...verifiedProps} />);
+
+      expect(await screen.findByDisplayValue('Maria Santos')).toBeInTheDocument();
+      // The shipping selectors are still shown.
+      expect(screen.getByText(/Select Courier Provider/i)).toBeInTheDocument();
+    });
+
+    it('does not waive shipping for a repeat flag when the batch is closed', async () => {
+      mockRpc.mockResolvedValue({
+        data: [{ ...completePrefillRow, courier_id: null, shipping_location: null, has_open_batch_order: true }],
+        error: null,
+      });
+
+      render(<Checkout {...verifiedProps} isBatchOpen={false} />);
+
+      expect(await screen.findByDisplayValue('Maria Santos')).toBeInTheDocument();
+      // Batch closed => the repeat waiver does not apply; shipping is still asked.
+      expect(screen.getByText(/Select Courier Provider/i)).toBeInTheDocument();
+    });
+  });
 });

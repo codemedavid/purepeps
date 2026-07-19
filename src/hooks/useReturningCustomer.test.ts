@@ -54,6 +54,27 @@ describe('useReturningCustomer', () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it('exposes hasOpenBatchOrder from the row so repeat orders can waive shipping', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ ...completeRow, has_open_batch_order: true }],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useReturningCustomer('maria@example.com', true));
+
+    await waitFor(() => expect(result.current.found).toBe(true));
+    expect(result.current.hasOpenBatchOrder).toBe(true);
+  });
+
+  it('defaults hasOpenBatchOrder to false when the flag is absent', async () => {
+    mockRpc.mockResolvedValue({ data: [completeRow], error: null });
+
+    const { result } = renderHook(() => useReturningCustomer('maria@example.com', true));
+
+    await waitFor(() => expect(result.current.found).toBe(true));
+    expect(result.current.hasOpenBatchOrder).toBe(false);
+  });
+
   it('reports not-found when no prior order exists for the email', async () => {
     mockRpc.mockResolvedValue({ data: [], error: null });
 
