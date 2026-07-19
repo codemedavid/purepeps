@@ -10,7 +10,9 @@ import { StickerPicker } from './StickerPicker';
 import { supabase } from '../lib/supabase';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { useCheckoutInfo } from '../hooks/useCheckoutInfo';
+import type { SavedCheckoutInfo } from '../hooks/useCheckoutInfo';
 import { useOrderHistory } from '../hooks/useOrderHistory';
+import { useReturningCustomer } from '../hooks/useReturningCustomer';
 import posthog, { identifyUser } from '../lib/posthog';
 import UpgradeTierModal from './UpgradeTierModal';
 
@@ -106,6 +108,46 @@ const Checkout: React.FC<CheckoutProps> = ({
     const [copied, setCopied] = useState(false);
 
     const [orderNumber, setOrderNumber] = useState<string>('');
+
+    // Returning customer recognized by email. Only looked up for a VERIFIED
+    // member email (lockEmail) so the server lookup can only surface details the
+    // shopper already owns. Prefills the form across devices (localStorage only
+    // covers this one) and, when the saved details are complete, skips straight
+    // to payment. `autoSkipped` drives the "Welcome back" banner + edit escape.
+    const enablePrefillLookup = lockEmail && Boolean(defaultEmail);
+    const returning = useReturningCustomer(
+        enablePrefillLookup ? defaultEmail : null,
+        enablePrefillLookup,
+    );
+    const [autoSkipped, setAutoSkipped] = useState(false);
+    const hasAppliedServerPrefill = React.useRef(false);
+
+    React.useEffect(() => {
+        if (hasAppliedServerPrefill.current) return;
+        const info: SavedCheckoutInfo | null = returning.prefill;
+        if (!info) return;
+        hasAppliedServerPrefill.current = true;
+
+        // Email is left as the locked verified identity (info.email === defaultEmail).
+        setFullName(info.fullName);
+        setPhone(info.phone);
+        setContactMethod(info.contactMethod ?? '');
+        setAddress(info.address);
+        setBarangay(info.barangay);
+        setCity(info.city);
+        setState(info.state);
+        setZipCode(info.zipCode);
+        setSelectedCourierId(info.selectedCourierId);
+        setShippingLocation(info.shippingLocation);
+
+        // Only skip when the saved details cover every required field AND no cart
+        // item is tier-locked — mirrors isDetailsValid so we never skip a form the
+        // validation would still reject.
+        if (returning.isComplete && !hasLockedItems) {
+            setStep('payment');
+            setAutoSkipped(true);
+        }
+    }, [returning.prefill, returning.isComplete, hasLockedItems]);
 
     // Payment Proof
     const [paymentProof, setPaymentProof] = useState<File | null>(null);
@@ -695,6 +737,28 @@ Please confirm this order. Thank you!
                         Payment & Verification
                         <Lock className="w-6 h-6 text-brand-600" />
                     </h1>
+
+                    {autoSkipped && (
+                        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded border border-brand-100 bg-brand-50/40 px-4 py-3">
+                            <p className="text-sm text-brand-700 flex items-center gap-2">
+                                <Check className="w-4 h-4 shrink-0" />
+                                <span>
+                                    Welcome back, {fullName}! We&apos;re shipping to your saved address —
+                                    {' '}{[address, barangay, city].filter(Boolean).join(', ')}.
+                                </span>
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setStep('details');
+                                    setAutoSkipped(false);
+                                }}
+                                className="text-xs font-bold text-brand-700 hover:text-brand-900 underline shrink-0 whitespace-nowrap self-start sm:self-auto"
+                            >
+                                Not you? Edit details
+                            </button>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">

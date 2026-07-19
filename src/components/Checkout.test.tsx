@@ -3,7 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checkout from './Checkout';
 import type { CartItem, Product, ProductVariation } from '../types';
-import type { SavedCheckoutInfo } from '../hooks/useCheckoutInfo';
 
 // Mock posthog
 vi.mock('../lib/posthog', () => ({
@@ -44,40 +43,32 @@ vi.mock('../hooks/useImageUpload', () => ({
   }),
 }));
 
-// Returning-customer lookup. Default: not recognized. Individual tests override
-// the return value to simulate a verified member with a prior order on file.
-const mockUseReturningCustomer = vi.fn(() => ({
-  prefill: null as SavedCheckoutInfo | null,
-  isComplete: false,
-  loading: false,
-  found: false,
-}));
-
-vi.mock('../hooks/useReturningCustomer', () => ({
-  useReturningCustomer: (...args: unknown[]) => mockUseReturningCustomer(...args),
-}));
-
-const returningMember: SavedCheckoutInfo = {
-  fullName: 'Maria Santos',
-  email: 'maria@member.com',
-  phone: '09171234567',
-  contactMethod: 'fb.com/maria',
-  address: '123 Main St',
-  barangay: 'Brgy Uno',
-  city: 'Cebu City',
-  state: 'Cebu',
-  zipCode: '6000',
-  selectedCourierId: 'cour-1',
-  shippingLocation: 'lbc_provincial',
+// Returning-customer lookup rows (get_checkout_prefill_by_email RPC shape). We
+// drive the real useReturningCustomer hook through the mocked supabase.rpc below
+// rather than mocking the hook module — that keeps these tests independent of
+// which other test files share the worker, and exercises the real integration.
+const completePrefillRow = {
+  customer_name: 'Maria Santos',
+  customer_phone: '09171234567',
+  contact_method: 'fb.com/maria',
+  shipping_address: '123 Main St',
+  shipping_barangay: 'Brgy Uno',
+  shipping_city: 'Cebu City',
+  shipping_state: 'Cebu',
+  shipping_zip_code: '6000',
+  courier_id: 'cour-1',
+  shipping_location: 'lbc_provincial',
 };
 
 // Mock supabase - use lazy arrows to avoid hoisting
 const mockPromoSingle = vi.fn();
 const mockInsertSingle = vi.fn();
 const mockUpdateEq = vi.fn().mockResolvedValue({ error: null });
+const mockRpc = vi.fn();
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
+    rpc: (...args: unknown[]) => mockRpc(...args),
     from: () => ({
       select: () => ({
         eq: () => ({
@@ -159,13 +150,8 @@ describe('Checkout', () => {
     vi.clearAllMocks();
     // Suppress window.scrollTo not implemented in jsdom
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-    // Default: no returning customer recognized.
-    mockUseReturningCustomer.mockReturnValue({
-      prefill: null,
-      isComplete: false,
-      loading: false,
-      found: false,
-    });
+    // Default: the returning-customer lookup finds nothing.
+    mockRpc.mockResolvedValue({ data: [], error: null });
     localStorage.clear();
     mockPromoSingle.mockResolvedValue({ data: null, error: { message: 'not found' } });
     mockInsertSingle.mockResolvedValue({
@@ -525,25 +511,26 @@ describe('Checkout', () => {
   };
 
   describe('returning customer', () => {
-    it('enables the lookup with the verified member email', () => {
+    it('looks up the prior order with the verified member email', async () => {
       render(<Checkout {...verifiedProps} />);
 
-      expect(mockUseReturningCustomer).toHaveBeenCalledWith('maria@member.com', true);
+      await waitFor(() =>
+        expect(mockRpc).toHaveBeenCalledWith('get_checkout_prefill_by_email', {
+          email_input: 'maria@member.com',
+        }),
+      );
     });
 
-    it('does not look up returning details for an unverified (unlocked) email', () => {
+    it('does not look up returning details for an unverified (unlocked) email', async () => {
       render(<Checkout {...defaultProps} defaultEmail="" lockEmail={false} />);
 
-      expect(mockUseReturningCustomer).toHaveBeenCalledWith(null, false);
+      // The only mount-time RPC is the returning-customer lookup; it must not fire.
+      await waitFor(() => expect(screen.getByText('Checkout Information')).toBeInTheDocument());
+      expect(mockRpc).not.toHaveBeenCalled();
     });
 
     it('auto-skips to the payment step when the returning details are complete', async () => {
-      mockUseReturningCustomer.mockReturnValue({
-        prefill: returningMember,
-        isComplete: true,
-        loading: false,
-        found: true,
-      });
+      mockRpc.mockResolvedValue({ data: [completePrefillRow], error: null });
 
       render(<Checkout {...verifiedProps} />);
 
@@ -554,12 +541,7 @@ describe('Checkout', () => {
     });
 
     it('lets the returning customer go back to edit their details', async () => {
-      mockUseReturningCustomer.mockReturnValue({
-        prefill: returningMember,
-        isComplete: true,
-        loading: false,
-        found: true,
-      });
+      mockRpc.mockResolvedValue({ data: [completePrefillRow], error: null });
 
       render(<Checkout {...verifiedProps} />);
 
@@ -573,19 +555,19 @@ describe('Checkout', () => {
     });
 
     it('prefills but stays on details when the returning info is incomplete', async () => {
-      mockUseReturningCustomer.mockReturnValue({
-        prefill: { ...returningMember, shippingLocation: '' },
-        isComplete: false,
-        loading: false,
-        found: true,
+      // Missing shipping_location => not complete enough to skip.
+      mockRpc.mockResolvedValue({
+        data: [{ ...completePrefillRow, shipping_location: null }],
+        error: null,
       });
 
       render(<Checkout {...verifiedProps} />);
 
-      // No auto-skip: still on the details form...
-      expect(await screen.findByText('Checkout Information')).toBeInTheDocument();
-      // ...but the known fields are prefilled so there is less to type.
-      expect(screen.getByDisplayValue('Maria Santos')).toBeInTheDocument();
+      // The prefilled name proves the lookup applied...
+      expect(await screen.findByDisplayValue('Maria Santos')).toBeInTheDocument();
+      // ...but there is no auto-skip: still on the details form.
+      expect(screen.getByText('Checkout Information')).toBeInTheDocument();
+      expect(screen.queryByText('Payment & Verification')).not.toBeInTheDocument();
     });
   });
 });
