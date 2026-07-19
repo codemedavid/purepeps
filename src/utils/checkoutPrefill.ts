@@ -16,6 +16,12 @@ export interface CheckoutPrefillRow {
   shipping_zip_code: string | null;
   courier_id: string | null;
   shipping_location: string | null;
+  /**
+   * True when this email already has a non-cancelled order in the currently-open
+   * batch, so a new order is a repeat that ships with the first. Not part of
+   * SavedCheckoutInfo — the hook reads it directly to waive shipping.
+   */
+  has_open_batch_order?: boolean | null;
 }
 
 const coalesce = (value: string | null | undefined): string => value ?? '';

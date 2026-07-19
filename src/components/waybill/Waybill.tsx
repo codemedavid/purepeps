@@ -46,6 +46,11 @@ export function Waybill({ data }: Props) {
             </span>
             <span>Confirmed: {data.dateLabel}</span>
             {data.batchLabel && <span>{data.batchLabel}</span>}
+            {data.orderCount > 1 && (
+              <span className="wb-tag">
+                {data.orderCount} orders · {data.orderNumbers.join(', ')}
+              </span>
+            )}
             {data.isClaim && <span className="wb-tag">CLAIM ADD-ON</span>}
           </div>
         </div>

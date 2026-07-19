@@ -171,9 +171,15 @@ const Checkout: React.FC<CheckoutProps> = ({
         }
     }, [paymentMethods, selectedPaymentMethod]);
 
-    // Calculate shipping fee based on location
+    // A repeat order is the customer's 2nd+ order in the SAME open batch. It ships
+    // together with their first order, so we neither ask for a courier/region
+    // again nor charge shipping twice. The server (enforce_group_buy_on_order)
+    // re-asserts shipping_fee = 0 authoritatively when it links the repeat.
+    const isRepeatOrder = isBatchOpen && returning.hasOpenBatchOrder;
+
+    // Calculate shipping fee based on location (waived for repeat orders).
     const selectedLocation = shippingLocations.find(loc => loc.id === shippingLocation);
-    const shippingFee = selectedLocation ? selectedLocation.fee : 0;
+    const shippingFee = isRepeatOrder ? 0 : (selectedLocation ? selectedLocation.fee : 0);
 
     // Calculate final total (Subtotal + Shipping - Discount)
     const finalTotal = Math.max(0, totalPrice + shippingFee - discountAmount);
@@ -269,8 +275,8 @@ const Checkout: React.FC<CheckoutProps> = ({
         zipCode.trim() !== '' &&
         state.trim() !== '' &&
         zipCode.trim() !== '' &&
-        selectedCourierId !== '' &&
-        shippingLocation !== '' &&
+        // A repeat order ships with the first, so no courier/region is required.
+        (isRepeatOrder || (selectedCourierId !== '' && shippingLocation !== '')) &&
         !hasLockedItems;
 
     const handleProceedToPayment = () => {
@@ -281,7 +287,7 @@ const Checkout: React.FC<CheckoutProps> = ({
 
 
     const handlePlaceOrder = async () => {
-        if (!shippingLocation) {
+        if (!isRepeatOrder && !shippingLocation) {
             alert('Please select your shipping location.');
             return;
         }
@@ -1139,7 +1145,26 @@ Please confirm this order. Thank you!
                             </div>
                         </div>
 
+                        {isRepeatOrder && (
+                            <div className="bg-white rounded shadow-clinical p-6 border border-gray-100 flex items-start gap-3">
+                                <div className="bg-brand-50 p-2 rounded text-brand-600 shrink-0">
+                                    <Truck className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-1">
+                                        Shipping already covered
+                                    </h2>
+                                    <p className="text-sm text-gray-600">
+                                        This adds to your earlier order in this batch, so it ships together
+                                        with it — no extra shipping fee, and nothing more to fill in here.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Courier Selection */}
+                        {!isRepeatOrder && (
+                        <>
                         <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
                         <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-3 flex items-center gap-2">
                             <Truck className="w-5 h-5 text-brand-600" />
@@ -1194,6 +1219,8 @@ Please confirm this order. Thank you!
                                 ))}
                         </div>
                     </div>
+                    </>
+                    )}
 
                     {hasLockedItems && (
                         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">

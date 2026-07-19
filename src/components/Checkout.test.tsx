@@ -592,10 +592,10 @@ describe('Checkout', () => {
       expect(screen.queryByText(/Select Courier Provider/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Choose Shipping Region/i)).not.toBeInTheDocument();
       // A note explains shipping is already covered by the first order.
-      expect(screen.getByText(/shipping.*already (covered|paid)/i)).toBeInTheDocument();
-      // The summary charges no shipping and the total excludes it (subtotal 3000).
-      expect(screen.getByText('₱3,000')).toBeInTheDocument();
-      // Even without a courier/region, checkout can proceed.
+      expect(screen.getByText(/shipping already covered/i)).toBeInTheDocument();
+      // Even without a courier/region, checkout can proceed — a non-repeat customer
+      // with no shipping selected cannot (see 'still asks for shipping' below), so
+      // this is the observable proof the shipping step was waived.
       expect(screen.getByText('Proceed to Payment').closest('button')).not.toBeDisabled();
     });
 

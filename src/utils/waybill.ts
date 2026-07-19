@@ -134,6 +134,10 @@ export interface WaybillData {
   items: WaybillLineItem[];
   itemsSubtotal: number;
   grandTotal: number;
+  /** How many orders were consolidated onto this waybill (1 for a lone order). */
+  orderCount: number;
+  /** Every consolidated order's reference, root first (["PP-0001", "PP-0002"]). */
+  orderNumbers: string[];
   /** Absolute customer-tracking URL for this order (also the QR payload). */
   trackingUrl: string;
   qrValue: string;
@@ -173,53 +177,89 @@ function lineItemName(item: {
   return variation ? `${product} — ${variation}` : product;
 }
 
-// Map a raw order into the normalized waybill shape. Item totals fall back to
-// price × quantity when a stored `total` is missing so the math is never blank.
-export function buildWaybillData(
-  order: WaybillOrderInput,
-  options: WaybillOptions = {},
-): WaybillData {
-  const items: WaybillLineItem[] = (order.order_items ?? []).map((item) => {
+// Normalize a raw order's line items, falling back to price × quantity when a
+// stored `total` is missing so the math is never blank.
+function normalizeItems(order: WaybillOrderInput): WaybillLineItem[] {
+  return (order.order_items ?? []).map((item) => {
     const price = toNumber(item.price);
     const quantity = toNumber(item.quantity);
     const total = item.total != null ? toNumber(item.total) : price * quantity;
     return { name: lineItemName(item), price, quantity, total };
   });
+}
+
+function referenceNumber(order: WaybillOrderInput): string {
+  return cleanText(order.order_number) ?? order.id.slice(0, 8).toUpperCase();
+}
+
+// Map a raw order into the normalized waybill shape.
+export function buildWaybillData(
+  order: WaybillOrderInput,
+  options: WaybillOptions = {},
+): WaybillData {
+  return buildGroupWaybillData([order], options);
+}
+
+/**
+ * Consolidate ONE customer's group-buy orders into a single waybill: every order
+ * bump / sequence / claim add-on the customer placed in the same batch prints on
+ * one sheet. `orders` must be scoped to a single customer and ordered root-first
+ * (the caller supplies the batch grouping); the first order supplies the customer
+ * identity, shipping address, and reference number.
+ *
+ * Line items concatenate across every order, shipping fees sum, and the batch
+ * admin/access fee is charged ONCE — members pay it per batch, not per order.
+ */
+export function buildGroupWaybillData(
+  orders: WaybillOrderInput[],
+  options: WaybillOptions = {},
+): WaybillData {
+  if (orders.length === 0) {
+    throw new Error('buildGroupWaybillData requires at least one order');
+  }
+
+  const primary = orders[0];
+  const items = orders.flatMap(normalizeItems);
 
   const itemsSubtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const shippingFee = toNumber(order.shipping_fee);
+  const shippingFee = orders.reduce((sum, order) => sum + toNumber(order.shipping_fee), 0);
   const adminFee = options.adminFee != null ? toNumber(options.adminFee) : null;
   const grandTotal = itemsSubtotal + shippingFee + (adminFee ?? 0);
 
-  const municipality = cleanText(order.shipping_city);
-  const province = cleanText(order.shipping_state);
-  const barangay = cleanText(order.shipping_barangay);
-  const street = cleanText(order.shipping_address);
-  const postalCode = cleanText(order.shipping_zip_code);
-  const country = cleanText(order.shipping_country);
-  const region = cleanText(order.shipping_location);
+  const municipality = cleanText(primary.shipping_city);
+  const province = cleanText(primary.shipping_state);
+  const barangay = cleanText(primary.shipping_barangay);
+  const street = cleanText(primary.shipping_address);
+  const postalCode = cleanText(primary.shipping_zip_code);
+  const country = cleanText(primary.shipping_country);
+  const region = cleanText(primary.shipping_location);
 
-  const paymentStatus = cleanText(order.payment_status) ?? 'pending';
-  const orderNumber = cleanText(order.order_number) ?? order.id.slice(0, 8).toUpperCase();
-
+  const orderNumber = referenceNumber(primary);
   // The QR encodes the tracking URL so scanning it opens the customer tracker
-  // for this order directly, rather than a plain text blob.
+  // for the root order directly, rather than a plain text blob.
   const trackingUrl = buildTrackingUrl(orderNumber);
+
+  // Only fully-paid across every consolidated order counts as confirmed; a single
+  // unpaid bump must not read as "paid" on the shared sheet.
+  const isPaymentConfirmed = orders.every(
+    (order) => (cleanText(order.payment_status) ?? 'pending') === 'paid',
+  );
+  const primaryPaymentStatus = cleanText(primary.payment_status) ?? 'pending';
 
   return {
     storeName: cleanText(options.storeName) ?? WAYBILL_STORE_NAME,
     title: WAYBILL_TITLE,
     orderNumber,
-    orderId: order.id,
-    dateLabel: formatWaybillDate(order.created_at),
+    orderId: primary.id,
+    dateLabel: formatWaybillDate(primary.created_at),
     batchLabel: cleanText(options.batchLabel),
-    isClaim: order.is_claim === true,
+    isClaim: primary.is_claim === true,
     customer: {
-      name: cleanText(order.customer_name) ?? 'N/A',
-      contact: cleanText(order.customer_phone),
-      email: cleanText(order.customer_email),
-      contactMethod: cleanText(order.contact_method),
-      stickerName: cleanText(order.selected_sticker_name),
+      name: cleanText(primary.customer_name) ?? 'N/A',
+      contact: cleanText(primary.customer_phone),
+      email: cleanText(primary.customer_email),
+      contactMethod: cleanText(primary.contact_method),
+      stickerName: cleanText(primary.selected_sticker_name),
     },
     address: {
       municipality,
@@ -234,20 +274,24 @@ export function buildWaybillData(
       ),
     },
     shipping: {
-      courier: cleanText(order.shipping_provider),
-      method: cleanText(order.shipping_note),
+      courier: cleanText(primary.shipping_provider),
+      method: cleanText(primary.shipping_note),
       fee: shippingFee,
-      trackingNumber: cleanText(order.tracking_number),
+      trackingNumber: cleanText(primary.tracking_number),
     },
     adminFee,
-    receiptUrl: cleanText(order.payment_proof_url),
-    additionalReceiptUrl: cleanText(order.additional_payment_proof_url),
-    paymentMethod: cleanText(order.payment_method_name),
-    paymentStatusLabel: PAYMENT_STATUS_LABELS[paymentStatus] ?? paymentStatus,
-    isPaymentConfirmed: paymentStatus === 'paid',
+    receiptUrl: cleanText(primary.payment_proof_url),
+    additionalReceiptUrl: cleanText(primary.additional_payment_proof_url),
+    paymentMethod: cleanText(primary.payment_method_name),
+    paymentStatusLabel: isPaymentConfirmed
+      ? 'Paid'
+      : PAYMENT_STATUS_LABELS[primaryPaymentStatus] ?? primaryPaymentStatus,
+    isPaymentConfirmed,
     items,
     itemsSubtotal,
     grandTotal,
+    orderCount: orders.length,
+    orderNumbers: orders.map(referenceNumber),
     trackingUrl,
     qrValue: trackingUrl,
   };

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildGroupWaybillData,
   buildWaybillData,
   canPrintWaybill,
   formatBatchLabel,
@@ -117,6 +118,74 @@ describe('buildWaybillData', () => {
     expect(data.shipping.courier).toBeNull();
     expect(data.paymentMethod).toBeNull();
     expect(data.shipping.trackingNumber).toBeNull();
+  });
+});
+
+describe('buildGroupWaybillData (one customer, all their group-buy orders)', () => {
+  // A second order (bump / repeat checkout) from the same customer in the batch.
+  function secondOrder(overrides: Partial<WaybillOrderInput> = {}): WaybillOrderInput {
+    return order({
+      id: 'f6e5d4c3b2a1',
+      order_number: 'PP-0002',
+      shipping_fee: 60,
+      order_items: [
+        { product_name: 'BPC-157', variation_name: '5mg', price: 49, quantity: 2, total: 98 },
+      ],
+      total_price: 98,
+      ...overrides,
+    });
+  }
+
+  it('concatenates every order line item into a single consolidated table', () => {
+    const data = buildGroupWaybillData([order(), secondOrder()]);
+    // 2 items from order() + 1 from secondOrder()
+    expect(data.items).toHaveLength(3);
+    expect(data.items.map((i) => i.name)).toContain('BPC-157 — 5mg');
+    // 3345.60 (order) + 98 (second) items
+    expect(data.itemsSubtotal).toBeCloseTo(3443.6, 2);
+  });
+
+  it('sums shipping across orders, counts admin fee once, into the grand total', () => {
+    const data = buildGroupWaybillData([order(), secondOrder()], { adminFee: 150 });
+    // shipping 100 + 60 summed; admin fee 150 charged once (paid per batch, not per order)
+    expect(data.shipping.fee).toBe(160);
+    expect(data.adminFee).toBe(150);
+    // items 3443.60 + shipping 160 + admin 150
+    expect(data.grandTotal).toBeCloseTo(3753.6, 2);
+  });
+
+  it('uses the first (root) order for the customer identity and reference', () => {
+    const data = buildGroupWaybillData([order(), secondOrder()]);
+    expect(data.orderNumber).toBe('PP-0001');
+    expect(data.orderId).toBe('a1b2c3d4e5f6');
+    expect(data.customer.name).toBe('Jastine Moya');
+  });
+
+  it('records how many orders were consolidated and their references', () => {
+    const data = buildGroupWaybillData([order(), secondOrder()]);
+    expect(data.orderCount).toBe(2);
+    expect(data.orderNumbers).toEqual(['PP-0001', 'PP-0002']);
+  });
+
+  it('confirms payment only when every order in the group is paid', () => {
+    expect(buildGroupWaybillData([order(), secondOrder()]).isPaymentConfirmed).toBe(true);
+    expect(
+      buildGroupWaybillData([order(), secondOrder({ payment_status: 'pending' })])
+        .isPaymentConfirmed,
+    ).toBe(false);
+  });
+
+  it('encodes the root order tracking URL for the whole group', () => {
+    const data = buildGroupWaybillData([order(), secondOrder()]);
+    expect(data.qrValue).toBe('https://purepeps.vercel.app/track-order?order=PP-0001');
+  });
+
+  it('matches buildWaybillData for a single-order group', () => {
+    const single = buildWaybillData(order(), { adminFee: 150 });
+    const grouped = buildGroupWaybillData([order()], { adminFee: 150 });
+    expect(grouped.grandTotal).toBe(single.grandTotal);
+    expect(grouped.itemsSubtotal).toBe(single.itemsSubtotal);
+    expect(grouped.orderCount).toBe(1);
   });
 });
 

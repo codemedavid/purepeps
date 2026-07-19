@@ -19,7 +19,7 @@ import type { BatchOrder, OrderLineItem, Product } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { OrderItemsEditor } from './OrderItemsEditor';
 import { batchStatusColor, peso, formatDateTime } from './orderStatusStyles';
-import { buildWaybillData, canPrintWaybill } from '../../utils/waybill';
+import { buildGroupWaybillData, canPrintWaybill } from '../../utils/waybill';
 import { WaybillModal } from '../waybill/WaybillModal';
 
 interface TrackingInput {
@@ -38,6 +38,11 @@ interface BatchOrderDetailProps {
   batchLabel?: string | null;
   /** Sequence context when this order is one of a customer's linked orders. */
   sequence?: OrderSequenceContext | null;
+  /**
+   * The customer's printable orders in this batch, root-first — consolidated onto
+   * one waybill. Defaults to just this order when the customer has a single order.
+   */
+  waybillOrders?: BatchOrder[];
   onSelectSibling?: (orderId: string) => void;
   /** Whether adding a new product (as a new linked order) is allowed here. */
   canAddOrder?: boolean;
@@ -69,6 +74,7 @@ export function BatchOrderDetail({
   adminFee = null,
   batchLabel = null,
   sequence,
+  waybillOrders,
   onSelectSibling,
   canAddOrder = true,
   requestConfirm,
@@ -169,7 +175,12 @@ export function BatchOrderDetail({
     <div className="space-y-4">
       {showWaybill && (
         <WaybillModal
-          waybills={[buildWaybillData(order, { adminFee, batchLabel })]}
+          waybills={[
+            buildGroupWaybillData(
+              waybillOrders && waybillOrders.length > 0 ? waybillOrders : [order],
+              { adminFee, batchLabel },
+            ),
+          ]}
           onClose={() => setShowWaybill(false)}
         />
       )}

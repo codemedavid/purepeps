@@ -1,4 +1,5 @@
 import type { BatchOrder } from '../types';
+import { canPrintWaybill } from './waybill';
 
 /**
  * Group a batch's orders the way the admin window shows them: every repeat
@@ -151,6 +152,17 @@ export function groupBatchOrders(orders: readonly BatchOrder[]): OrderGroup[] {
   return [...membersByRoot.entries()]
     .map(([rootId, members]) => toGroup(rootId, members, byId))
     .sort((a, b) => b.latestActivityAt.localeCompare(a.latestActivityAt));
+}
+
+/**
+ * A group's orders in print order — numbered orders root-first, then claim
+ * add-ons — filtered to those eligible for a waybill (confirmed and later
+ * stages). This is the exact set that consolidates onto one customer's waybill.
+ */
+export function printableGroupOrders(group: OrderGroup): BatchOrder[] {
+  return [...group.sequenced.map((seq) => seq.order), ...group.addOns].filter((order) =>
+    canPrintWaybill(order.order_status),
+  );
 }
 
 /**

@@ -12,6 +12,12 @@ export interface ReturningCustomer {
   prefill: SavedCheckoutInfo | null;
   /** True when the prefill has every field the checkout form requires. */
   isComplete: boolean;
+  /**
+   * True when this email already has a non-cancelled order in the currently-open
+   * batch — i.e. this checkout is a repeat order that ships with the first, so
+   * shipping should not be asked for or charged again.
+   */
+  hasOpenBatchOrder: boolean;
   /** True while the server lookup is in flight. */
   loading: boolean;
   /** True once a prior order was found for this email. */
@@ -21,6 +27,7 @@ export interface ReturningCustomer {
 const NOT_FOUND: ReturningCustomer = {
   prefill: null,
   isComplete: false,
+  hasOpenBatchOrder: false,
   loading: false,
   found: false,
 };
@@ -67,6 +74,7 @@ export function useReturningCustomer(email: string | null, enabled: boolean): Re
         setState({
           prefill,
           isComplete: isCheckoutInfoComplete(prefill),
+          hasOpenBatchOrder: row?.has_open_batch_order === true,
           loading: false,
           found: prefill !== null,
         });
