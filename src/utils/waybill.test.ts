@@ -96,11 +96,18 @@ describe('buildWaybillData', () => {
     expect(data.orderNumber).toBe('A1B2C3D4');
   });
 
-  it('encodes the order reference and grand total into the QR value', () => {
+  it('encodes a site tracking URL for the order into the QR value', () => {
     const data = buildWaybillData(order(), { adminFee: 150 });
-    expect(data.qrValue).toContain('PP-0001');
-    expect(data.qrValue).toContain('a1b2c3d4e5f6');
-    expect(data.qrValue).toContain('3595.60');
+    // Scanning the QR must open the customer tracking page for this order.
+    expect(data.qrValue).toBe('https://purepeps.vercel.app/track-order?order=PP-0001');
+    expect(data.trackingUrl).toBe(data.qrValue);
+  });
+
+  it('url-encodes an order number with unsafe characters in the tracking URL', () => {
+    const data = buildWaybillData(order({ order_number: 'PP 0001/AF' }));
+    expect(data.trackingUrl).toBe(
+      'https://purepeps.vercel.app/track-order?order=PP%200001%2FAF',
+    );
   });
 
   it('renders missing optional fields as null (shown as N/A by the UI)', () => {

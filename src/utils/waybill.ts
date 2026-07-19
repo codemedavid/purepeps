@@ -190,12 +190,9 @@ export function buildWaybillData(
   const paymentStatus = cleanText(order.payment_status) ?? 'pending';
   const orderNumber = cleanText(order.order_number) ?? order.id.slice(0, 8).toUpperCase();
 
-  const qrValue = [
-    `${WAYBILL_STORE_NAME} Order`,
-    `No: ${orderNumber}`,
-    `ID: ${order.id}`,
-    `Total: PHP ${grandTotal.toFixed(2)}`,
-  ].join('\n');
+  // The QR encodes the tracking URL so scanning it opens the customer tracker
+  // for this order directly, rather than a plain text blob.
+  const trackingUrl = buildTrackingUrl(orderNumber);
 
   return {
     storeName: cleanText(options.storeName) ?? WAYBILL_STORE_NAME,
