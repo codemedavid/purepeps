@@ -87,6 +87,36 @@ $ npx vitest run src/utils/checkoutPrefill.test.ts \
 | 12 | "Not you? Edit details" returns to the prefilled details form | `Checkout.test.tsx` › lets the returning customer go back to edit | component | PASS |
 | 13 | Incomplete details prefill but do NOT skip | `Checkout.test.tsx` › prefills but stays on details when incomplete | component | PASS |
 
+## Follow-up: waive shipping on repeat orders in the same batch
+
+**Ask:** "Don't ask for shipping on the 2nd+ order — request one shipping fee once."
+
+A repeat order (the customer's 2nd+ non-cancelled order in the **same open batch**,
+matched by email) ships together with their first order, so checkout no longer
+asks for a courier/region and charges no second shipping fee.
+
+- **Server (authoritative):** `enforce_group_buy_on_order` already links a repeat
+  order to its root via `parent_order_id`; it now also sets `NEW.shipping_fee = 0`
+  whenever it makes that link, so the single-fee rule holds regardless of the
+  client. `get_checkout_prefill_by_email` additionally returns
+  `has_open_batch_order`. Migration:
+  `supabase/migrations/20260721000000_waive_shipping_on_repeat_order.sql`.
+- **Client:** `useReturningCustomer` exposes `hasOpenBatchOrder`; Checkout derives
+  `isRepeatOrder = isBatchOpen && hasOpenBatchOrder` and then hides the
+  courier/region selectors, drops them from `isDetailsValid`, forces the displayed
+  shipping fee to ₱0, and shows a "Shipping already covered" note.
+
+RED → GREEN commits: `06afac0` (RED) → `e8ed5a6` (GREEN, full suite 808 passed).
+
+Added guarantees:
+
+| # | What is guaranteed | Test | Type | Result |
+|---|--------------------|------|------|--------|
+| 14 | The hook exposes `hasOpenBatchOrder` from the row (defaults false) | `useReturningCustomer.test.ts` › exposes/defaults hasOpenBatchOrder | unit (hook) | PASS |
+| 15 | A repeat order hides the courier/region step, shows the waived-shipping note, and can proceed with no courier selected | `Checkout.test.tsx` › hides the courier/region selectors and waives the fee | component | PASS |
+| 16 | A returning-but-not-repeat customer still gets the normal shipping step | `Checkout.test.tsx` › still asks for shipping when no order in the open batch | component | PASS |
+| 17 | The waiver does not apply when the batch is closed | `Checkout.test.tsx` › does not waive shipping when the batch is closed | component | PASS |
+
 ## Coverage and known gaps
 
 - `@vitest/coverage-v8` is not installed in this repo, so a `--coverage` number was
@@ -94,10 +124,13 @@ $ npx vitest run src/utils/checkoutPrefill.test.ts \
   util and hook are exercised across happy path, empty/disabled, not-found, and
   error branches; the component covers enabled/disabled, complete/incomplete, and
   the edit-back escape.
-- **SQL not unit-tested.** `get_checkout_prefill_by_email` is a migration; it needs
-  to be applied to Supabase (`supabase db push` / MCP `apply_migration`) and was not
-  executed against a live DB in this run. Columns are cast to `text` so the
-  `RETURNS TABLE` shape is stable regardless of the underlying `courier_id` type.
+- **SQL not unit-tested.** Both migrations (`20260720000000_get_checkout_prefill_by_email.sql`
+  and `20260721000000_waive_shipping_on_repeat_order.sql`) need to be applied to
+  Supabase (`supabase db push` / MCP `apply_migration`); they were not executed
+  against a live DB in this run. Columns are cast to `text` so the `RETURNS TABLE`
+  shape is stable regardless of the underlying `courier_id` type. The
+  shipping-fee-once rule is enforced in the `enforce_group_buy_on_order` trigger,
+  so it holds even for clients that don't render the waiver.
 - Ownership is not verified server-side (an email is enumerable); this matches the
   accepted tradeoff already documented for `get_orders_by_email`. A captcha /
   magic-link step is the follow-up if that posture changes.
