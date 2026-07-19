@@ -10,6 +10,16 @@
 export const WAYBILL_STORE_NAME = 'PURE PEPS';
 export const WAYBILL_TITLE = 'PURE PEPS — WAYBILL / ORDER SUMMARY';
 
+// Public site base for the customer order-tracking page. The waybill QR encodes
+// an absolute tracking URL so a scan opens the tracker for that exact order.
+export const WAYBILL_TRACKING_BASE_URL = 'https://purepeps.vercel.app';
+
+// Absolute tracking URL the QR encodes: `/track-order?order=<order number>`.
+// The tracking page auto-runs the lookup from the `order` param.
+export function buildTrackingUrl(orderNumber: string): string {
+  return `${WAYBILL_TRACKING_BASE_URL}/track-order?order=${encodeURIComponent(orderNumber)}`;
+}
+
 // A waybill prints for a customer's CONFIRMED order and every fulfillment stage
 // after it. 'new' (not yet confirmed) and 'cancelled' are excluded — there is no
 // confirmed order to ship. Legacy 'processing'/'shipped' map onto the same set.
@@ -124,6 +134,8 @@ export interface WaybillData {
   items: WaybillLineItem[];
   itemsSubtotal: number;
   grandTotal: number;
+  /** Absolute customer-tracking URL for this order (also the QR payload). */
+  trackingUrl: string;
   qrValue: string;
 }
 
@@ -190,12 +202,9 @@ export function buildWaybillData(
   const paymentStatus = cleanText(order.payment_status) ?? 'pending';
   const orderNumber = cleanText(order.order_number) ?? order.id.slice(0, 8).toUpperCase();
 
-  const qrValue = [
-    `${WAYBILL_STORE_NAME} Order`,
-    `No: ${orderNumber}`,
-    `ID: ${order.id}`,
-    `Total: PHP ${grandTotal.toFixed(2)}`,
-  ].join('\n');
+  // The QR encodes the tracking URL so scanning it opens the customer tracker
+  // for this order directly, rather than a plain text blob.
+  const trackingUrl = buildTrackingUrl(orderNumber);
 
   return {
     storeName: cleanText(options.storeName) ?? WAYBILL_STORE_NAME,
@@ -239,7 +248,8 @@ export function buildWaybillData(
     items,
     itemsSubtotal,
     grandTotal,
-    qrValue,
+    trackingUrl,
+    qrValue: trackingUrl,
   };
 }
 

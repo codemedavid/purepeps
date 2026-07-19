@@ -51,7 +51,7 @@ export function Waybill({ data }: Props) {
         </div>
         <div className="wb-qr">
           <QRCodeSVG value={data.qrValue} size={92} level="M" />
-          <span className="wb-qr-caption">{data.orderNumber}</span>
+          <span className="wb-qr-caption">Scan to track</span>
         </div>
       </header>
 

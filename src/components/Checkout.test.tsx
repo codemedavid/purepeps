@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checkout from './Checkout';
 import type { CartItem, Product, ProductVariation } from '../types';
+import type { SavedCheckoutInfo } from '../hooks/useCheckoutInfo';
 
 // Mock posthog
 vi.mock('../lib/posthog', () => ({
@@ -42,6 +43,33 @@ vi.mock('../hooks/useImageUpload', () => ({
     uploadProgress: 0,
   }),
 }));
+
+// Returning-customer lookup. Default: not recognized. Individual tests override
+// the return value to simulate a verified member with a prior order on file.
+const mockUseReturningCustomer = vi.fn(() => ({
+  prefill: null as SavedCheckoutInfo | null,
+  isComplete: false,
+  loading: false,
+  found: false,
+}));
+
+vi.mock('../hooks/useReturningCustomer', () => ({
+  useReturningCustomer: (...args: unknown[]) => mockUseReturningCustomer(...args),
+}));
+
+const returningMember: SavedCheckoutInfo = {
+  fullName: 'Maria Santos',
+  email: 'maria@member.com',
+  phone: '09171234567',
+  contactMethod: 'fb.com/maria',
+  address: '123 Main St',
+  barangay: 'Brgy Uno',
+  city: 'Cebu City',
+  state: 'Cebu',
+  zipCode: '6000',
+  selectedCourierId: 'cour-1',
+  shippingLocation: 'lbc_provincial',
+};
 
 // Mock supabase - use lazy arrows to avoid hoisting
 const mockPromoSingle = vi.fn();
@@ -131,6 +159,14 @@ describe('Checkout', () => {
     vi.clearAllMocks();
     // Suppress window.scrollTo not implemented in jsdom
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    // Default: no returning customer recognized.
+    mockUseReturningCustomer.mockReturnValue({
+      prefill: null,
+      isComplete: false,
+      loading: false,
+      found: false,
+    });
+    localStorage.clear();
     mockPromoSingle.mockResolvedValue({ data: null, error: { message: 'not found' } });
     mockInsertSingle.mockResolvedValue({
       data: { id: 'order-1', order_number: 'TBS-0001' },
@@ -473,6 +509,83 @@ describe('Checkout', () => {
       expect(
         screen.queryByText(/outside your access tier/i),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Returning Customer (recognized by email) ---
+  // A verified member who has ordered before under the same email should not have
+  // to re-fill the checkout form. When the server returns their prior details and
+  // they are complete, jump straight to the payment step; otherwise just prefill.
+
+  const verifiedProps = {
+    ...defaultProps,
+    defaultEmail: 'maria@member.com',
+    lockEmail: true,
+    canAccessCategory: () => true,
+  };
+
+  describe('returning customer', () => {
+    it('enables the lookup with the verified member email', () => {
+      render(<Checkout {...verifiedProps} />);
+
+      expect(mockUseReturningCustomer).toHaveBeenCalledWith('maria@member.com', true);
+    });
+
+    it('does not look up returning details for an unverified (unlocked) email', () => {
+      render(<Checkout {...defaultProps} defaultEmail="" lockEmail={false} />);
+
+      expect(mockUseReturningCustomer).toHaveBeenCalledWith(null, false);
+    });
+
+    it('auto-skips to the payment step when the returning details are complete', async () => {
+      mockUseReturningCustomer.mockReturnValue({
+        prefill: returningMember,
+        isComplete: true,
+        loading: false,
+        found: true,
+      });
+
+      render(<Checkout {...verifiedProps} />);
+
+      // Lands on payment, not the details form.
+      expect(await screen.findByText('Payment & Verification')).toBeInTheDocument();
+      expect(screen.getByText(/Welcome back, Maria Santos/i)).toBeInTheDocument();
+      expect(screen.queryByText('Checkout Information')).not.toBeInTheDocument();
+    });
+
+    it('lets the returning customer go back to edit their details', async () => {
+      mockUseReturningCustomer.mockReturnValue({
+        prefill: returningMember,
+        isComplete: true,
+        loading: false,
+        found: true,
+      });
+
+      render(<Checkout {...verifiedProps} />);
+
+      await screen.findByText('Payment & Verification');
+      await userEvent.click(screen.getByRole('button', { name: /not you\? edit details/i }));
+
+      // Back on the details form with the fields prefilled.
+      expect(await screen.findByText('Checkout Information')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Maria Santos')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('123 Main St')).toBeInTheDocument();
+    });
+
+    it('prefills but stays on details when the returning info is incomplete', async () => {
+      mockUseReturningCustomer.mockReturnValue({
+        prefill: { ...returningMember, shippingLocation: '' },
+        isComplete: false,
+        loading: false,
+        found: true,
+      });
+
+      render(<Checkout {...verifiedProps} />);
+
+      // No auto-skip: still on the details form...
+      expect(await screen.findByText('Checkout Information')).toBeInTheDocument();
+      // ...but the known fields are prefilled so there is less to type.
+      expect(screen.getByDisplayValue('Maria Santos')).toBeInTheDocument();
     });
   });
 });

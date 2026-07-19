@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
@@ -86,6 +86,17 @@ const OrderTracking: React.FC = () => {
             setLoading(false);
         }
     }, []);
+
+    // Auto-track when arriving via the waybill QR: /track-order?order=<number>.
+    // Router-independent (reads window.location) so the deep link works from a
+    // fresh page load / scanned QR. trackOrder is stable (useCallback []).
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = params.get('order');
+        if (fromQuery) {
+            void trackOrder(fromQuery);
+        }
+    }, [trackOrder]);
 
     const handleTrack = (e: React.FormEvent) => {
         e.preventDefault();
