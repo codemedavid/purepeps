@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Package, CheckCircle, XCircle, Clock, Truck, AlertCircle, Search, RefreshCw, Eye, MessageCircle, Image as ImageIcon, Layers } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle, XCircle, Clock, Truck, AlertCircle, Search, RefreshCw, Eye, MessageCircle, Image as ImageIcon, Layers, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useMenu } from '../hooks/useMenu';
 import { useCouriers } from '../hooks/useCouriers';
 import posthog from '../lib/posthog';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../utils/orderTracking';
 import { toFacebookProfileUrl } from '../utils/facebookLink';
+import { buildWaybillData, canPrintWaybill } from '../utils/waybill';
+import { WaybillModal } from './waybill/WaybillModal';
 
 interface OrderItem {
   product_id: string;
@@ -78,6 +80,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   const [batchFilter, setBatchFilter] = useState<string>(BATCH_FILTER_ALL);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [printOrder, setPrintOrder] = useState<Order | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { refreshProducts } = useMenu();
@@ -456,6 +459,26 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     }
   };
 
+  // Build the waybill for the order queued to print. Regular orders carry no
+  // per-batch admin fee, so adminFee is left off (shown as absent, not ₱0).
+  const printBatch = printOrder?.group_buy_batch_id
+    ? batchById.get(printOrder.group_buy_batch_id)
+    : undefined;
+  const waybillModal = printOrder ? (
+    <WaybillModal
+      waybills={[
+        buildWaybillData(printOrder, {
+          batchLabel: printOrder.group_buy_batch_id
+            ? printBatch
+              ? batchLabel(printBatch)
+              : 'Group Buy'
+            : null,
+        }),
+      ]}
+      onClose={() => setPrintOrder(null)}
+    />
+  ) : null;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-white flex items-center justify-center">
@@ -469,20 +492,25 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
 
   if (selectedOrder) {
     return (
-      <OrderDetailsView
-        order={selectedOrder}
-        batch={selectedOrder.group_buy_batch_id ? batchById.get(selectedOrder.group_buy_batch_id) : undefined}
-        onBack={() => setSelectedOrder(null)}
-        onConfirm={() => handleConfirmOrder(selectedOrder)}
-        onUpdateStatus={handleUpdateOrderStatus}
-        onSaveTracking={handleSaveTracking}
-        isProcessing={isProcessing}
-      />
+      <>
+        {waybillModal}
+        <OrderDetailsView
+          order={selectedOrder}
+          batch={selectedOrder.group_buy_batch_id ? batchById.get(selectedOrder.group_buy_batch_id) : undefined}
+          onBack={() => setSelectedOrder(null)}
+          onConfirm={() => handleConfirmOrder(selectedOrder)}
+          onUpdateStatus={handleUpdateOrderStatus}
+          onSaveTracking={handleSaveTracking}
+          onPrintWaybill={() => setPrintOrder(selectedOrder)}
+          isProcessing={isProcessing}
+        />
+      </>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-white">
+      {waybillModal}
       {/* Header */}
       <div className="bg-white shadow-md border-b-4 border-navy-900">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
@@ -624,6 +652,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 order={order}
                 batch={order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined}
                 onView={() => setSelectedOrder(order)}
+                onPrintWaybill={() => setPrintOrder(order)}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
               />
@@ -640,11 +669,12 @@ interface OrderCardProps {
   order: Order;
   batch?: BatchSummary;
   onView: () => void;
+  onPrintWaybill: () => void;
   getStatusColor: (status: string) => string;
   getStatusIcon: (status: string) => React.ReactNode;
 }
 
-const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, getStatusColor, getStatusIcon }) => {
+const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, onPrintWaybill, getStatusColor, getStatusIcon }) => {
   const totalItems = order.order_items.reduce((sum, item) => sum + item.quantity, 0);
   const finalTotal = order.total_price + (order.shipping_fee || 0);
 
@@ -713,6 +743,19 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, getStatusCo
             <Eye className="w-3 h-3 md:w-4 md:h-4" />
             View Details
           </button>
+          {canPrintWaybill(order.order_status) && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrintWaybill();
+              }}
+              className="px-3 md:px-4 py-1.5 md:py-2 bg-white border border-navy-900/30 text-navy-900 hover:bg-gray-50 rounded-lg transition-colors font-medium text-xs md:text-sm flex items-center justify-center gap-1 md:gap-2 shadow-sm"
+              title="Print customer waybill"
+            >
+              <Printer className="w-3 h-3 md:w-4 md:h-4" />
+              Waybill
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -727,6 +770,7 @@ interface OrderDetailsViewProps {
   onConfirm: () => void;
   onUpdateStatus: (orderId: string, status: string) => void;
   onSaveTracking: (orderId: string, trackingNumber: string, shippingProvider: string, shippingNote: string) => void;
+  onPrintWaybill: () => void;
   isProcessing: boolean;
 }
 
@@ -737,6 +781,7 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
   onConfirm,
   onUpdateStatus,
   onSaveTracking,
+  onPrintWaybill,
   isProcessing
 }) => {
   const { couriers } = useCouriers();
@@ -776,6 +821,17 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
                 Order #{order.order_number || order.id.slice(0, 8).toUpperCase()}
               </h1>
             </div>
+            {canPrintWaybill(order.order_status) && (
+              <button
+                onClick={onPrintWaybill}
+                className="shrink-0 bg-white border border-navy-900/30 text-navy-900 hover:bg-gray-50 px-2 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl font-medium text-xs md:text-sm shadow-sm transition-all flex items-center gap-1 md:gap-2"
+                title="Print customer waybill"
+              >
+                <Printer className="w-3 h-3 md:w-4 md:h-4" />
+                <span className="hidden sm:inline">Print Waybill</span>
+                <span className="sm:hidden">Waybill</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

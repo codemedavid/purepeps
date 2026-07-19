@@ -8,6 +8,7 @@ import {
   Tag,
   AlertTriangle,
   Upload,
+  Printer,
 } from 'lucide-react';
 import { useCouriers } from '../../hooks/useCouriers';
 import { useImageUpload } from '../../hooks/useImageUpload';
@@ -18,6 +19,8 @@ import type { BatchOrder, OrderLineItem, Product } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { OrderItemsEditor } from './OrderItemsEditor';
 import { batchStatusColor, peso, formatDateTime } from './orderStatusStyles';
+import { buildWaybillData, canPrintWaybill } from '../../utils/waybill';
+import { WaybillModal } from '../waybill/WaybillModal';
 
 interface TrackingInput {
   tracking_number: string | null;
@@ -29,6 +32,10 @@ interface BatchOrderDetailProps {
   order: BatchOrder;
   products: Product[];
   busy: boolean;
+  /** Per-batch admin/access fee (PHP) printed on the waybill. */
+  adminFee?: number | null;
+  /** e.g. "Batch #3 · Recovery drop" — printed on the waybill. */
+  batchLabel?: string | null;
   /** Sequence context when this order is one of a customer's linked orders. */
   sequence?: OrderSequenceContext | null;
   onSelectSibling?: (orderId: string) => void;
@@ -59,6 +66,8 @@ export function BatchOrderDetail({
   order,
   products,
   busy,
+  adminFee = null,
+  batchLabel = null,
   sequence,
   onSelectSibling,
   canAddOrder = true,
@@ -80,6 +89,7 @@ export function BatchOrderDetail({
   // could silently overwrite shipping_provider with the wrong value on save.
   const [shippingProvider, setShippingProvider] = useState(order.shipping_provider ?? '');
   const [shippingNote, setShippingNote] = useState(order.shipping_note ?? '');
+  const [showWaybill, setShowWaybill] = useState(false);
 
   useEffect(() => {
     setTrackingNumber(order.tracking_number ?? '');
@@ -157,6 +167,12 @@ export function BatchOrderDetail({
 
   return (
     <div className="space-y-4">
+      {showWaybill && (
+        <WaybillModal
+          waybills={[buildWaybillData(order, { adminFee, batchLabel })]}
+          onClose={() => setShowWaybill(false)}
+        />
+      )}
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -166,12 +182,25 @@ export function BatchOrderDetail({
           <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
           Back to batch orders
         </button>
-        {order.is_claim && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold">
-            <Tag className="h-3 w-3" />
-            Claim add-on
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {order.is_claim && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold">
+              <Tag className="h-3 w-3" />
+              Claim add-on
+            </span>
+          )}
+          {canPrintWaybill(order.order_status) && (
+            <button
+              type="button"
+              onClick={() => setShowWaybill(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 text-xs font-medium shadow-sm"
+              title="Print customer waybill"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print waybill
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 md:p-5 space-y-5">

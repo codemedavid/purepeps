@@ -114,3 +114,310 @@
 .animate-sheetUp {
   animation: sheetUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
+
+/* ============================================================
+   Printable customer waybill / order summary (J&T-style)
+   Kept in plain CSS (not Tailwind @apply) so the print rules are
+   self-contained and easy to reason about across print/screen.
+   ============================================================ */
+
+.wb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: rgba(17, 24, 39, 0.75);
+}
+
+.wb-modal {
+  width: 100%;
+  max-width: 900px;
+  background: #f3f4f6;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.wb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #111827;
+  color: #fff;
+}
+
+.wb-toolbar-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wb-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-btn-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wb-btn-print:hover {
+  background: #15803d;
+}
+
+.wb-btn-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.wb-btn-close:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.waybill-print-area {
+  padding: 16px;
+}
+
+.wb-page + .wb-page {
+  margin-top: 16px;
+}
+
+/* The waybill sheet itself — strong borders + dark text for paper legibility. */
+.wb-sheet {
+  background: #fff;
+  color: #111827;
+  border: 2px solid #111827;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wb-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 2px solid #111827;
+  background: #f9fafb;
+}
+
+.wb-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #111827;
+  margin: 0;
+}
+
+.wb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #374151;
+}
+
+.wb-mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+.wb-tag {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.wb-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.wb-qr-caption {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 9px;
+  color: #374151;
+}
+
+.wb-body {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+}
+
+.wb-col-left {
+  border-right: 2px solid #111827;
+}
+
+.wb-block {
+  padding: 8px 12px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.wb-block:last-child {
+  border-bottom: none;
+}
+
+.wb-block-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.wb-field {
+  margin: 2px 0;
+  color: #111827;
+  word-break: break-word;
+}
+
+.wb-field-label {
+  font-weight: 700;
+}
+
+.wb-paid {
+  font-weight: 700;
+  color: #15803d;
+}
+
+.wb-unpaid {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.wb-col-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.wb-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.wb-table th,
+.wb-table td {
+  border-bottom: 1px solid #d1d5db;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.wb-table thead th {
+  background: #111827;
+  color: #fff;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wb-th-num,
+.wb-td-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-td-item {
+  font-weight: 600;
+}
+
+.wb-empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 12px;
+}
+
+.wb-totals {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: auto;
+}
+
+.wb-totals td {
+  padding: 5px 8px;
+  border-top: 1px solid #d1d5db;
+}
+
+.wb-totals td:last-child {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-totals .wb-grand td {
+  border-top: 2px solid #111827;
+  font-size: 13px;
+  font-weight: 800;
+  background: #f3f4f6;
+}
+
+/* Print: reveal only the waybill area, drop all admin chrome. The
+   visibility toggle keeps document flow intact while hiding every other
+   element (nav, buttons, backdrop) so nothing but the waybill hits paper. */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .waybill-print-area,
+  .waybill-print-area * {
+    visibility: visible !important;
+  }
+
+  .waybill-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    background: #fff;
+  }
+
+  .wb-no-print,
+  .wb-no-print * {
+    visibility: hidden !important;
+  }
+
+  .wb-page {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .wb-page + .wb-page {
+    margin-top: 0;
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .wb-sheet {
+    border-width: 2px;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ShoppingCart, RefreshCw, CheckSquare, Users, Search, X } from 'lucide-react';
+import { ShoppingCart, RefreshCw, CheckSquare, Users, Search, X, Printer } from 'lucide-react';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../../utils/orderTracking';
 import { filterBatchOrders } from '../../utils/groupBuyOverview';
 import { groupBatchOrders } from '../../utils/batchOrderGroups';
@@ -7,12 +7,18 @@ import type { BatchOrder } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { peso } from './orderStatusStyles';
 import { BatchOrderRow } from './BatchOrderRow';
+import { buildWaybillData, canPrintWaybill } from '../../utils/waybill';
+import { WaybillModal } from '../waybill/WaybillModal';
 
 interface BatchOrdersPanelProps {
   batchNumber: number;
   orders: BatchOrder[];
   loading: boolean;
   busy: boolean;
+  /** Per-batch admin/access fee (PHP) printed on each waybill. */
+  adminFee?: number | null;
+  /** e.g. "Batch #3 · Recovery drop" — printed on each waybill. */
+  batchLabel?: string | null;
   requestConfirm: RequestConfirm;
   onReload: () => void;
   onSelectOrder: (order: BatchOrder) => void;
@@ -45,6 +51,8 @@ export function BatchOrdersPanel({
   orders,
   loading,
   busy,
+  adminFee = null,
+  batchLabel = null,
   requestConfirm,
   onReload,
   onSelectOrder,
@@ -55,6 +63,17 @@ export function BatchOrdersPanel({
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTarget, setBulkTarget] = useState<string>('packing');
+  const [showAllWaybills, setShowAllWaybills] = useState(false);
+
+  // Every confirmed (or later-stage) order in the batch, as printable waybills.
+  // Drives the "Print all confirmed waybills" action; cancelled/new are excluded.
+  const confirmedWaybills = useMemo(
+    () =>
+      orders
+        .filter((order) => canPrintWaybill(order.order_status))
+        .map((order) => buildWaybillData(order, { adminFee, batchLabel })),
+    [orders, adminFee, batchLabel],
+  );
 
   // Clear any selection and leave select mode when the viewed batch changes, so a
   // bulk "Apply" can never fire against stale order IDs from a previously viewed batch.
@@ -124,12 +143,29 @@ export function BatchOrdersPanel({
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {showAllWaybills && (
+        <WaybillModal
+          waybills={confirmedWaybills}
+          onClose={() => setShowAllWaybills(false)}
+        />
+      )}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
           <ShoppingCart className="h-4 w-4 text-amber-600" />
           Orders in Batch #{batchNumber} ({orders.length})
         </h3>
         <div className="flex items-center gap-2">
+          {confirmedWaybills.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAllWaybills(true)}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
+              title="Print a waybill for every confirmed order in this batch"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print waybills ({confirmedWaybills.length})
+            </button>
+          )}
           <button
             type="button"
             onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
