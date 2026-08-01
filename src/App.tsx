@@ -16,6 +16,10 @@ import { useAccess } from './hooks/useAccess';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
 import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
+import { isViewOnlyActive } from './utils/groupBuySchedule';
+
+/** How often the storefront re-checks whether a pending view-only gate has lifted. */
+const VIEW_ONLY_TICK_MS = 30_000;
 
 // Lazy load route components
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
@@ -57,6 +61,7 @@ function MainApp() {
     // open so we don't flash a "closed" state on first paint. The server trigger is
     // the authoritative gate and the UI corrects once the RPC resolves.
     const isBatchOpen = groupBuy.loading || groupBuy.isBatchOpen;
+    const [now, setNow] = useState(() => new Date());
     const [currentView, setCurrentView] = useState<'menu' | 'cart' | 'checkout' | 'access'>('menu');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -87,9 +92,20 @@ function MainApp() {
         : filteredProducts;
 
     // "View-only mode" (per open batch): products stay browsable but Add-to-Cart is
-    // disabled until the admin flips it off ("allow adding now"). Gated on an open
-    // batch so no-batch / flag-off / still-loading never mis-gate. See MenuItemCard.
-    const viewOnly = !groupBuy.loading && groupBuy.isBatchOpen && (groupBuy.batch?.view_only_mode ?? false);
+    // disabled until the admin flips it off ("allow adding now") — or until the
+    // batch's announced start passes, since view-only is a pre-launch phase and the
+    // drop going live ends it (isViewOnlyActive). Gated on an open batch so
+    // no-batch / flag-off / still-loading never mis-gate. See MenuItemCard.
+    const viewOnly = !groupBuy.loading && groupBuy.isBatchOpen && isViewOnlyActive(groupBuy.batch, now);
+
+    // A page left open across the announced start must lift the gate on its own,
+    // so tick the clock while — and only while — a view-only gate is still pending.
+    const viewOnlyPending = viewOnly && !!groupBuy.batch?.starts_at;
+    useEffect(() => {
+        if (!viewOnlyPending) return;
+        const id = setInterval(() => setNow(new Date()), VIEW_ONLY_TICK_MS);
+        return () => clearInterval(id);
+    }, [viewOnlyPending]);
 
     // Only the group-buy-available lines may be checked out — a batch cap that
     // filled up while the item sat in the cart makes it "no longer available", so

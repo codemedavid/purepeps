@@ -6,6 +6,8 @@
  * regardless of the viewer's timezone.
  */
 
+import type { GroupBuyBatch } from '../types';
+
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
@@ -64,6 +66,29 @@ export const formatDateRange = (
   const sameMonth = from.getUTCMonth() === to.getUTCMonth();
   const right = sameMonth ? dayOfMonth(to) : monthDay(to);
   return `${monthDay(from)} – ${right}`;
+};
+
+/**
+ * Whether the storefront should currently be gated to "view-only" (browsable,
+ * Add-to-Cart disabled, CTA reads "Coming soon").
+ *
+ * View-only is a PRE-LAUNCH phase, so the batch's announced start is what ends
+ * it: once `starts_at` has passed the drop is live and the gate lifts itself,
+ * even if the admin never flipped the toggle back off. A batch with no announced
+ * start has nothing to lift at, so there the toggle stays fully manual.
+ *
+ * `now` is injectable for deterministic tests; the UI passes the live clock.
+ */
+export const isViewOnlyActive = (
+  batch: Pick<GroupBuyBatch, 'view_only_mode' | 'starts_at'> | null | undefined,
+  now: Date = new Date(),
+): boolean => {
+  if (!batch?.view_only_mode) return false;
+
+  const start = parse(batch.starts_at);
+  if (!start) return true;
+
+  return now.getTime() < start.getTime();
 };
 
 export interface Countdown {

@@ -560,6 +560,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                           When on, shoppers can browse products and open details but Add-to-Cart is
                           disabled everywhere (shown as "Coming soon"). Flip it off to allow adding
                           now — a pre-launch phase where people can look before the drop goes live.
+                          It also lifts on its own once this batch's announced start date passes.
                         </p>
                       </div>
                       <button
