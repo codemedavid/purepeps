@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatDateRange, getCountdown, getCountdownParts } from './groupBuySchedule';
+import { formatDateRange, getCountdown, getCountdownParts, isViewOnlyActive } from './groupBuySchedule';
+import type { GroupBuyBatch } from '../types';
 
 describe('formatDateRange', () => {
   it('returns empty string when both dates are missing', () => {
@@ -90,5 +91,66 @@ describe('getCountdownParts', () => {
       minutes: 0,
       seconds: 0,
     });
+  });
+});
+
+describe('isViewOnlyActive', () => {
+  const batch = (over: Partial<GroupBuyBatch> = {}): GroupBuyBatch =>
+    ({
+      id: 'batch-1',
+      batch_number: 28,
+      name: 'Gb 5',
+      status: 'open',
+      opened_at: '2026-07-26T00:00:00Z',
+      closed_at: null,
+      finalized_at: null,
+      fulfillment_stage: null,
+      ...over,
+    }) as GroupBuyBatch;
+
+  it('is inactive when the batch is not in view-only mode', () => {
+    const now = new Date('2026-07-26T12:00:00Z');
+    expect(isViewOnlyActive(batch({ view_only_mode: false, starts_at: null }), now)).toBe(false);
+  });
+
+  it('is inactive when there is no batch', () => {
+    expect(isViewOnlyActive(null, new Date('2026-07-26T12:00:00Z'))).toBe(false);
+  });
+
+  it('gates the storefront before the announced start', () => {
+    // Arrange
+    const now = new Date('2026-07-26T12:00:00Z');
+    const openBatch = batch({ view_only_mode: true, starts_at: '2026-07-27T00:00:00Z' });
+
+    // Act / Assert
+    expect(isViewOnlyActive(openBatch, now)).toBe(true);
+  });
+
+  it('lifts itself once the announced start has passed', () => {
+    // Arrange — the drop went live on Jul 27; it is now Aug 1.
+    const now = new Date('2026-08-01T00:00:00Z');
+    const openBatch = batch({ view_only_mode: true, starts_at: '2026-07-27T00:00:00Z' });
+
+    // Act / Assert
+    expect(isViewOnlyActive(openBatch, now)).toBe(false);
+  });
+
+  it('lifts itself exactly at the announced start instant', () => {
+    const now = new Date('2026-07-27T00:00:00Z');
+    expect(
+      isViewOnlyActive(batch({ view_only_mode: true, starts_at: '2026-07-27T00:00:00Z' }), now),
+    ).toBe(false);
+  });
+
+  it('stays gated with no announced start, so the toggle remains fully manual', () => {
+    const now = new Date('2026-07-26T12:00:00Z');
+    expect(isViewOnlyActive(batch({ view_only_mode: true, starts_at: null }), now)).toBe(true);
+  });
+
+  it('stays gated when the announced start is unparseable', () => {
+    const now = new Date('2026-07-26T12:00:00Z');
+    expect(isViewOnlyActive(batch({ view_only_mode: true, starts_at: 'not-a-date' }), now)).toBe(
+      true,
+    );
   });
 });
