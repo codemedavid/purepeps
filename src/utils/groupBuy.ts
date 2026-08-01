@@ -216,6 +216,57 @@ export function partitionCartAvailability<T extends CartLineRef>(
   return { available, unavailable };
 }
 
+/** A cart bucket (product + variation) whose quantity exceeds its cap headroom. */
+export interface OverCapLine {
+  productId: string;
+  variationId: string | null;
+  /** Total units of this product+variation across the cart. */
+  quantity: number;
+  /** Units the batch cap still allows for it. */
+  remaining: number;
+}
+
+/**
+ * The pre-submit cap gate shared by the cart and the checkout screen: buckets the
+ * lines by product AND variation, then compares each bucket against the headroom
+ * resolved by `remainingForVariation` (variation cap overrides the product cap;
+ * uncapped variations share the product pool).
+ *
+ * Bucketing per variation is the whole point: rolling every line of a product up
+ * against the product-level cap blocks a variation that still has slots the moment
+ * a sibling variation fills the product total — the bug shoppers hit in pasalo
+ * mode. Pure: never mutates the input, returns a new array in cart order.
+ */
+export function findOverCapLines(
+  lines: readonly (CartLineRef & { quantity: number })[],
+  items: GroupBuyProgressItem[],
+): OverCapLine[] {
+  const buckets = new Map<string, OverCapLine>();
+  for (const cartLine of lines) {
+    const productId = cartLine.product.id;
+    const variationId = cartLine.variation?.id ?? null;
+    const key = `${productId}:${variationId ?? ''}`;
+    const existing = buckets.get(key);
+    if (existing) {
+      buckets.set(key, { ...existing, quantity: existing.quantity + cartLine.quantity });
+    } else {
+      buckets.set(key, { productId, variationId, quantity: cartLine.quantity, remaining: 0 });
+    }
+  }
+
+  const over: OverCapLine[] = [];
+  for (const bucket of buckets.values()) {
+    const remaining = remainingForVariation(
+      findProgressItem(items, bucket.productId),
+      bucket.variationId,
+    );
+    if (remaining != null && bucket.quantity > remaining) {
+      over.push({ ...bucket, remaining });
+    }
+  }
+  return over;
+}
+
 /**
  * Filters a product list to the pasalo-eligible subset: capped products with
  * remaining capacity in the current batch. Pure — returns a new array and never

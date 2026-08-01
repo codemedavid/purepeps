@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, ShieldCheck, Package, CreditCard, Activity, Copy, Check, MessageCircle, Tag, Upload, Database, Lock, Truck } from 'lucide-react';
 import type { CartItem, GroupBuyProgressItem, Product } from '../types';
-import { findProgressItem, remainingForProduct } from '../utils/groupBuy';
+import { findOverCapLines } from '../utils/groupBuy';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
 import { useShippingLocations } from '../hooks/useShippingLocations';
 import { useCouriers } from '../hooks/useCouriers';
@@ -267,18 +267,19 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
-        // Pre-submit cap check: catch any product whose cart quantity exceeds what
-        // its batch cap still allows before we upload anything.
-        const cartQtyByProduct = cartItems.reduce<Record<string, number>>((acc, item) => {
-            acc[item.product.id] = (acc[item.product.id] || 0) + item.quantity;
-            return acc;
-        }, {});
-        const overCapProducts = Object.entries(cartQtyByProduct)
-            .filter(([productId, qty]) => {
-                const remaining = remainingForProduct(findProgressItem(groupBuyItems, productId));
-                return remaining != null && qty > remaining;
-            })
-            .map(([productId]) => cartItems.find((i) => i.product.id === productId)?.product.name || 'an item');
+        // Pre-submit cap check: catch any line whose cart quantity exceeds what its
+        // batch cap still allows before we upload anything. Resolved PER VARIATION
+        // (a variation cap overrides the product cap), so a variation that still has
+        // slots is never blocked by a sibling variation that filled up.
+        const overCapProducts = findOverCapLines(cartItems, groupBuyItems).map(
+            ({ productId, variationId }) => {
+                const match = cartItems.find(
+                    (i) => i.product.id === productId && (i.variation?.id ?? null) === variationId,
+                );
+                if (!match) return 'an item';
+                return match.variation ? `${match.product.name} (${match.variation.name})` : match.product.name;
+            },
+        );
         if (overCapProducts.length > 0) {
             alert(`The group limit was reached for ${overCapProducts.join(', ')}. Please lower the quantity before checking out.`);
             await onRefreshGroupBuy?.();

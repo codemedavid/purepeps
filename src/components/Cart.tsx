@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity, Lock } from 'lucide-react';
 import type { CartItem, GroupBuyProgressItem } from '../types';
-import { findProgressItem, isCartLineSoldOut, remainingForVariation } from '../utils/groupBuy';
+import { findOverCapLines, isCartLineSoldOut } from '../utils/groupBuy';
 import { cartSubtotal } from '../utils/cart';
 
 interface CartProps {
@@ -69,23 +69,10 @@ const Cart: React.FC<CartProps> = ({
   // variation (a variation cap overrides the product cap; otherwise the variation
   // falls back to the product's shared pool). The database trigger is the
   // authoritative backstop; this is the friendly, pre-submit guard.
-  const cartQtyByVariation = availableItems.reduce<
-    Record<string, { productId: string; variationId: string | null; qty: number; name: string }>
-  >((acc, item) => {
-    const variationId = item.variation?.id ?? null;
-    const key = variationId ? `${item.product.id}:${variationId}` : item.product.id;
-    if (!acc[key]) {
-      acc[key] = { productId: item.product.id, variationId, qty: 0, name: item.product.name };
-    }
-    acc[key].qty += item.quantity;
-    return acc;
-  }, {});
-  const overCapProducts = Object.values(cartQtyByVariation)
-    .filter(({ productId, variationId, qty }) => {
-      const remaining = remainingForVariation(findProgressItem(groupBuyItems, productId), variationId);
-      return remaining != null && qty > remaining;
-    })
-    .map(({ name }) => name);
+  const overCapProducts = findOverCapLines(availableItems, groupBuyItems).map(
+    ({ productId }) =>
+      availableItems.find((i) => i.product.id === productId)?.product.name ?? 'an item',
+  );
   const capBlocked = overCapProducts.length > 0;
   // Nothing left to buy once every line is sold out.
   const noAvailableItems = availableItems.length === 0;
