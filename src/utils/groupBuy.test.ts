@@ -19,6 +19,7 @@ import {
   isVariationSoldOut,
   isCartLineSoldOut,
   partitionCartAvailability,
+  findOverCapLines,
   combinedVariationCaps,
 } from './groupBuy';
 import type {
@@ -660,6 +661,122 @@ describe('partitionCartAvailability', () => {
     const lines = [line('p1'), line('p2')];
     const snapshot = [...lines];
     partitionCartAvailability(lines, items);
+    expect(lines).toEqual(snapshot);
+  });
+});
+
+// The pre-submit cap gate shared by the cart and the checkout screen. It must
+// resolve headroom PER VARIATION (a variation cap overrides the product cap;
+// uncapped variations share the product pool), never by rolling every line of a
+// product up against the product-level cap — that wrongly blocks a variation
+// that still has slots as soon as a sibling variation fills up.
+describe('findOverCapLines', () => {
+  it('returns nothing when there are no caps at all', () => {
+    expect(findOverCapLines([line('p1', 'v1', 5)], [])).toEqual([]);
+  });
+
+  it('flags a line whose quantity exceeds its variation headroom', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        variations: [variation({ variation_id: 'v1', cap_quantity: 10, total_quantity: 8 })],
+      }),
+    ];
+    expect(findOverCapLines([line('p1', 'v1', 3)], items)).toEqual([
+      { productId: 'p1', variationId: 'v1', quantity: 3, remaining: 2 },
+    ]);
+  });
+
+  it('allows a line that exactly fills the remaining variation headroom', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        variations: [variation({ variation_id: 'v1', cap_quantity: 10, total_quantity: 8 })],
+      }),
+    ];
+    expect(findOverCapLines([line('p1', 'v1', 2)], items)).toEqual([]);
+  });
+
+  it('does NOT block a variation with room when a sibling variation is full', () => {
+    // The pasalo-mode bug: CAGRI has a product-level cap plus per-variation caps.
+    // One variation is full, so the product total already equals the product cap —
+    // but the other variation still has its own headroom and must stay orderable.
+    const items = [
+      item({
+        product_id: 'cagri',
+        cap_quantity: 20,
+        total_quantity: 20,
+        variations: [
+          variation({ variation_id: 'full', cap_quantity: 20, total_quantity: 20 }),
+          variation({ variation_id: 'open', cap_quantity: 20, total_quantity: 0 }),
+        ],
+      }),
+    ];
+    expect(findOverCapLines([line('cagri', 'open', 3)], items)).toEqual([]);
+  });
+
+  it('still blocks the sibling variation that is actually full', () => {
+    const items = [
+      item({
+        product_id: 'cagri',
+        cap_quantity: 20,
+        total_quantity: 20,
+        variations: [
+          variation({ variation_id: 'full', cap_quantity: 20, total_quantity: 20 }),
+          variation({ variation_id: 'open', cap_quantity: 20, total_quantity: 0 }),
+        ],
+      }),
+    ];
+    expect(findOverCapLines([line('cagri', 'full', 1)], items)).toEqual([
+      { productId: 'cagri', variationId: 'full', quantity: 1, remaining: 0 },
+    ]);
+  });
+
+  it('sums duplicate lines of the same variation before comparing to the cap', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        variations: [variation({ variation_id: 'v1', cap_quantity: 4, total_quantity: 0 })],
+      }),
+    ];
+    expect(findOverCapLines([line('p1', 'v1', 3), line('p1', 'v1', 3)], items)).toEqual([
+      { productId: 'p1', variationId: 'v1', quantity: 6, remaining: 4 },
+    ]);
+  });
+
+  it('keeps sibling variations in separate buckets', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        variations: [
+          variation({ variation_id: 'a', cap_quantity: 2, total_quantity: 0 }),
+          variation({ variation_id: 'b', cap_quantity: 10, total_quantity: 0 }),
+        ],
+      }),
+    ];
+    const over = findOverCapLines([line('p1', 'a', 5), line('p1', 'b', 5)], items);
+    expect(over).toEqual([{ productId: 'p1', variationId: 'a', quantity: 5, remaining: 2 }]);
+  });
+
+  it('falls back to the shared product pool for uncapped variations', () => {
+    const items = [
+      item({
+        product_id: 'p1',
+        cap_quantity: 10,
+        total_quantity: 8,
+        variations: [variation({ variation_id: 'v1', cap_quantity: null, total_quantity: 8 })],
+      }),
+    ];
+    expect(findOverCapLines([line('p1', 'v1', 3)], items)).toEqual([
+      { productId: 'p1', variationId: 'v1', quantity: 3, remaining: 2 },
+    ]);
+  });
+
+  it('does not mutate the input lines', () => {
+    const items = [item({ product_id: 'p1', cap_quantity: 1, total_quantity: 1 })];
+    const lines = [line('p1', null, 2)];
+    const snapshot = JSON.parse(JSON.stringify(lines));
+    findOverCapLines(lines, items);
     expect(lines).toEqual(snapshot);
   });
 });
