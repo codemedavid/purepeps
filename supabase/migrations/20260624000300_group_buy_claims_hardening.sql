@@ -1,3 +1,11 @@
+-- !! SUPERSEDED (cap enforcement) — DO NOT RE-APPLY THIS FILE !!
+-- Its enforce_group_buy_on_order() definition predates per-variation caps: it
+-- compares EVERY group_buy_caps row against the product's whole unit total, so a
+-- variation cap of 20 rejects an order once the product total passes 20 even
+-- while that variation still has room. Re-running this file over
+-- 20260720000000_repair_variation_aware_cap_enforcement.sql caused the "cap 20,
+-- already reserved 27" checkout failures. Kept for history only.
+--
 -- Pure Peps — Group Buy claims security hardening (review remediation).
 --
 -- Fixes found by adversarial review of 20260624000200_group_buy_claims.sql:
