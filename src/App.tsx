@@ -12,6 +12,7 @@ import FloatingCartButton from './components/FloatingCartButton';
 import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
+import StorefrontNoticeGate from './components/StorefrontNoticeGate';
 import { useAccess } from './hooks/useAccess';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
@@ -114,6 +115,9 @@ function MainApp() {
 
     return (
         <div className="min-h-screen bg-white font-inter flex flex-col">
+            {/* Research-use disclaimer — shown on every visit until acknowledged. */}
+            <StorefrontNoticeGate />
+
             <Header
                 cartItemsCount={cart.getTotalItems()}
                 onCartClick={() => handleViewChange('cart')}

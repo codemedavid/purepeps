@@ -3,6 +3,7 @@ import { Home, Layout } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useImageUpload } from '../hooks/useImageUpload';
 import AccessIntakeToggle from './AccessIntakeToggle';
+import StorefrontNoticeManager from './StorefrontNoticeManager';
 
 const SiteSettingsManager: React.FC = () => {
   const { siteSettings, loading, updateSiteSettings } = useSiteSettings();
@@ -117,6 +118,9 @@ const SiteSettingsManager: React.FC = () => {
     <div className="space-y-8 pb-12">
       {/* Access request intake switch (shared with the Access Requests view). */}
       <AccessIntakeToggle />
+
+      {/* Every string in the storefront's Important Notice pop-up. */}
+      <StorefrontNoticeManager />
 
       {/* General Site Settings Card */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
