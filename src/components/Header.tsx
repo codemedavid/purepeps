@@ -7,9 +7,17 @@ interface HeaderProps {
   onMenuClick: () => void;
   onGetAccess: () => void;
   isVerified: boolean;
+  hideMobileStorefrontActions?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClick, onGetAccess, isVerified }) => {
+const Header: React.FC<HeaderProps> = ({
+  cartItemsCount,
+  onCartClick,
+  onMenuClick,
+  onGetAccess,
+  isVerified,
+  hideMobileStorefrontActions = false,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -83,7 +91,8 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
               {/* Cart Button */}
               <button
                 onClick={onCartClick}
-                className="relative p-2.5 text-sakura-ink hover:bg-sakura-blush-soft rounded-xl transition-colors"
+                aria-label="View cart"
+                className={`${hideMobileStorefrontActions ? 'hidden md:block ' : ''}relative p-2.5 text-sakura-ink hover:bg-sakura-blush-soft rounded-xl transition-colors`}
               >
                 <ShoppingCart className="w-5 h-5" />
                 {cartItemsCount > 0 && (
@@ -107,24 +116,26 @@ const Header: React.FC<HeaderProps> = ({ cartItemsCount, onCartClick, onMenuClic
               </button>
 
               {/* Mobile Menu Button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"
-                aria-label="Toggle menu"
-              >
-                {mobileMenuOpen ? (
-                  <X className="w-6 h-6" />
-                ) : (
-                  <Menu className="w-6 h-6" />
-                )}
-              </button>
+              {!hideMobileStorefrontActions && (
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="md:hidden p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"
+                  aria-label="Toggle menu"
+                >
+                  {mobileMenuOpen ? (
+                    <X className="w-6 h-6" />
+                  ) : (
+                    <Menu className="w-6 h-6" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
       </header>
 
       {/* Mobile Navigation Menu */}
-      {mobileMenuOpen && (
+      {!hideMobileStorefrontActions && mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-[60]">
           {/* Backdrop */}
           <div
