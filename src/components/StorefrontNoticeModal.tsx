@@ -1,8 +1,39 @@
 import { useEffect, useRef } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { StorefrontNotice, splitLines, splitParagraphs } from '../utils/storefrontNotice';
 
 const FALLBACK_BUTTON_LABEL = 'I Understand & Agree';
+
+const STYLE_CONFIG = {
+  info: {
+    Icon: Info,
+    header: 'bg-blue-50 border-blue-100',
+    icon: 'text-blue-600',
+    accent: 'border-blue-100 bg-blue-50 text-blue-700',
+    button: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-400',
+  },
+  warning: {
+    Icon: AlertTriangle,
+    header: 'bg-sakura-blush-soft border-sakura-edge',
+    icon: 'text-amber-500',
+    accent: 'border-sakura-edge bg-sakura-blush-soft text-brand-400',
+    button: 'bg-brand-400 hover:bg-brand-500 focus:ring-brand-300',
+  },
+  success: {
+    Icon: CheckCircle2,
+    header: 'bg-emerald-50 border-emerald-100',
+    icon: 'text-emerald-600',
+    accent: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    button: 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-400',
+  },
+  critical: {
+    Icon: AlertCircle,
+    header: 'bg-red-50 border-red-100',
+    icon: 'text-red-600',
+    accent: 'border-red-100 bg-red-50 text-red-700',
+    button: 'bg-red-600 hover:bg-red-700 focus:ring-red-400',
+  },
+} as const;
 
 type Props = {
   notice: StorefrontNotice;
@@ -37,6 +68,8 @@ export default function StorefrontNoticeModal({ notice, onAccept, isPreview = fa
   const title = notice.title.trim();
   const buttonLabel = notice.buttonLabel.trim() || FALLBACK_BUTTON_LABEL;
   const hasPolicy = policyTitle.length > 0 || policyLines.length > 0;
+  const style = STYLE_CONFIG[notice.style];
+  const NoticeIcon = style.Icon;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-charcoal-900/50 p-4 backdrop-blur-sm">
@@ -44,12 +77,13 @@ export default function StorefrontNoticeModal({ notice, onAccept, isPreview = fa
         {...(isPreview
           ? { 'aria-hidden': true }
           : { role: 'dialog', 'aria-modal': true, 'aria-labelledby': 'storefront-notice-title' })}
+        data-style={notice.style}
         className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl"
       >
         {/* Header */}
-        <div className="flex items-start gap-4 rounded-t-2xl bg-sakura-blush-soft px-6 py-5 border-b border-sakura-edge">
+        <div className={`flex items-start gap-4 rounded-t-2xl px-6 py-5 border-b ${style.header}`}>
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
-            <AlertTriangle className="h-6 w-6 text-amber-500" aria-hidden="true" />
+            <NoticeIcon data-testid="notice-icon" className={`h-6 w-6 ${style.icon}`} aria-hidden="true" />
           </div>
           <div>
             <h2 id={isPreview ? undefined : 'storefront-notice-title'} className="text-xl font-bold text-sakura-ink">
@@ -70,7 +104,7 @@ export default function StorefrontNoticeModal({ notice, onAccept, isPreview = fa
           {highlight && (
             <div
               data-testid="notice-highlight"
-              className="rounded-xl border border-sakura-edge bg-sakura-blush-soft px-4 py-3 text-center text-sm font-bold text-brand-400"
+              className={`rounded-xl border px-4 py-3 text-center text-sm font-bold ${style.accent}`}
             >
               {highlight}
             </div>
@@ -79,7 +113,7 @@ export default function StorefrontNoticeModal({ notice, onAccept, isPreview = fa
           {hasPolicy && (
             <div
               data-testid="notice-policy"
-              className="rounded-xl border border-sakura-edge bg-sakura-blush-soft px-4 py-3"
+              className={`rounded-xl border px-4 py-3 ${style.accent}`}
             >
               {policyTitle && <p className="text-sm font-bold text-sakura-ink">{policyTitle}</p>}
               {policyLines.length > 0 && (
@@ -100,7 +134,7 @@ export default function StorefrontNoticeModal({ notice, onAccept, isPreview = fa
             onClick={isPreview ? undefined : onAccept}
             disabled={isPreview}
             tabIndex={isPreview ? -1 : undefined}
-            className="w-full rounded-xl bg-brand-400 px-4 py-3 text-base font-bold text-white shadow-md transition-colors hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:ring-offset-2"
+            className={`w-full rounded-xl px-4 py-3 text-base font-bold text-white shadow-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${style.button}`}
           >
             {buttonLabel}
           </button>

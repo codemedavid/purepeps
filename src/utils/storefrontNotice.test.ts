@@ -1,12 +1,109 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import {
   DEFAULT_STOREFRONT_NOTICE,
   STOREFRONT_NOTICE_KEYS,
   noticeFromSettings,
   noticeToSettingRows,
+  getNoticeAcknowledgementKey,
+  hasAcknowledgedNotice,
+  acknowledgeNotice,
+  createBlankStorefrontNotice,
+  fromManilaDatetimeLocal,
+  toManilaDatetimeLocal,
+  validateNoticeForPublish,
   splitLines,
   splitParagraphs,
 } from './storefrontNotice';
+
+describe('managed notice validation', () => {
+  it('allows incomplete drafts but reports every publication blocker', () => {
+    const draft = createBlankStorefrontNotice();
+
+    expect(validateNoticeForPublish(draft)).toEqual({
+      internalName: 'Internal name is required.',
+      title: 'Title is required.',
+      body: 'Body is required.',
+      buttonLabel: 'Button label is required.',
+    });
+  });
+
+  it('requires at least one target page and an end after the start', () => {
+    const notice = {
+      ...DEFAULT_STOREFRONT_NOTICE,
+      pageIds: [],
+      startsAt: '2026-08-12T10:00:00.000Z',
+      endsAt: '2026-08-12T09:00:00.000Z',
+    };
+
+    expect(validateNoticeForPublish(notice)).toEqual(expect.objectContaining({
+      pageIds: 'Select at least one page.',
+      endsAt: 'End time must be after the start time.',
+    }));
+  });
+
+  it('accepts the complete legal notice', () => {
+    expect(validateNoticeForPublish(DEFAULT_STOREFRONT_NOTICE)).toEqual({});
+  });
+});
+
+describe('Manila scheduling values', () => {
+  it('formats UTC timestamps for a Manila datetime-local control', () => {
+    expect(toManilaDatetimeLocal('2026-08-12T10:30:00.000Z')).toBe('2026-08-12T18:30');
+  });
+
+  it('stores Manila datetime-local values as UTC', () => {
+    expect(fromManilaDatetimeLocal('2026-08-12T18:30')).toBe('2026-08-12T10:30:00.000Z');
+    expect(fromManilaDatetimeLocal('')).toBeNull();
+  });
+});
+
+describe('notice acknowledgements', () => {
+  const notice = {
+    ...DEFAULT_STOREFRONT_NOTICE,
+    id: '6f8a5363-56b9-4fdd-a985-260c8f910ccb',
+    version: 3,
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('keys an acknowledgement by notice id and published version', () => {
+    expect(getNoticeAcknowledgementKey(notice)).toBe(
+      'storefront-notice:6f8a5363-56b9-4fdd-a985-260c8f910ccb:v3',
+    );
+  });
+
+  it('stores once-per-browser acknowledgements in local storage', () => {
+    const once = { ...notice, frequency: 'once' as const };
+
+    expect(hasAcknowledgedNotice(once, localStorage, sessionStorage)).toBe(false);
+    acknowledgeNotice(once, localStorage, sessionStorage);
+
+    expect(hasAcknowledgedNotice(once, localStorage, sessionStorage)).toBe(true);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('stores once-per-session acknowledgements in session storage', () => {
+    const session = { ...notice, frequency: 'session' as const };
+
+    acknowledgeNotice(session, localStorage, sessionStorage);
+
+    expect(hasAcknowledgedNotice(session, localStorage, sessionStorage)).toBe(true);
+    expect(localStorage.length).toBe(0);
+  });
+
+  it('does not persist every-visit acknowledgements', () => {
+    const everyVisit = { ...notice, frequency: 'every_visit' as const };
+
+    acknowledgeNotice(everyVisit, localStorage, sessionStorage);
+
+    expect(hasAcknowledgedNotice(everyVisit, localStorage, sessionStorage)).toBe(false);
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+});
 
 describe('splitParagraphs', () => {
   it('splits text on blank lines', () => {

@@ -9,7 +9,46 @@
  *    how an admin removes an optional section (highlight, policy, footer note).
  */
 
+export const NOTICE_STATUSES = ['draft', 'published', 'archived'] as const;
+export type NoticeStatus = (typeof NOTICE_STATUSES)[number];
+
+export const NOTICE_AUDIENCES = ['everyone', 'visitor', 'verified_member'] as const;
+export type NoticeAudience = (typeof NOTICE_AUDIENCES)[number];
+
+export const NOTICE_FREQUENCIES = ['once', 'session', 'every_visit'] as const;
+export type NoticeFrequency = (typeof NOTICE_FREQUENCIES)[number];
+
+export const NOTICE_STYLES = ['info', 'warning', 'success', 'critical'] as const;
+export type NoticeStyle = (typeof NOTICE_STYLES)[number];
+
+export const NOTICE_PAGE_IDS = [
+  'storefront.menu',
+  'storefront.cart',
+  'storefront.checkout',
+  'storefront.access',
+  'coa',
+  'faq',
+  'calculator',
+  'track-order',
+  'protocols',
+] as const;
+export type NoticePageId = (typeof NOTICE_PAGE_IDS)[number];
+
 export interface StorefrontNotice {
+  id: string;
+  internalName: string;
+  status: NoticeStatus;
+  version: number;
+  priority: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  audience: NoticeAudience;
+  pageIds: NoticePageId[];
+  frequency: NoticeFrequency;
+  style: NoticeStyle;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
   /** When false the modal never renders on the storefront. */
   isEnabled: boolean;
   title: string;
@@ -33,6 +72,16 @@ export interface StorefrontNoticeSettingRow {
   description?: string;
 }
 
+type LegacyNoticeTextField =
+  | 'title'
+  | 'subtitle'
+  | 'body'
+  | 'highlight'
+  | 'policyTitle'
+  | 'policyLines'
+  | 'buttonLabel'
+  | 'footerNote';
+
 const KEY_BY_FIELD = {
   isEnabled: 'storefront_notice_enabled',
   title: 'storefront_notice_title',
@@ -43,15 +92,29 @@ const KEY_BY_FIELD = {
   policyLines: 'storefront_notice_policy_lines',
   buttonLabel: 'storefront_notice_button_label',
   footerNote: 'storefront_notice_footer_note',
-} as const satisfies Record<keyof StorefrontNotice, string>;
+} as const satisfies Record<'isEnabled' | LegacyNoticeTextField, string>;
 
 const TEXT_FIELDS = Object.keys(KEY_BY_FIELD).filter(
-  (field): field is Exclude<keyof StorefrontNotice, 'isEnabled'> => field !== 'isEnabled',
+  (field): field is LegacyNoticeTextField => field !== 'isEnabled',
 );
 
 export const STOREFRONT_NOTICE_KEYS: readonly string[] = Object.values(KEY_BY_FIELD);
 
 export const DEFAULT_STOREFRONT_NOTICE: StorefrontNotice = {
+  id: 'fallback-legal-notice',
+  internalName: 'Research-use legal notice',
+  status: 'published',
+  version: 1,
+  priority: 0,
+  startsAt: null,
+  endsAt: null,
+  audience: 'everyone',
+  pageIds: ['storefront.menu'],
+  frequency: 'every_visit',
+  style: 'warning',
+  publishedAt: null,
+  createdAt: '',
+  updatedAt: '',
   isEnabled: true,
   title: 'Important Notice',
   subtitle: 'Please read before continuing',
@@ -70,6 +133,82 @@ export const DEFAULT_STOREFRONT_NOTICE: StorefrontNotice = {
   ].join('\n'),
   buttonLabel: '🛡️ I Understand & Agree',
   footerNote: 'This notice is shown on every visit to the storefront.',
+};
+
+type VersionedNotice = Pick<StorefrontNotice, 'id' | 'version' | 'frequency'>;
+
+export const getNoticeAcknowledgementKey = (notice: Pick<VersionedNotice, 'id' | 'version'>): string =>
+  `storefront-notice:${notice.id}:v${notice.version}`;
+
+export const hasAcknowledgedNotice = (
+  notice: VersionedNotice,
+  local: Pick<Storage, 'getItem'>,
+  session: Pick<Storage, 'getItem'>,
+): boolean => {
+  const key = getNoticeAcknowledgementKey(notice);
+  if (notice.frequency === 'once') return local.getItem(key) === 'acknowledged';
+  if (notice.frequency === 'session') return session.getItem(key) === 'acknowledged';
+  return false;
+};
+
+export const acknowledgeNotice = (
+  notice: VersionedNotice,
+  local: Pick<Storage, 'setItem'>,
+  session: Pick<Storage, 'setItem'>,
+): void => {
+  const key = getNoticeAcknowledgementKey(notice);
+  if (notice.frequency === 'once') local.setItem(key, 'acknowledged');
+  if (notice.frequency === 'session') session.setItem(key, 'acknowledged');
+};
+
+export const createBlankStorefrontNotice = (): StorefrontNotice => ({
+  ...DEFAULT_STOREFRONT_NOTICE,
+  id: '',
+  internalName: '',
+  status: 'draft',
+  title: '',
+  subtitle: '',
+  body: '',
+  highlight: '',
+  policyTitle: '',
+  policyLines: '',
+  buttonLabel: '',
+  footerNote: '',
+  publishedAt: null,
+  createdAt: '',
+  updatedAt: '',
+});
+
+export type NoticeValidationErrors = Partial<Record<
+  'internalName' | 'title' | 'body' | 'buttonLabel' | 'pageIds' | 'endsAt',
+  string
+>>;
+
+export const validateNoticeForPublish = (notice: StorefrontNotice): NoticeValidationErrors => {
+  const errors: NoticeValidationErrors = {};
+  if (!notice.internalName.trim()) errors.internalName = 'Internal name is required.';
+  if (!notice.title.trim()) errors.title = 'Title is required.';
+  if (!notice.body.trim()) errors.body = 'Body is required.';
+  if (!notice.buttonLabel.trim()) errors.buttonLabel = 'Button label is required.';
+  if (notice.pageIds.length === 0) errors.pageIds = 'Select at least one page.';
+  if (notice.startsAt && notice.endsAt && new Date(notice.endsAt) <= new Date(notice.startsAt)) {
+    errors.endsAt = 'End time must be after the start time.';
+  }
+  return errors;
+};
+
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export const toManilaDatetimeLocal = (iso: string | null): string => {
+  if (!iso) return '';
+  const time = new Date(iso).getTime();
+  return Number.isNaN(time) ? '' : new Date(time + MANILA_OFFSET_MS).toISOString().slice(0, 16);
+};
+
+export const fromManilaDatetimeLocal = (value: string): string | null => {
+  if (!value) return null;
+  const date = new Date(`${value}:00+08:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
 /** Splits notice body text into paragraphs on blank lines, dropping empties. */
