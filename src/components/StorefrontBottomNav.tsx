@@ -1,5 +1,6 @@
 import React from 'react';
 import { BookOpen, ClipboardList, Home, ShoppingCart, Store } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export type StorefrontView = 'menu' | 'cart' | 'checkout' | 'access';
 export type MenuDestination = 'home' | 'shop';
@@ -82,15 +83,15 @@ const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
         </button>
       </div>
 
-      <a href="/track-order" className={itemClassName(false)}>
+      <Link to="/track-order" className={itemClassName(false)}>
         <ClipboardList aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
         <span>Orders</span>
-      </a>
+      </Link>
 
-      <a href="/protocols" className={itemClassName(false)}>
+      <Link to="/protocols" className={itemClassName(false)}>
         <BookOpen aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
         <span>Guides</span>
-      </a>
+      </Link>
     </nav>
   );
 };

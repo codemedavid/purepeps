@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import StorefrontBottomNav, {
   type MenuDestination,
@@ -22,14 +23,16 @@ const renderNav = ({
   onCart: () => void;
 }> = {}) => {
   render(
-    <StorefrontBottomNav
-      activeView={activeView}
-      menuDestination={menuDestination}
-      cartItemCount={cartItemCount}
-      onHome={onHome}
-      onShop={onShop}
-      onCart={onCart}
-    />,
+    <MemoryRouter>
+      <StorefrontBottomNav
+        activeView={activeView}
+        menuDestination={menuDestination}
+        cartItemCount={cartItemCount}
+        onHome={onHome}
+        onShop={onShop}
+        onCart={onCart}
+      />
+    </MemoryRouter>,
   );
 
   return { onHome, onShop, onCart };
@@ -70,15 +73,19 @@ describe('StorefrontBottomNav', () => {
   ] as const)('marks %s as the current destination', (_name, activeView, menuDestination, currentName) => {
     renderNav({ activeView, menuDestination });
 
-    expect(screen.getByRole('button', { name: currentName })).toHaveAttribute('aria-current', 'page');
+    const nav = screen.getByRole('navigation', { name: 'Storefront' });
+    const expectedCurrent = screen.getByRole('button', { name: currentName });
+    const currentItems = nav.querySelectorAll('[aria-current="page"]');
+
+    expect(currentItems).toHaveLength(1);
+    expect(currentItems[0]).toBe(expectedCurrent);
   });
 
   it('does not mark menu destinations current when the access view is active', () => {
     renderNav({ activeView: 'access' });
 
-    expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('button', { name: 'Shop' })).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('button', { name: 'Cart, 0 items' })).not.toHaveAttribute('aria-current');
+    const nav = screen.getByRole('navigation', { name: 'Storefront' });
+    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
   });
 
   it('hides the cart badge when there are no items', () => {
