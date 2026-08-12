@@ -91,6 +91,15 @@ function MainApp() {
         setShopScrollRequest((request) => request + 1);
     };
 
+    const handleReturnToMenu = () => {
+        if (menuDestination === 'shop') {
+            handleShop();
+            return;
+        }
+
+        handleHome();
+    };
+
     const handleCategoryClick = (categoryId: string) => {
         setSelectedCategory(categoryId);
     };
@@ -147,7 +156,7 @@ function MainApp() {
     const availableCartItems = partitionCartAvailability(cart.cartItems, groupBuy.items).available;
 
     return (
-        <div className="min-h-screen bg-white font-inter flex flex-col pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0">
+        <div className="min-h-screen bg-white font-inter flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom))] md:pb-0">
             {/* Research-use disclaimer — shown on every visit until acknowledged. */}
             <StorefrontNoticeGate />
 
@@ -196,7 +205,7 @@ function MainApp() {
 
                 {currentView === 'access' && (
                     <GetAccess
-                        onBack={() => handleViewChange('menu')}
+                        onBack={handleReturnToMenu}
                         onVerified={() => handleViewChange('cart')}
                         verifyEmail={access.verifyEmail}
                         watchPendingEmail={access.watchPendingEmail}
