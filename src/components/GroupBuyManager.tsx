@@ -587,9 +587,10 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                       <div>
                         <h3 className="text-sm font-bold text-gray-900">Pasalo mode</h3>
                         <p className="mt-1 text-xs text-gray-500">
-                          When on, the storefront shows only capped products that still have
-                          remaining slots — for a re-opening phase where shoppers see just the
-                          items that still need orders.
+                          Turning this on replaces the batch caps automatically. Every item with
+                          non-cancelled orders gets its own cap at the next block of 10 (for
+                          example, 26 becomes 30 and 30 becomes 40), and the storefront shows only
+                          those items while they still have remaining slots.
                         </p>
                       </div>
                       <button

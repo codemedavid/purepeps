@@ -130,8 +130,9 @@ export const useGroupBuy = () => {
     [refresh],
   );
 
-  // Toggle "pasalo mode" on a batch: when on, the storefront shows only this
-  // batch's capped products that still have remaining slots.
+  // Toggle "pasalo mode" on a batch. Enabling also atomically rebuilds this
+  // batch's caps from non-cancelled demand (next block of 10); the storefront
+  // then shows only those capped products while they still have room.
   const setPasaloMode = useCallback(
     async (batchId: string, enabled: boolean) => {
       const { error: rpcError } = await supabase.rpc('set_group_buy_pasalo_mode', {
