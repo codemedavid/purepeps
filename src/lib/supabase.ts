@@ -213,6 +213,113 @@ export type Database = {
           updated_at?: string;
         };
       };
+      storefront_notices: {
+        Row: {
+          id: string;
+          internal_name: string;
+          status: 'draft' | 'published' | 'archived';
+          version: number;
+          priority: number;
+          starts_at: string | null;
+          ends_at: string | null;
+          audience: 'everyone' | 'visitor' | 'verified_member';
+          page_ids: string[];
+          frequency: 'once' | 'session' | 'every_visit';
+          style: 'info' | 'warning' | 'success' | 'critical';
+          title: string;
+          subtitle: string;
+          body: string;
+          highlight: string;
+          policy_title: string;
+          policy_lines: string;
+          button_label: string;
+          footer_note: string;
+          published_at: string | null;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          internal_name: string;
+          status?: 'draft' | 'published' | 'archived';
+          version?: number;
+          priority?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          audience?: 'everyone' | 'visitor' | 'verified_member';
+          page_ids?: string[];
+          frequency?: 'once' | 'session' | 'every_visit';
+          style?: 'info' | 'warning' | 'success' | 'critical';
+          title?: string;
+          subtitle?: string;
+          body?: string;
+          highlight?: string;
+          policy_title?: string;
+          policy_lines?: string;
+          button_label?: string;
+          footer_note?: string;
+          published_at?: string | null;
+          archived_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['storefront_notices']['Insert']>;
+      };
+      storefront_notice_stats: {
+        Row: {
+          notice_id: string;
+          version: number;
+          impression_count: number;
+          acknowledgement_count: number;
+          updated_at: string;
+        };
+        Insert: {
+          notice_id: string;
+          version: number;
+          impression_count?: number;
+          acknowledgement_count?: number;
+          updated_at?: string;
+        };
+        Update: {
+          impression_count?: number;
+          acknowledgement_count?: number;
+          updated_at?: string;
+        };
+      };
+    };
+    Functions: {
+      get_active_storefront_notice: {
+        Args: { p_page_id: string; p_audience: 'visitor' | 'verified_member' };
+        Returns: Array<{
+          id: string;
+          version: number;
+          priority: number;
+          starts_at: string | null;
+          ends_at: string | null;
+          audience: string;
+          page_ids: string[];
+          frequency: string;
+          style: string;
+          title: string;
+          subtitle: string;
+          body: string;
+          highlight: string;
+          policy_title: string;
+          policy_lines: string;
+          button_label: string;
+          footer_note: string;
+          published_at: string;
+        }>;
+      };
+      record_storefront_notice_event: {
+        Args: {
+          p_notice_id: string;
+          p_version: number;
+          p_event: 'impression' | 'acknowledgement';
+        };
+        Returns: undefined;
+      };
     };
   };
 };

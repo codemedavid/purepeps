@@ -17,6 +17,13 @@ const notice = {
 };
 
 describe('StorefrontNoticeModal', () => {
+  it('applies the configured curated visual style', () => {
+    render(<StorefrontNoticeModal notice={{ ...notice, style: 'critical' }} onAccept={vi.fn()} />);
+
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-style', 'critical');
+    expect(screen.getByTestId('notice-icon')).toHaveClass('text-red-600');
+  });
+
   it('renders the title and subtitle', () => {
     render(<StorefrontNoticeModal notice={notice} onAccept={vi.fn()} />);
 

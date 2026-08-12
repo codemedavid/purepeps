@@ -1,108 +1,108 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStorefrontNotice } from './useStorefrontNotice';
-import { DEFAULT_STOREFRONT_NOTICE, STOREFRONT_NOTICE_KEYS } from '../utils/storefrontNotice';
+import { DEFAULT_STOREFRONT_NOTICE } from '../utils/storefrontNotice';
 
-const mockIn = vi.fn();
-const mockUpsert = vi.fn();
+const mockRpc = vi.fn();
 
 vi.mock('../lib/supabase', () => ({
-  supabase: {
-    from: (table: string) => ({
-      select: () => ({ in: (column: string, values: string[]) => mockIn(table, column, values) }),
-      upsert: (rows: unknown) => mockUpsert(table, rows),
-    }),
-  },
+  supabase: { rpc: (...args: unknown[]) => mockRpc(...args) },
 }));
+
+const row = {
+  id: '6f8a5363-56b9-4fdd-a985-260c8f910ccb',
+  version: 2,
+  priority: 10,
+  starts_at: null,
+  ends_at: null,
+  audience: 'everyone',
+  page_ids: ['storefront.menu'],
+  frequency: 'once',
+  style: 'critical',
+  title: 'Heads Up',
+  subtitle: 'Read this',
+  body: 'Research use only.',
+  highlight: 'No rush orders',
+  policy_title: 'Delivery',
+  policy_lines: 'Monday-Friday',
+  button_label: 'Agree',
+  footer_note: 'Thank you',
+  published_at: '2026-08-12T10:00:00.000Z',
+};
 
 describe('useStorefrontNotice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockIn.mockResolvedValue({ data: [], error: null });
-    mockUpsert.mockResolvedValue({ error: null });
+    mockRpc.mockResolvedValue({ data: [], error: null });
   });
 
-  it('reads only the notice keys from site_settings', async () => {
-    renderHook(() => useStorefrontNotice());
+  it('requests the highest eligible notice for the page and shopper type', async () => {
+    renderHook(() => useStorefrontNotice('storefront.menu', 'verified_member'));
 
-    await waitFor(() => expect(mockIn).toHaveBeenCalled());
-    expect(mockIn).toHaveBeenCalledWith('site_settings', 'id', [...STOREFRONT_NOTICE_KEYS]);
-  });
-
-  it('starts in a loading state and resolves to the stored notice', async () => {
-    mockIn.mockResolvedValue({
-      data: [{ id: 'storefront_notice_title', value: 'Heads Up' }],
-      error: null,
+    await waitFor(() => expect(mockRpc).toHaveBeenCalled());
+    expect(mockRpc).toHaveBeenCalledWith('get_active_storefront_notice', {
+      p_page_id: 'storefront.menu',
+      p_audience: 'verified_member',
     });
+  });
 
-    const { result } = renderHook(() => useStorefrontNotice());
-    expect(result.current.loading).toBe(true);
+  it('maps the public RPC payload to the notice model', async () => {
+    mockRpc.mockResolvedValueOnce({ data: [row], error: null });
+
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.notice.title).toBe('Heads Up');
+    expect(result.current.notice).toEqual(expect.objectContaining({
+      id: row.id,
+      title: 'Heads Up',
+      frequency: 'once',
+      style: 'critical',
+      pageIds: ['storefront.menu'],
+      policyTitle: 'Delivery',
+    }));
     expect(result.current.error).toBeNull();
   });
 
-  it('falls back to the defaults when the query fails', async () => {
-    mockIn.mockResolvedValue({ data: null, error: { message: 'boom' } });
-
-    const { result } = renderHook(() => useStorefrontNotice());
+  it('returns no modal after a successful empty query', async () => {
+    const { result } = renderHook(() => useStorefrontNotice('faq', 'visitor'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
-    expect(result.current.error).toBe('boom');
+    expect(result.current.notice).toBeNull();
   });
 
-  it('falls back to the defaults when the query throws', async () => {
-    mockIn.mockRejectedValue(new Error('network down'));
+  it('uses the legal fallback when retrieval fails', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'network down' } });
 
-    const { result } = renderHook(() => useStorefrontNotice());
+    const { result } = renderHook(() => useStorefrontNotice('faq', 'visitor'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
     expect(result.current.error).toBe('network down');
   });
 
-  it('upserts every notice key on save', async () => {
-    const { result } = renderHook(() => useStorefrontNotice());
+  it('records anonymous events for a persisted notice version', async () => {
+    mockRpc
+      .mockResolvedValueOnce({ data: [row], error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    await act(async () => {
-      await result.current.saveNotice({ ...DEFAULT_STOREFRONT_NOTICE, title: 'Heads Up' });
-    });
+    await act(() => result.current.recordEvent('acknowledgement'));
 
-    expect(mockUpsert).toHaveBeenCalledTimes(1);
-    const [table, rows] = mockUpsert.mock.calls[0];
-    expect(table).toBe('site_settings');
-    expect(rows).toHaveLength(STOREFRONT_NOTICE_KEYS.length);
-    expect(rows).toContainEqual(expect.objectContaining({ id: 'storefront_notice_title', value: 'Heads Up' }));
+    expect(mockRpc).toHaveBeenLastCalledWith('record_storefront_notice_event', {
+      p_notice_id: row.id,
+      p_version: 2,
+      p_event: 'acknowledgement',
+    });
   });
 
-  it('exposes the saved notice without a refetch', async () => {
-    const { result } = renderHook(() => useStorefrontNotice());
+  it('does not send analytics for the hard-coded fallback', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'offline' } });
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    await act(async () => {
-      await result.current.saveNotice({ ...DEFAULT_STOREFRONT_NOTICE, title: 'Heads Up' });
-    });
+    await act(() => result.current.recordEvent('impression'));
 
-    expect(result.current.notice.title).toBe('Heads Up');
-  });
-
-  it('rejects and surfaces an error when the save fails', async () => {
-    mockUpsert.mockResolvedValue({ error: { message: 'denied' } });
-
-    const { result } = renderHook(() => useStorefrontNotice());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    let caught: unknown = null;
-    await act(async () => {
-      await result.current.saveNotice(DEFAULT_STOREFRONT_NOTICE).catch((err) => {
-        caught = err;
-      });
-    });
-
-    expect((caught as Error | null)?.message).toBe('denied');
-    expect(result.current.error).toBe('denied');
+    expect(mockRpc).toHaveBeenCalledTimes(1);
   });
 });

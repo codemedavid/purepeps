@@ -1,5 +1,5 @@
-import { Suspense, lazy, useCallback, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { Suspense, lazy, useCallback, useState, useEffect, type ReactNode } from 'react';
+import { BrowserRouter as Router, Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { usePostHog } from 'posthog-js/react';
 import { useCart } from './hooks/useCart';
 import Header from './components/Header';
@@ -13,7 +13,8 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import StorefrontNoticeGate from './components/StorefrontNoticeGate';
-import { useAccess } from './hooks/useAccess';
+import { AccessProvider, useAccessContext } from './contexts/AccessContext';
+import type { NoticePageId } from './utils/storefrontNotice';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
 import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
@@ -35,7 +36,7 @@ import { useMenu } from './hooks/useMenu';
 
 function MainApp() {
     const { menuItems, loading: menuLoading } = useMenu();
-    const access = useAccess();
+    const access = useAccessContext();
     // Verified members get a server-backed cart (survives localStorage eviction
     // and follows them across devices); the catalog rehydrates its references.
     const cart = useCart({ email: access.email, products: menuItems });
@@ -115,8 +116,12 @@ function MainApp() {
 
     return (
         <div className="min-h-screen bg-white font-inter flex flex-col">
-            {/* Research-use disclaimer — shown on every visit until acknowledged. */}
-            <StorefrontNoticeGate />
+            {!access.checking && (
+                <StorefrontNoticeGate
+                    pageId={`storefront.${currentView}` as NoticePageId}
+                    shopperType={access.isVerified ? 'verified_member' : 'visitor'}
+                />
+            )}
 
             <Header
                 cartItemsCount={cart.getTotalItems()}
@@ -226,6 +231,29 @@ function PostHogPageviewTracker() {
     return null;
 }
 
+function PublicAccessLayout() {
+    return (
+        <AccessProvider>
+            <Outlet />
+        </AccessProvider>
+    );
+}
+
+function PublicNoticePage({ pageId, children }: { pageId: NoticePageId; children: ReactNode }) {
+    const access = useAccessContext();
+    return (
+        <>
+            {!access.checking && (
+                <StorefrontNoticeGate
+                    pageId={pageId}
+                    shopperType={access.isVerified ? 'verified_member' : 'visitor'}
+                />
+            )}
+            {children}
+        </>
+    );
+}
+
 function App() {
     //   const { coaPageEnabled } = useCOAPageSetting();
 
@@ -235,12 +263,14 @@ function App() {
             <ErrorBoundary>
                 <Suspense fallback={<LoadingSpinner />}>
                     <Routes>
-                        <Route path="/" element={<MainApp />} />
-                        <Route path="/coa" element={<COA />} />
-                        <Route path="/faq" element={<FAQ />} />
-                        <Route path="/calculator" element={<PeptideCalculator />} />
-                        <Route path="/track-order" element={<OrderTracking />} />
-                        <Route path="/protocols" element={<ProtocolGuide />} />
+                        <Route element={<PublicAccessLayout />}>
+                            <Route path="/" element={<MainApp />} />
+                            <Route path="/coa" element={<PublicNoticePage pageId="coa"><COA /></PublicNoticePage>} />
+                            <Route path="/faq" element={<PublicNoticePage pageId="faq"><FAQ /></PublicNoticePage>} />
+                            <Route path="/calculator" element={<PublicNoticePage pageId="calculator"><PeptideCalculator /></PublicNoticePage>} />
+                            <Route path="/track-order" element={<PublicNoticePage pageId="track-order"><OrderTracking /></PublicNoticePage>} />
+                            <Route path="/protocols" element={<PublicNoticePage pageId="protocols"><ProtocolGuide /></PublicNoticePage>} />
+                        </Route>
                         <Route path="/admin" element={<AdminDashboard />} />
                     </Routes>
                 </Suspense>
