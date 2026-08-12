@@ -83,6 +83,7 @@ export function BatchOrdersPanel({
     setSelectedIds(new Set());
     setSelectMode(false);
     setQuery('');
+    setShowAllWaybills(false);
   }, [batchNumber]);
 
   const filtered = useMemo(
@@ -157,17 +158,27 @@ export function BatchOrdersPanel({
           Orders in Batch #{batchNumber} ({orders.length})
         </h3>
         <div className="flex items-center gap-2">
-          {confirmedWaybills.length > 0 && (
+          <div className="flex flex-col items-end gap-1">
             <button
               type="button"
               onClick={() => setShowAllWaybills(true)}
-              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors"
-              title="Print a waybill for every confirmed order in this batch"
+              disabled={confirmedWaybills.length === 0}
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-400 transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+              title={
+                confirmedWaybills.length === 0
+                  ? 'Confirmed orders are required before printing.'
+                  : 'Print a waybill for every confirmed customer in this batch'
+              }
             >
               <Printer className="h-3.5 w-3.5" />
               Print waybills ({confirmedWaybills.length})
             </button>
-          )}
+            {confirmedWaybills.length === 0 && (
+              <span className="text-[10px] text-gray-500">
+                Confirmed orders are required before printing.
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}

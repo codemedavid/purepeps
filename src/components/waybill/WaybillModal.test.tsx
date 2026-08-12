@@ -1,9 +1,13 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { WaybillModal } from './WaybillModal';
 import { buildWaybillData, type WaybillOrderInput } from '../../utils/waybill';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 function waybill(id: string) {
   const input: WaybillOrderInput = {
@@ -44,5 +48,14 @@ describe('WaybillModal print structure', () => {
   it('renders one printable page per waybill', () => {
     render(<WaybillModal waybills={[waybill('1'), waybill('2'), waybill('3')]} onClose={() => {}} />);
     expect(document.querySelectorAll('.waybill-print-area .wb-page')).toHaveLength(3);
+  });
+
+  it('opens the browser print dialog exactly once from the preview', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    render(<WaybillModal waybills={[waybill('1'), waybill('2')]} onClose={() => {}} />);
+
+    await userEvent.click(document.querySelector<HTMLButtonElement>('.wb-btn-print')!);
+
+    expect(print).toHaveBeenCalledTimes(1);
   });
 });

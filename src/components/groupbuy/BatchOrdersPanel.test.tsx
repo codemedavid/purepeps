@@ -70,6 +70,121 @@ function setup() {
 }
 
 describe('BatchOrdersPanel', () => {
+  it('keeps batch printing visible but disabled until an order is confirmed', () => {
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[order('new', 'Maria Santos'), order('cancelled', 'Jose Rizal', 'cancelled')]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={vi.fn()}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Print waybills (0)' })).toBeDisabled();
+    expect(screen.getByText('Confirmed orders are required before printing.')).toBeInTheDocument();
+  });
+
+  it('counts one printable customer for every eligible order status', () => {
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[
+          order('new', 'New Customer'),
+          order('confirmed', 'Confirmed Customer', 'confirmed'),
+          order('packing', 'Packing Customer', 'packing'),
+          order('delivery', 'Delivery Customer', 'out_for_delivery'),
+          order('delivered', 'Delivered Customer', 'delivered'),
+          order('cancelled', 'Cancelled Customer', 'cancelled'),
+        ]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={vi.fn()}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Print waybills (4)' })).toBeEnabled();
+  });
+
+  it('consolidates a customer’s repeat order and claim add-on into one waybill', () => {
+    const root = order('root', 'Maria Santos', 'confirmed');
+    const repeat = {
+      ...order('repeat', 'Maria Santos', 'packing'),
+      parent_order_id: root.id,
+      created_at: '2026-06-02T08:00:00Z',
+    };
+    const claim = {
+      ...order('claim', 'Maria Santos', 'delivered'),
+      parent_order_id: root.id,
+      is_claim: true,
+      created_at: '2026-06-03T08:00:00Z',
+    };
+
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[root, repeat, claim]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={vi.fn()}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Print waybills (1)' })).toBeEnabled();
+  });
+
+  it('opens one combined preview for all printable customers', async () => {
+    render(
+      <BatchOrdersPanel
+        batchNumber={7}
+        orders={[
+          order('maria', 'Maria Santos', 'confirmed'),
+          order('jose', 'Jose Rizal', 'packing'),
+        ]}
+        loading={false}
+        busy={false}
+        requestConfirm={vi.fn()}
+        onReload={vi.fn()}
+        onSelectOrder={vi.fn()}
+        onBulkUpdateStatus={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Print waybills (2)' }));
+
+    expect(screen.getByRole('dialog', { name: 'Printable waybill' })).toBeInTheDocument();
+    expect(screen.getByText('2 waybills ready to print')).toBeInTheDocument();
+  });
+
+  it('closes an open waybill preview when the selected batch changes', async () => {
+    const sharedProps = {
+      orders: [order('maria', 'Maria Santos', 'confirmed')],
+      loading: false,
+      busy: false,
+      requestConfirm: vi.fn(),
+      onReload: vi.fn(),
+      onSelectOrder: vi.fn(),
+      onBulkUpdateStatus: vi.fn(),
+    };
+    const { rerender } = render(<BatchOrdersPanel batchNumber={7} {...sharedProps} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Print waybills (1)' }));
+    expect(screen.getByRole('dialog', { name: 'Printable waybill' })).toBeInTheDocument();
+
+    rerender(<BatchOrdersPanel batchNumber={8} {...sharedProps} />);
+
+    expect(screen.queryByRole('dialog', { name: 'Printable waybill' })).not.toBeInTheDocument();
+  });
+
   it('filters orders by the search box', async () => {
     setup();
     expect(screen.getByText('Maria Santos')).toBeInTheDocument();
