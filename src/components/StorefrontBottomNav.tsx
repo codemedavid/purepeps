@@ -15,9 +15,9 @@ export interface StorefrontBottomNavProps {
 }
 
 const itemClassName = (active: boolean) => [
-  'flex min-h-[44px] w-full flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-semibold leading-none transition-colors duration-150 motion-reduce:transition-none',
+  'relative flex min-h-[64px] w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold leading-none transition-colors duration-150 motion-reduce:transition-none',
   active
-    ? 'text-sakura-primary'
+    ? 'text-sakura-primary before:absolute before:left-1/2 before:top-0 before:h-0.5 before:w-8 before:-translate-x-1/2 before:rounded-b-full before:bg-sakura-primary'
     : 'text-sakura-muted hover:text-sakura-deep',
 ].join(' ');
 
@@ -66,26 +66,24 @@ const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
         <span>Shop</span>
       </button>
 
-      <div className="flex min-h-[64px] items-start justify-center">
-        <button
-          type="button"
-          onClick={onCart}
-          aria-label={cartLabel}
-          aria-current={cartIsCurrent ? 'page' : undefined}
-          className="relative -mt-5 flex h-14 min-h-[44px] w-14 min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-full bg-sakura-primary text-white shadow-lg transition-transform duration-150 hover:bg-sakura-deep hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-sakura-primary focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-        >
-          <ShoppingCart aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-          <span className="text-[10px] font-semibold leading-none">Cart</span>
-          {cartItemCount > 0 && (
-            <span
-              data-testid="bottom-nav-cart-badge"
-              className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-sakura-ink px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
-            >
-              {visibleCartCount}
-            </span>
-          )}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onCart}
+        aria-label={cartLabel}
+        aria-current={cartIsCurrent ? 'page' : undefined}
+        className={itemClassName(cartIsCurrent)}
+      >
+        <ShoppingCart aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
+        <span>Cart</span>
+        {cartItemCount > 0 && (
+          <span
+            data-testid="bottom-nav-cart-badge"
+            className="absolute left-1/2 top-1 ml-2 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-sakura-primary px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
+          >
+            {visibleCartCount}
+          </span>
+        )}
+      </button>
 
       <Link to="/track-order" onClick={handleRouteNavigation} className={itemClassName(false)}>
         <ClipboardList aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
