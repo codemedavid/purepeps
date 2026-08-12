@@ -65,6 +65,19 @@ describe('StorefrontBottomNav', () => {
     expect(onCart).toHaveBeenCalledOnce();
   });
 
+  it('resets scroll when Orders or Guides is activated', async () => {
+    const user = userEvent.setup();
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    renderNav();
+
+    await user.click(screen.getByRole('link', { name: 'Orders' }));
+    await user.click(screen.getByRole('link', { name: 'Guides' }));
+
+    expect(scrollTo).toHaveBeenNthCalledWith(1, { top: 0, behavior: 'auto' });
+    expect(scrollTo).toHaveBeenNthCalledWith(2, { top: 0, behavior: 'auto' });
+    scrollTo.mockRestore();
+  });
+
   it.each([
     ['menu/home', 'menu', 'home', 'Home'],
     ['menu/shop', 'menu', 'shop', 'Shop'],

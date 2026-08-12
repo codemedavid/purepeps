@@ -23,6 +23,10 @@ const itemClassName = (active: boolean) => [
 
 const iconClassName = 'h-5 w-5 shrink-0';
 
+const handleRouteNavigation = () => {
+  window.scrollTo({ top: 0, behavior: 'auto' });
+};
+
 const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
   activeView,
   menuDestination,
@@ -83,12 +87,12 @@ const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
         </button>
       </div>
 
-      <Link to="/track-order" className={itemClassName(false)}>
+      <Link to="/track-order" onClick={handleRouteNavigation} className={itemClassName(false)}>
         <ClipboardList aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
         <span>Orders</span>
       </Link>
 
-      <Link to="/protocols" className={itemClassName(false)}>
+      <Link to="/protocols" onClick={handleRouteNavigation} className={itemClassName(false)}>
         <BookOpen aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
         <span>Guides</span>
       </Link>
