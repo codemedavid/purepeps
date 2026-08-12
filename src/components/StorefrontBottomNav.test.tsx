@@ -65,6 +65,16 @@ describe('StorefrontBottomNav', () => {
     expect(onCart).toHaveBeenCalledOnce();
   });
 
+  it('uses the refined level treatment for Cart and a slim indicator for the current item', () => {
+    renderNav({ activeView: 'cart', cartItemCount: 2 });
+
+    const cart = screen.getByRole('button', { name: 'Cart, 2 items' });
+
+    expect(cart).toHaveClass('w-full', 'py-2', 'text-sakura-primary');
+    expect(cart.className).toContain('before:h-0.5');
+    expect(cart).not.toHaveClass('-mt-5', 'rounded-full', 'bg-sakura-primary', 'text-white');
+  });
+
   it('resets scroll when Orders or Guides is activated', async () => {
     const user = userEvent.setup();
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
