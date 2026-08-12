@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useState, useEffect } from 'react';
+import { Suspense, lazy, useCallback, useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { usePostHog } from 'posthog-js/react';
 import { useCart } from './hooks/useCart';
@@ -13,6 +13,7 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import StorefrontNoticeGate from './components/StorefrontNoticeGate';
+import StorefrontBottomNav, { type MenuDestination, type StorefrontView } from './components/StorefrontBottomNav';
 import { useAccess } from './hooks/useAccess';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
@@ -63,16 +64,31 @@ function MainApp() {
     // the authoritative gate and the UI corrects once the RPC resolves.
     const isBatchOpen = groupBuy.loading || groupBuy.isBatchOpen;
     const [now, setNow] = useState(() => new Date());
-    const [currentView, setCurrentView] = useState<'menu' | 'cart' | 'checkout' | 'access'>('menu');
+    const [currentView, setCurrentView] = useState<StorefrontView>('menu');
+    const [menuDestination, setMenuDestination] = useState<MenuDestination>('home');
+    const [shopScrollRequest, setShopScrollRequest] = useState(0);
+    const completedShopScrollRequest = useRef(0);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-    const handleViewChange = (view: 'menu' | 'cart' | 'checkout' | 'access') => {
+    const handleViewChange = (view: StorefrontView) => {
         // Checkout needs access — but a cart of only free items can check out
         // without paying. Route to Get Access only when something in the cart is gated.
         const target = view === 'checkout' && !canCheckoutNow ? 'access' : view;
         setCurrentView(target);
         // Scroll to top when changing views
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleHome = () => {
+        setMenuDestination('home');
+        setCurrentView('menu');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleShop = () => {
+        setMenuDestination('shop');
+        setCurrentView('menu');
+        setShopScrollRequest((request) => request + 1);
     };
 
     const handleCategoryClick = (categoryId: string) => {
@@ -108,31 +124,53 @@ function MainApp() {
         return () => clearInterval(id);
     }, [viewOnlyPending]);
 
+    // Wait until the menu and its catalog navigation have committed before
+    // scrolling. The request counter also makes a repeated Shop tap scroll again.
+    useEffect(() => {
+        if (shopScrollRequest === completedShopScrollRequest.current || currentView !== 'menu') return;
+
+        completedShopScrollRequest.current = shopScrollRequest;
+
+        const frame = window.requestAnimationFrame(() => {
+            document.getElementById('storefront-catalog')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+
+        return () => window.cancelAnimationFrame(frame);
+    }, [currentView, shopScrollRequest]);
+
     // Only the group-buy-available lines may be checked out — a batch cap that
     // filled up while the item sat in the cart makes it "no longer available", so
     // it is dropped from the order the Checkout screen submits (and its total).
     const availableCartItems = partitionCartAvailability(cart.cartItems, groupBuy.items).available;
 
     return (
-        <div className="min-h-screen bg-white font-inter flex flex-col">
+        <div className="min-h-screen bg-white font-inter flex flex-col pb-[calc(80px+env(safe-area-inset-bottom))] md:pb-0">
             {/* Research-use disclaimer — shown on every visit until acknowledged. */}
             <StorefrontNoticeGate />
 
             <Header
                 cartItemsCount={cart.getTotalItems()}
                 onCartClick={() => handleViewChange('cart')}
-                onMenuClick={() => handleViewChange('menu')}
+                onMenuClick={handleHome}
                 onGetAccess={() => handleViewChange('access')}
                 isVerified={access.isVerified}
+                hideMobileStorefrontActions
             />
 
             {currentView === 'menu' && (
-                <SubNav
-                    selectedCategory={selectedCategory}
-                    onCategoryClick={handleCategoryClick}
-                    isVerified={access.isVerified}
-                    canAccessCategory={canAccessCategory}
-                />
+                <>
+                    {/* Keep the anchor outside SubNav so its sticky containing block is unchanged. */}
+                    <div id="storefront-catalog" className="scroll-mt-20" aria-hidden="true" />
+                    <SubNav
+                        selectedCategory={selectedCategory}
+                        onCategoryClick={handleCategoryClick}
+                        isVerified={access.isVerified}
+                        canAccessCategory={canAccessCategory}
+                    />
+                </>
             )}
 
             <main className="flex-grow">
@@ -173,7 +211,7 @@ function MainApp() {
                         updateQuantity={cart.updateQuantity}
                         removeFromCart={cart.removeFromCart}
                         clearCart={cart.clearCart}
-                        onContinueShopping={() => handleViewChange('menu')}
+                        onContinueShopping={handleShop}
                         onCheckout={() => handleViewChange('checkout')}
                         isBatchOpen={isBatchOpen}
                         groupBuyItems={groupBuy.items}
@@ -206,6 +244,15 @@ function MainApp() {
                     <Footer />
                 </>
             )}
+
+            <StorefrontBottomNav
+                activeView={currentView}
+                menuDestination={menuDestination}
+                cartItemCount={cart.getTotalItems()}
+                onHome={handleHome}
+                onShop={handleShop}
+                onCart={() => handleViewChange('cart')}
+            />
         </div>
     );
 }
