@@ -152,7 +152,7 @@ describe('buildMembersExportCsv', () => {
     ];
     const lines = buildMembersExportCsv(orders).split('\n');
     expect(lines[0]).toBe(
-      'Email,Name,Phone,Order #,Status,Payment,Items,Vials,Order total,Member total,Payment proof,Extra proof,Date',
+      'Email,Name,Phone,Order #,Status,Payment option,Payment,COD to collect,Items,Vials,Order total,Member total,Payment proof,Extra proof,Date',
     );
     // Both of Jane's orders show the same member total (1500.00).
     expect(lines[1]).toContain('jane@example.com,Jane Dela Cruz,09170000000,PP-1');

@@ -1,4 +1,5 @@
 import type { BatchOrder, OrderLineItem } from '../types';
+import { codAmountDue, paymentTypeLabel } from '../constants/payment';
 import { csvRow, money, type Cell } from './csv';
 import { formatKits } from './groupBuyOverview';
 
@@ -129,7 +130,9 @@ const MEMBERS_HEADER = [
   'Phone',
   'Order #',
   'Status',
+  'Payment option',
   'Payment',
+  'COD to collect',
   'Items',
   'Vials',
   'Order total',
@@ -169,7 +172,13 @@ function memberRow(order: BatchOrder, memberTotal: number): Cell[] {
     order.customer_phone,
     order.order_number ?? order.id.slice(0, 8),
     order.order_status,
+    paymentTypeLabel(order.payment_type),
     order.payment_status,
+    // Blank unless the courier still has to collect — a closeout sheet should
+    // make outstanding cash obvious, not bury it behind the status column.
+    order.payment_type === 'cod' && order.payment_status !== 'paid'
+      ? money(codAmountDue(order))
+      : '',
     itemsSummary(order.order_items ?? []),
     orderUnits(order),
     money(order.total_price ?? 0),

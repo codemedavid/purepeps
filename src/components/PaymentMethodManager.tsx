@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CodToggle from './checkout/CodToggle';
 import { Plus, Edit, Trash2, Save, X, ArrowLeft, CreditCard, Upload } from 'lucide-react';
 import { usePaymentMethods, PaymentMethod } from '../hooks/usePaymentMethods';
 import ImageUpload from './ImageUpload';
@@ -285,6 +286,10 @@ const PaymentMethodManager: React.FC<PaymentMethodManagerProps> = ({ onBack }) =
       </div>
 
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        {/* Shop-wide COD switch sits above the online methods: both answer
+            "how can customers pay?", so they belong on one screen. */}
+        <CodToggle />
+
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden">
           <div className="p-4 sm:p-6">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
