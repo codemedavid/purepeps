@@ -61,10 +61,9 @@ All 9 pre-existing failures were in unrelated in-progress work (feature flags, h
 ## Final validation
 
 ```
-npm test               =>  Tests 1069 passed (1071), 2 flaky failures (see below)
-                           Test Files 4 failed | 87 passed (91)
-                           — 2 of those files are the pre-existing orphans;
-                             the other 2 pass in isolation
+npm test               =>  Tests 1078 passed (1078), 0 failed
+                           Test Files 2 failed | 89 passed (91)
+                           — both are the pre-existing orphans (missing modules)
 npm run build          =>  built in 28.18s, ok
 npx tsc --noEmit       =>  no new errors (see Gaps for pre-existing)
 ```
@@ -97,6 +96,19 @@ The 2 failing test FILES are the pre-existing orphans carried from the baseline;
 - `.wb-cod` had no CSS rule at all. Now styled and print-colour-forced.
 - Selecting COD before availability resolved left a disabled card selected with a live submit button.
 - Stale `20260824000200` cross-reference after the rename.
+
+**Fixed after a third review** (my own `/code-review`; 10 findings in these files):
+- **CRITICAL** — `useBatchOrders.confirmOrder` is a second confirm path beside `OrdersManager` and was never migrated. It forged `payment_status:'paid'`, so a COD order confirmed from the Group Buy panel was dropped from `codOrders` and its COLLECT ON DELIVERY banner never printed. `bulkUpdateStatus` had the same bug.
+- **HIGH** — `addLinkedOrder` sent no `payment_method_id`/`payment_type`, so my own trigger rejected it; adding a linked order to any group-buy parent was broken. Fixed on both sides.
+- **HIGH** — no in-flight guard: a COD double-tap placed two orders.
+- `submit_additional_payment` (paid → submitted) silently dropped a paid order out of confirmed demand; marker now `payment-aware-v3`.
+- New backfill migration `20260824000400` preserves confirmed counts for orders advanced under the old rule, rather than silently lowering cap demand on live batches.
+- Status dropdown `new → Packing` bypassed the payment decision entirely.
+- A manual confirmation outlived the payment it overrode, permanently burning a cap slot.
+- `isCodCollectible` now gates the COLLECT banner and CSV column, so cancelled/refunded COD orders no longer print an amount.
+- `REVOKE` on the trigger function; COD confirmation notification carries the cash due.
+
+**Review rounds and what they say about the first pass.** Three review rounds found 27 issues in this work, including two that would have lost real money (a courier collecting nothing on a confirmed COD order, twice over) and one security regression that reverted an existing CRITICAL fix. The recurring cause was assuming a single code path where the codebase had two: one RLS policy definition superseded by a newer one, one confirm handler when `useBatchOrders` held a second, one `confirmed` predicate when `groupBuyOverview` held a duplicate. Grepping for *all* writers of a column before changing its meaning would have caught most of them.
 
 **Suite flakiness under load.** Full-suite runs intermittently fail 1–3 different tests each time (`Cart`, `MenuItemCard`, `useCart.server`, `BatchCloseoutPanel`, `App`, and occasionally a Checkout COD test). Every one passes in isolation; `Checkout.test.tsx` was run twice consecutively at 32/32. These are timing-sensitive component tests under parallel load, made worse by a second session writing to the same working tree during runs. Not stable regressions, but the suite is not reliably green in a single pass.
 
