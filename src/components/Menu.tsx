@@ -20,6 +20,12 @@ interface MenuProps {
   canAccessCategory?: (categoryId: string | null | undefined) => boolean;
   tierName?: string | null;
   onGetAccess: () => void;
+  /**
+   * Sends the shopper to the catalog from the hero CTA. Owned by the storefront
+   * shell so the bottom navigation can switch its highlight to Shop alongside the
+   * scroll. Falls back to a local scroll when the parent does not supply one.
+   */
+  onShopAll?: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
   /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
@@ -37,6 +43,7 @@ const Menu: React.FC<MenuProps> = ({
   isVerified,
   canAccessCategory,
   onGetAccess,
+  onShopAll,
   groupBuyItems = [],
   isBatchOpen = true,
   isViewOnly = false,
@@ -106,7 +113,7 @@ const Menu: React.FC<MenuProps> = ({
 
       <div className="min-h-screen bg-sakura-canvas font-display">
         <Hero
-          onShopAll={scrollToProducts}
+          onShopAll={onShopAll ?? scrollToProducts}
           onGetAccess={onGetAccess}
           batchNumber={batchNumber}
           startsAt={batchStartsAt}

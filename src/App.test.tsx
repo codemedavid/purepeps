@@ -67,8 +67,10 @@ vi.mock('./contexts/AccessContext', () => ({
 }));
 
 /** A tab inside the mobile bottom navigation, scoped so the header's buttons never match. */
-const bottomNavTab = (name: 'Home' | 'Shop') =>
-  within(screen.getByRole('navigation', { name: 'Storefront' })).getByRole('button', { name });
+const bottomNavTab = (name: 'Home' | 'Shop' | 'Cart') =>
+  within(screen.getByRole('navigation', { name: 'Storefront' })).getByRole('button', {
+    name: name === 'Cart' ? /^Cart,/ : name,
+  });
 
 describe('Storefront bottom navigation', () => {
   beforeEach(() => {
@@ -89,6 +91,17 @@ describe('Storefront bottom navigation', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /browse the catalog/i }));
+
+    expect(bottomNavTab('Shop')).toHaveAttribute('aria-current', 'page');
+    expect(bottomNavTab('Home')).not.toHaveAttribute('aria-current');
+  });
+
+  it('highlights Shop instead of Home after the empty cart Browse Catalog button is used', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(bottomNavTab('Cart'));
+    await user.click(screen.getByRole('button', { name: /browse catalog/i }));
 
     expect(bottomNavTab('Shop')).toHaveAttribute('aria-current', 'page');
     expect(bottomNavTab('Home')).not.toHaveAttribute('aria-current');

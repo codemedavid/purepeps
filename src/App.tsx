@@ -199,6 +199,7 @@ function MainApp() {
                         canAccessCategory={canAccessCategory}
                         tierName={access.tierName}
                         onGetAccess={() => handleViewChange('access')}
+                        onShopAll={handleShop}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
                         isViewOnly={viewOnly}
