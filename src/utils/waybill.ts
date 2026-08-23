@@ -9,6 +9,7 @@
 
 import {
   codAmountDue as codAmountDueFor,
+  isCodCollectible,
   paymentStatusLabel,
 } from '../constants/payment';
 
@@ -268,10 +269,12 @@ export function buildGroupWaybillData(
   // Cash the courier still has to collect. Only COD orders that have NOT been
   // remitted count, and every such order on a consolidated sheet is summed —
   // the courier hands over one parcel but may be carrying several orders.
-  const codOrders = orders.filter(
-    (order) =>
-      cleanText(order.payment_type) === 'cod' &&
-      (cleanText(order.payment_status) ?? 'pending') !== 'paid',
+  const codOrders = orders.filter((order) =>
+    isCodCollectible({
+      order_status: cleanText(order.order_status),
+      payment_type: cleanText(order.payment_type),
+      payment_status: cleanText(order.payment_status) ?? 'pending',
+    }),
   );
   const isCashOnDelivery = codOrders.length > 0;
 

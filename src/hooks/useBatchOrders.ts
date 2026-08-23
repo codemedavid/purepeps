@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { planOrderConfirmation } from '../utils/orderConfirmation';
 import { supabase } from '../lib/supabase';
 import type { BatchOrder, OrderLineItem } from '../types';
 
@@ -18,6 +19,20 @@ interface TrackingInput {
  * State is updated immutably; every mutation rethrows so callers can surface the
  * DB message in the UI.
  */
+/**
+ * Best-effort admin identity for the manual-confirmation audit trail. A failure
+ * here must never block a confirm, so it degrades to null (planOrderConfirmation
+ * falls back to 'admin').
+ */
+async function currentAdminEmail(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function useBatchOrders(batchId: string | null) {
   const [orders, setOrders] = useState<BatchOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,10 +86,20 @@ export function useBatchOrders(batchId: string | null) {
     async (order: BatchOrder): Promise<void> => {
       try {
         const updatedAt = new Date().toISOString();
+
+        // Same decision as OrdersManager: never forge a payment. A COD order is
+        // unpaid until the courier collects, and a failed Pay Now payment is
+        // recorded as a manual override rather than relabelled paid.
+        const plan = planOrderConfirmation(order, {
+          now: updatedAt,
+          adminEmail: await currentAdminEmail(),
+        });
         const patch = {
-          order_status: 'confirmed',
-          payment_status: 'paid',
-          paid_total: order.total_price ?? 0,
+          ...plan.updates,
+          // paid_total only moves when the payment actually settles here.
+          ...(plan.updates.payment_status === 'paid'
+            ? { paid_total: order.total_price ?? 0 }
+            : {}),
           updated_at: updatedAt,
         };
         const { error: updateError } = await supabase
@@ -312,6 +337,8 @@ export function useBatchOrders(batchId: string | null) {
           shipping_zip_code: parentOrder.shipping_zip_code,
           shipping_country: parentOrder.shipping_country,
           shipping_location: parentOrder.shipping_location,
+          payment_type: parentOrder.payment_type ?? 'pay_now',
+          payment_method_id: parentOrder.payment_method_id ?? null,
           payment_method_name: parentOrder.payment_method_name,
           order_items: items,
           subtotal,
@@ -349,13 +376,14 @@ export function useBatchOrders(batchId: string | null) {
       if (orderIds.length === 0) return;
       try {
         const updatedAt = new Date().toISOString();
-        // Bulk-confirming must mirror the single-order confirm: mark paid too, so
-        // payment_status never drifts out of sync with order_status. Like
-        // confirmOrder, this is a pre-order against the cap — NO stock deduction.
+        // Bulk-confirming must NOT blanket-mark orders paid: the selection can
+        // mix COD (unpaid until delivery) with failed Pay Now payments, and one
+        // UPDATE cannot make a per-order payment decision. Only order_status
+        // moves here; payment is settled per order via confirmOrder, which
+        // routes through planOrderConfirmation. Like confirmOrder, this is a
+        // pre-order against the cap — NO stock deduction.
         const patch: Partial<BatchOrder> & { order_status: string; updated_at: string } =
-          status === 'confirmed'
-            ? { order_status: status, payment_status: 'paid', updated_at: updatedAt }
-            : { order_status: status, updated_at: updatedAt };
+          { order_status: status, updated_at: updatedAt };
         const { error: updateError } = await supabase
           .from('orders')
           .update(patch)

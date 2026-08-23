@@ -161,6 +161,27 @@ export function countsAsConfirmedOrder(order: ConfirmableOrder): boolean {
   return order.payment_type === 'cod' || order.payment_status === 'paid';
 }
 
+export interface CollectibleOrder {
+  readonly order_status?: string | null;
+  readonly payment_type?: string | null;
+  readonly payment_status?: string | null;
+}
+
+/**
+ * Whether a courier should still collect cash for this order.
+ *
+ * Drives the waybill COLLECT ON DELIVERY banner and the closeout CSV's
+ * "COD to collect" column, so a false positive tells someone to take money that
+ * is not owed. Requires all three: it is COD, the cash has not already been
+ * remitted, and the order has not been cancelled or settled against us.
+ */
+export function isCodCollectible(order: CollectibleOrder): boolean {
+  if (order.payment_type !== 'cod') return false;
+  if (order.payment_status === 'paid') return false;
+  if (SETTLED_AGAINST_STATUSES.includes(order.payment_status ?? '')) return false;
+  return order.order_status !== 'cancelled';
+}
+
 /**
  * Derive the refund status implied by an amount refunded, or null when nothing
  * has been refunded and the caller should leave the current status alone.

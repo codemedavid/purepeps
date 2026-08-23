@@ -289,7 +289,9 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
         shipping_fee: order.shipping_fee,
         item_count: order.order_items.length,
         items_description,
+        payment_type: order.payment_type,
         payment_method: order.payment_method_name,
+        cod_amount_due: order.payment_type === 'cod' ? codAmountDue(order) : null,
         promo_code: order.promo_code,
         discount_applied: order.discount_applied,
         $set: { email: order.customer_email, name: order.customer_name },
@@ -354,6 +356,19 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       updates.refunded_total = null;
     }
 
+    // A manual confirmation overrode a specific bad payment. Once the money is
+    // refunded or has failed outright, that override should not keep the order
+    // counting as confirmed demand — otherwise the cap slot can only be freed by
+    // cancelling, which erases the record of what happened.
+    if (
+      updates.payment_status === 'refunded' ||
+      updates.payment_status === 'partially_refunded' ||
+      updates.payment_status === 'failed'
+    ) {
+      updates.manually_confirmed_at = null;
+      updates.manually_confirmed_by = null;
+    }
+
     try {
       setIsProcessing(true);
       const { error } = await supabase.from('orders').update(updates).eq('id', order.id);
@@ -374,17 +389,43 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       setIsProcessing(true);
+
+      const order = orders.find((o) => o.id === orderId);
+      const now = new Date().toISOString();
+
+      // Advancing an order past 'new' IS confirming it, whichever control the
+      // admin used. Without this, picking "Packing" straight from the dropdown
+      // moved order_status alone and left the order permanently outside
+      // confirmed_quantity — invisible to cap maths and supplier kit counts
+      // while it was being packed and shipped.
+      const needsPaymentDecision =
+        order?.order_status === 'new' && newStatus !== 'new' && newStatus !== 'cancelled';
+
+      let paymentUpdates: Record<string, unknown> = {};
+      if (needsPaymentDecision && order) {
+        const { data: authData } = await supabase.auth.getUser();
+        const plan = planOrderConfirmation(order, {
+          now,
+          adminEmail: authData?.user?.email ?? null,
+        });
+        if (plan.requiresOverride && !confirm(`${plan.warning}\n\nContinue?`)) {
+          return;
+        }
+        const { order_status: _ignored, ...rest } = plan.updates;
+        paymentUpdates = rest;
+      }
+
       const { error } = await supabase
         .from('orders')
         .update({
           order_status: newStatus,
-          updated_at: new Date().toISOString()
+          ...paymentUpdates,
+          updated_at: now
         })
         .eq('id', orderId);
 
       if (error) throw error;
 
-      const order = orders.find(o => o.id === orderId);
       const eventMap: Record<string, string> = {
         packing: 'tbs_order_packing',
         out_for_delivery: 'tbs_order_out_for_delivery',

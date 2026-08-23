@@ -4,6 +4,7 @@ import {
   COD_STATUS_OPTIONS,
   codAmountDue,
   countsAsConfirmedOrder,
+  isCodCollectible,
   isProofRequired,
   paymentStatusColor,
   paymentStatusLabel,
@@ -227,6 +228,41 @@ describe('countsAsConfirmedOrder', () => {
         payment_status: 'pending',
       }),
     ).toBe(false);
+  });
+});
+
+describe('isCodCollectible', () => {
+  // Drives both the waybill COLLECT banner and the CSV "COD to collect" column.
+  // A false positive here tells a courier to take money that is not owed.
+  const cod = (over: Record<string, unknown> = {}) => ({
+    payment_type: 'cod',
+    payment_status: 'pending',
+    order_status: 'confirmed',
+    ...over,
+  });
+
+  it('is collectible for a confirmed, unpaid COD order', () => {
+    expect(isCodCollectible(cod())).toBe(true);
+  });
+
+  it('is not collectible once the courier has remitted', () => {
+    expect(isCodCollectible(cod({ payment_status: 'paid' }))).toBe(false);
+  });
+
+  it('is NOT collectible for a cancelled order', () => {
+    // The members CSV deliberately lists cancelled rows; printing a concrete
+    // amount against one invites collecting on an order that no longer exists.
+    expect(isCodCollectible(cod({ order_status: 'cancelled' }))).toBe(false);
+  });
+
+  it('is NOT collectible once the payment failed or was refunded', () => {
+    expect(isCodCollectible(cod({ payment_status: 'failed' }))).toBe(false);
+    expect(isCodCollectible(cod({ payment_status: 'refunded' }))).toBe(false);
+    expect(isCodCollectible(cod({ payment_status: 'partially_refunded' }))).toBe(false);
+  });
+
+  it('is never collectible for a Pay Now order', () => {
+    expect(isCodCollectible(cod({ payment_type: 'pay_now' }))).toBe(false);
   });
 });
 

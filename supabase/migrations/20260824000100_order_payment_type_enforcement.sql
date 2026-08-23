@@ -77,7 +77,11 @@ BEGIN
     NEW.payment_method_name := NULL;
     NEW.payment_proof_url   := NULL;
 
-  ELSIF NOT COALESCE(NEW.is_claim, false) THEN
+  ELSIF NOT COALESCE(NEW.is_claim, false) AND NOT public.is_admin() THEN
+    -- Storefront checkout must name a method. Admins are exempt: back-office
+    -- flows legitimately create orders without one (a linked order added to a
+    -- group-buy parent, a phone order recorded by hand), and blocking those
+    -- breaks admin tooling to guard against a shopper payload it cannot send.
     IF NEW.payment_method_id IS NULL OR btrim(NEW.payment_method_id) = '' THEN
       RAISE EXCEPTION 'Please select an online payment method to continue.'
         USING ERRCODE = 'check_violation';
@@ -96,6 +100,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+-- Matches the hardening convention for SECURITY DEFINER functions in this
+-- directory (see enforce_group_buy_on_order, 20260720000000): no role may call
+-- it directly; it runs only as a trigger.
+REVOKE ALL ON FUNCTION public.enforce_payment_type_on_order() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_enforce_payment_type_on_order ON public.orders;
 CREATE TRIGGER trg_enforce_payment_type_on_order

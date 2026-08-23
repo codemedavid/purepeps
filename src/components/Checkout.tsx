@@ -114,6 +114,11 @@ const Checkout: React.FC<CheckoutProps> = ({
     const [copied, setCopied] = useState(false);
 
     const [orderNumber, setOrderNumber] = useState<string>('');
+    // Guards against a double-tap placing two orders. The Pay Now path was
+    // incidentally covered by isUploadingProof; COD uploads nothing, so without
+    // this a second tap runs next_order_number and inserts again — two order
+    // numbers, two cap slots, two COD collections.
+    const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
     // Payment Proof
     const [paymentProof, setPaymentProof] = useState<File | null>(null);
@@ -263,6 +268,7 @@ const Checkout: React.FC<CheckoutProps> = ({
 
 
     const handlePlaceOrder = async () => {
+        if (isPlacingOrder) return;
         if (!shippingLocation) {
             alert('Please select your shipping location.');
             return;
@@ -325,6 +331,8 @@ const Checkout: React.FC<CheckoutProps> = ({
             : undefined;
 
         try {
+            setIsPlacingOrder(true);
+
             // 1. Upload Payment Proof First
             let paymentProofUrl = null;
             if (isPayNow && paymentProof) {
@@ -609,6 +617,12 @@ Please confirm this order. Thank you!
         } catch (error) {
             console.error('❌ Error placing order:', error);
             alert(`Failed to place order: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+        } finally {
+            // Required, not tidiness: handlePlaceOrder returns early from inside
+            // the try on several failure paths (upload failed, insert rejected).
+            // Without this the button stays disabled forever and the shopper
+            // cannot retry.
+            setIsPlacingOrder(false);
         }
     };
 
@@ -892,14 +906,16 @@ Please confirm this order. Thank you!
 
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={(isPayNow && !paymentProof) || isUploadingProof}
+                                disabled={(isPayNow && !paymentProof) || isUploadingProof || isPlacingOrder}
                                 className="w-full btn-primary py-4 text-base shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {isUploadingProof
                                     ? 'Uploading Proof...'
-                                    : isPayNow
-                                        ? 'Complete Order'
-                                        : 'Place COD Order'}
+                                    : isPlacingOrder
+                                        ? 'Placing Order...'
+                                        : isPayNow
+                                            ? 'Complete Order'
+                                            : 'Place COD Order'}
                             </button>
                         </div>
 

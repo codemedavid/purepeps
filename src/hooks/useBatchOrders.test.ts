@@ -152,6 +152,48 @@ describe('useBatchOrders — paid_total bookkeeping', () => {
     expect(patch.paid_total).toBe(1000);
   });
 
+  it('does NOT mark a COD order paid when confirming it', async () => {
+    // The Group Buy panel is a SECOND confirm path beside OrdersManager. If it
+    // forges payment_status:'paid', buildGroupWaybillData drops the order out of
+    // codOrders and the COLLECT ON DELIVERY banner never prints — the courier
+    // hands over the parcel and collects nothing.
+    const result = await mountLoaded();
+    const cod = makeOrder({
+      id: 'cod-1',
+      payment_type: 'cod',
+      payment_status: 'pending',
+      payment_method_name: null,
+      total_price: 1000,
+    });
+
+    await act(async () => {
+      await result.current.confirmOrder(cod);
+    });
+
+    const patch = lastUpdate();
+    expect(patch.order_status).toBe('confirmed');
+    expect(patch.payment_status).toBeUndefined();
+    expect(patch.paid_total).toBeUndefined();
+  });
+
+  it('does not relabel a FAILED Pay Now payment as paid when confirming', async () => {
+    const result = await mountLoaded();
+    const failed = makeOrder({
+      id: 'failed-1',
+      payment_type: 'pay_now',
+      payment_status: 'failed',
+      total_price: 1000,
+    });
+
+    await act(async () => {
+      await result.current.confirmOrder(failed);
+    });
+
+    const patch = lastUpdate();
+    expect(patch.payment_status).toBeUndefined();
+    expect(patch.manually_confirmed_at).toEqual(expect.any(String));
+  });
+
   it('verifyAdditionalPayment marks paid and advances paid_total to the new total', async () => {
     const result = await mountLoaded();
     await act(async () => {
