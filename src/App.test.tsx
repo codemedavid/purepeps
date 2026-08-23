@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -72,11 +72,17 @@ const bottomNavTab = (name: 'Home' | 'Shop' | 'Cart') =>
     name: name === 'Cart' ? /^Cart,/ : name,
   });
 
+/** Elements the storefront asked to scroll into view, in call order. */
+let scrollTargets: Element[] = [];
+
 describe('Storefront bottom navigation', () => {
   beforeEach(() => {
     // jsdom implements neither scroll API; the storefront calls both while navigating.
     window.scrollTo = vi.fn();
-    Element.prototype.scrollIntoView = vi.fn();
+    scrollTargets = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrollTargets.push(this);
+    });
   });
 
   it('highlights Home on first load', () => {
@@ -105,5 +111,22 @@ describe('Storefront bottom navigation', () => {
 
     expect(bottomNavTab('Shop')).toHaveAttribute('aria-current', 'page');
     expect(bottomNavTab('Home')).not.toHaveAttribute('aria-current');
+  });
+
+  it('scrolls down into the catalog from the hero CTA rather than back up the page', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const heroHeading = screen.getByRole('heading', { level: 1 });
+
+    await user.click(screen.getByRole('button', { name: /browse the catalog/i }));
+    await waitFor(() => expect(scrollTargets).toHaveLength(1));
+
+    // The shopper must end up below the hero. An element that precedes the hero
+    // (the catalog anchor sits above it) would scroll the page back to the top and
+    // leave the products just as far away as before.
+    expect(
+      heroHeading.compareDocumentPosition(scrollTargets[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
