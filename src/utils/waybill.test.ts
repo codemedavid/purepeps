@@ -278,3 +278,63 @@ describe('waybill — cash on delivery', () => {
     expect(data.codAmountDue).toBeCloseTo(3445.6, 2);
   });
 });
+
+// --- One sheet, one number ---
+// The courier acts on this paper. If COLLECT ON DELIVERY and Grand total
+// disagree, one of them is wrong and money moves incorrectly either way.
+
+describe('waybill — COD figure reconciles with the printed total', () => {
+  const discounted = (overrides: Partial<WaybillOrderInput> = {}) =>
+    order({
+      payment_type: 'cod',
+      payment_status: 'pending',
+      payment_method_name: null,
+      // items total 3345.60, but a ₱500 promo means the customer owes 2845.60.
+      total_price: 2845.6,
+      ...overrides,
+    });
+
+  it('shows the discount that total_price already carries', () => {
+    const data = buildWaybillData(discounted());
+
+    expect(data.discountTotal).toBeCloseTo(500, 2);
+  });
+
+  it('grand total reflects the discount the customer actually got', () => {
+    // 3345.60 items - 500 discount + 100 shipping.
+    const data = buildWaybillData(discounted());
+
+    expect(data.grandTotal).toBeCloseTo(2945.6, 2);
+  });
+
+  it('collects exactly the grand total on a fully COD sheet', () => {
+    // The invariant that matters: the two printed figures agree.
+    const data = buildWaybillData(discounted());
+
+    expect(data.codAmountDue).toBeCloseTo(data.grandTotal, 2);
+  });
+
+  it('still agrees when a batch access fee is charged', () => {
+    const data = buildWaybillData(discounted(), { adminFee: 250 });
+
+    expect(data.grandTotal).toBeCloseTo(3195.6, 2);
+    expect(data.codAmountDue).toBeCloseTo(data.grandTotal, 2);
+  });
+
+  it('reports no discount when none was applied', () => {
+    const data = buildWaybillData(order({ payment_type: 'pay_now' }));
+
+    expect(data.discountTotal).toBe(0);
+    expect(data.grandTotal).toBeCloseTo(3445.6, 2);
+  });
+
+  it('collects only the unpaid share on a mixed sheet, never the whole total', () => {
+    const data = buildGroupWaybillData([
+      discounted({ id: 'aaa', order_number: 'PP-0001' }),
+      discounted({ id: 'bbb', order_number: 'PP-0002', payment_status: 'paid' }),
+    ]);
+
+    expect(data.codAmountDue).toBeCloseTo(2945.6, 2);
+    expect(data.codAmountDue).toBeLessThan(data.grandTotal);
+  });
+});

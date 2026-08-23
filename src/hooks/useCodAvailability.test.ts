@@ -20,11 +20,12 @@ describe('parseCodEnabled', () => {
     expect(parseCodEnabled('maybe')).toBe(false);
   });
 
-  it('treats an unseeded setting as ON, matching the migration default', () => {
-    // The migration seeds cod_enabled='true'; a missing row means it was never
-    // seeded, not that an admin switched COD off.
-    expect(parseCodEnabled(null)).toBe(true);
-    expect(parseCodEnabled(undefined)).toBe(true);
+  it('treats an unseeded setting as OFF, exactly as the trigger does', () => {
+    // The trigger's SELECT INTO leaves NULL when no row exists, and
+    // COALESCE(NULL, false) rejects. Reading it as ON here would offer COD and
+    // then have every submission rejected server-side.
+    expect(parseCodEnabled(null)).toBe(false);
+    expect(parseCodEnabled(undefined)).toBe(false);
   });
 
   it('agrees with the SQL trigger, which accepts exactly true/1/yes', () => {

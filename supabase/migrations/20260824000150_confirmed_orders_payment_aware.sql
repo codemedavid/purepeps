@@ -11,7 +11,8 @@
 --
 -- Confirmed now means: the order has moved past 'new', is not cancelled, AND
 -- one of the following is true —
---   * it is COD (unpaid by design; confirming it IS the admin taking the risk),
+--   * it is COD and the cash has not failed or been handed back (unpaid by
+--     design; confirming it IS the admin taking the risk),
 --   * the payment is verified paid, or
 --   * an admin manually confirmed it despite the payment state, which is
 --     recorded in manually_confirmed_at (see 20260824000000).
@@ -53,7 +54,7 @@ BEGIN
     RETURN jsonb_build_object('batch', NULL, 'items', '[]'::jsonb);
   END IF;
 
-  -- confirmed-quantity-version: payment-aware-v1
+  -- confirmed-quantity-version: payment-aware-v2
   WITH order_totals AS (
     SELECT
       (elem->>'product_id')                                                        AS product_id,
@@ -62,9 +63,11 @@ BEGIN
                FILTER (WHERE o.order_status <> 'cancelled'), 0)                     AS total_quantity,
       COALESCE(SUM((elem->>'quantity')::numeric)
                FILTER (WHERE o.order_status NOT IN ('cancelled', 'new')
-                         AND (o.payment_type = 'cod'
-                              OR o.payment_status = 'paid'
-                              OR o.manually_confirmed_at IS NOT NULL)), 0)  AS confirmed_quantity,
+                         AND (o.manually_confirmed_at IS NOT NULL
+                              OR (o.payment_status NOT IN
+                                    ('failed', 'refunded', 'partially_refunded')
+                                  AND (o.payment_type = 'cod'
+                                       OR o.payment_status = 'paid')))), 0)  AS confirmed_quantity,
       COUNT(DISTINCT o.id)
                FILTER (WHERE o.order_status <> 'cancelled')                         AS order_count,
       COALESCE(SUM((elem->>'quantity')::numeric)
@@ -206,14 +209,14 @@ GRANT EXECUTE ON FUNCTION public.get_group_buy_progress(UUID) TO anon, authentic
 --    Run this SELECT on its own any time to check the DEPLOYED function:
 --
 --      SELECT pg_get_functiondef('public.get_group_buy_progress(uuid)'::regprocedure)
---             LIKE '%confirmed-quantity-version: payment-aware-v1%' AS is_payment_aware;
+--             LIKE '%confirmed-quantity-version: payment-aware-v2%' AS is_payment_aware;
 --
 --    FALSE means an older migration file was re-applied over this one.
 -- ===========================================================================
 DO $verify$
 BEGIN
   IF pg_get_functiondef('public.get_group_buy_progress(uuid)'::regprocedure)
-     NOT LIKE '%confirmed-quantity-version: payment-aware-v1%' THEN
+     NOT LIKE '%confirmed-quantity-version: payment-aware-v2%' THEN
     RAISE EXCEPTION
       'get_group_buy_progress is still a stale, payment-blind definition. Re-apply this migration.';
   END IF;

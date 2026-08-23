@@ -14,7 +14,7 @@
 --     A client-only toggle would be no control at all against a direct insert.
 --   * A newly placed order is ALWAYS unpaid and never pre-confirmed. This is the
 --     insert-time half of "failed or unpaid Pay Now orders don't count as
---     confirmed"; the counting half is redefined in 20260824000200.
+--     confirmed"; the counting half is redefined in 20260824000150.
 --
 -- Claim add-ons (is_claim) are exempt from the method requirement: they are
 -- created by claim_group_buy_leftover (SECURITY DEFINER) and inherit the parent

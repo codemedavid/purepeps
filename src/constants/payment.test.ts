@@ -188,6 +188,36 @@ describe('countsAsConfirmedOrder', () => {
     ).toBe(true);
   });
 
+  it('does NOT count a COD order whose payment failed', () => {
+    // Customer refused delivery, admin marked it Failed. Those units must stop
+    // occupying a cap slot — otherwise only cancelling frees it, which destroys
+    // the record of what happened.
+    expect(
+      countsAsConfirmedOrder({
+        ...base,
+        payment_type: 'cod',
+        payment_status: 'failed',
+      }),
+    ).toBe(false);
+  });
+
+  it('does NOT count a refunded COD order', () => {
+    expect(
+      countsAsConfirmedOrder({ ...base, payment_type: 'cod', payment_status: 'refunded' }),
+    ).toBe(false);
+  });
+
+  it('counts a failed COD order once an admin manually confirms it', () => {
+    expect(
+      countsAsConfirmedOrder({
+        ...base,
+        payment_type: 'cod',
+        payment_status: 'failed',
+        manually_confirmed_at: '2026-08-24T00:00:00Z',
+      }),
+    ).toBe(true);
+  });
+
   it('does not count a COD order still sitting at new', () => {
     expect(
       countsAsConfirmedOrder({

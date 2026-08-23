@@ -6,12 +6,17 @@ import { supabase } from '../lib/supabase';
 const TRUTHY = ['true', '1', 'yes'];
 
 /**
- * Read the cod_enabled setting. An ABSENT row means the setting was never
- * seeded, which is not the same as an admin switching COD off — so it reads as
- * enabled, matching the migration's default.
+ * Read the cod_enabled setting.
+ *
+ * An ABSENT row reads as OFF, matching the server exactly: the trigger does
+ * `SELECT ... INTO v_cod_enabled` (NULL when no row) then
+ * `IF NOT COALESCE(v_cod_enabled, false) THEN RAISE`. Reading it as ON here
+ * would offer a payment option that every submission then gets rejected for,
+ * after the shopper has filled in the whole form. A kill switch should fail
+ * closed on both sides or it is not a kill switch.
  */
 export function parseCodEnabled(raw: string | null | undefined): boolean {
-  if (raw == null) return true;
+  if (raw == null) return false;
   return TRUTHY.includes(String(raw).trim().toLowerCase());
 }
 
@@ -23,9 +28,10 @@ export function parseCodEnabled(raw: string | null | undefined): boolean {
  * NOT the control — anon inserts go straight to the table, so the authoritative
  * check lives in enforce_payment_type_on_order (20260824000100).
  *
- * Fails OPEN to the server's judgement: if the setting cannot be read we leave
- * COD visible and let the trigger reject it, rather than silently removing a
- * payment option because of a transient network error.
+ * An ABSENT row reads as OFF, matching the trigger exactly. A FAILED read is
+ * different — it is not an answer — so COD stays visible and the trigger, which
+ * is the real control, decides. A network blip should not silently remove a
+ * payment option for everyone.
  */
 export function useCodAvailability(): { codEnabled: boolean; loading: boolean } {
   const [codEnabled, setCodEnabled] = useState(true);
@@ -47,6 +53,8 @@ export function useCodAvailability(): { codEnabled: boolean; loading: boolean } 
 
         setCodEnabled(parseCodEnabled(data?.value));
       } catch (err) {
+        // Not an answer about the setting — defer to the server rather than
+        // withdrawing a payment option on a transient failure.
         console.error('Error reading cod_enabled setting:', err);
         if (!cancelled) setCodEnabled(true);
       } finally {

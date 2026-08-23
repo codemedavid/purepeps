@@ -144,6 +144,13 @@ const Checkout: React.FC<CheckoutProps> = ({
     // Calculate final total (Subtotal + Shipping - Discount)
     const finalTotal = Math.max(0, totalPrice + shippingFee - discountAmount);
 
+    // useCodAvailability resolves after a round trip, so a shopper can select COD
+    // before it reports the option is off. Fall back rather than leave a disabled
+    // card selected with a live "Place COD Order" button the server will reject.
+    React.useEffect(() => {
+        if (!codEnabled && paymentType === 'cod') setPaymentType('pay_now');
+    }, [codEnabled, paymentType]);
+
     const isPayNow = isProofRequired(paymentType);
     // Cash the courier collects. Identical to finalTotal — there is no COD
     // surcharge — but derived through the shared helper so the checkout screen,

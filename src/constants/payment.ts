@@ -27,6 +27,9 @@ export type PaymentStatus =
 /** Order statuses that mean the order is not (or no longer) a live commitment. */
 const UNCONFIRMED_ORDER_STATUSES: readonly string[] = ['new', 'cancelled'];
 
+/** Payment states where money did not stay with us, so the order is not demand. */
+const SETTLED_AGAINST_STATUSES: readonly string[] = ['failed', 'refunded', 'partially_refunded'];
+
 const PAYMENT_TYPE_LABELS: Readonly<Record<string, string>> = {
   pay_now: 'Pay Now',
   cod: 'Cash on Delivery',
@@ -146,11 +149,16 @@ export function countsAsConfirmedOrder(order: ConfirmableOrder): boolean {
   const orderStatus = order.order_status;
   if (!orderStatus || UNCONFIRMED_ORDER_STATUSES.includes(orderStatus)) return false;
 
-  return (
-    order.payment_type === 'cod' ||
-    order.payment_status === 'paid' ||
-    order.manually_confirmed_at != null
-  );
+  // An explicit admin decision outranks the payment state, whatever it is.
+  if (order.manually_confirmed_at != null) return true;
+
+  // A payment that failed or was handed back is not demand — for COD just as
+  // much as for Pay Now. A refused COD delivery must release its cap slot,
+  // otherwise the only way to free it is cancelling, which erases the record.
+  if (SETTLED_AGAINST_STATUSES.includes(order.payment_status ?? '')) return false;
+
+  // COD is legitimately unpaid until the courier collects.
+  return order.payment_type === 'cod' || order.payment_status === 'paid';
 }
 
 /**

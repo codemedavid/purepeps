@@ -132,6 +132,8 @@ export interface WaybillData {
     trackingNumber: string | null;
   };
   adminFee: number | null;
+  /** Promo discount already baked into total_price, surfaced so the sheet adds up. */
+  discountTotal: number;
   receiptUrl: string | null;
   additionalReceiptUrl: string | null;
   paymentMethod: string | null;
@@ -227,7 +229,21 @@ export function buildGroupWaybillData(
   const itemsSubtotal = items.reduce((sum, item) => sum + item.total, 0);
   const shippingFee = orders.reduce((sum, order) => sum + toNumber(order.shipping_fee), 0);
   const adminFee = options.adminFee != null ? toNumber(options.adminFee) : null;
-  const grandTotal = itemsSubtotal + shippingFee + (adminFee ?? 0);
+
+  // order_items carry UNDISCOUNTED line totals, while total_price is the
+  // subtotal AFTER the promo (Checkout.tsx stores it that way). Summing the
+  // line items alone therefore overstates what the customer owes on a
+  // discounted order. Recover the discount so the printed sheet adds up and,
+  // critically, so the COD figure below cannot contradict the grand total.
+  // Only infer a discount when EVERY order actually reports total_price. A
+  // missing field means "no charged total recorded", not "discounted to zero" —
+  // treating it as the latter would wipe the whole sheet down to fees.
+  const hasChargedTotals = orders.every((order) => order.total_price != null);
+  const chargedSubtotal = hasChargedTotals
+    ? orders.reduce((sum, order) => sum + toNumber(order.total_price), 0)
+    : itemsSubtotal;
+  const discountTotal = Math.max(0, itemsSubtotal - chargedSubtotal);
+  const grandTotal = itemsSubtotal - discountTotal + shippingFee + (adminFee ?? 0);
 
   const municipality = cleanText(primary.shipping_city);
   const province = cleanText(primary.shipping_state);
@@ -258,13 +274,22 @@ export function buildGroupWaybillData(
       (cleanText(order.payment_status) ?? 'pending') !== 'paid',
   );
   const isCashOnDelivery = codOrders.length > 0;
-  const codAmountDue = codOrders.reduce(
-    (sum, order) => sum + codAmountDueFor({
-      total_price: toNumber(order.total_price),
-      shipping_fee: toNumber(order.shipping_fee),
-    }),
-    0,
-  );
+
+  // Built from the same components as grandTotal, so a sheet where every order
+  // is unpaid COD collects EXACTLY the printed total — no second, conflicting
+  // instruction to the courier. The batch access fee is charged once per batch,
+  // so it is only collected when the whole sheet is unpaid; on a mixed sheet the
+  // prepaid order already carried it, and collecting it twice would overcharge.
+  const isEntirelyCashOnDelivery = isCashOnDelivery && codOrders.length === orders.length;
+  const codAmountDue = isCashOnDelivery
+    ? codOrders.reduce(
+      (sum, order) => sum + codAmountDueFor({
+        total_price: toNumber(order.total_price),
+        shipping_fee: toNumber(order.shipping_fee),
+      }),
+      0,
+    ) + (isEntirelyCashOnDelivery ? adminFee ?? 0 : 0)
+    : 0;
 
   return {
     storeName: cleanText(options.storeName) ?? WAYBILL_STORE_NAME,
@@ -300,6 +325,7 @@ export function buildGroupWaybillData(
       trackingNumber: cleanText(primary.tracking_number),
     },
     adminFee,
+    discountTotal,
     receiptUrl: cleanText(primary.payment_proof_url),
     additionalReceiptUrl: cleanText(primary.additional_payment_proof_url),
     paymentMethod: cleanText(primary.payment_method_name),

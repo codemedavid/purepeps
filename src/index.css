@@ -301,6 +301,22 @@
   font-weight: 700;
 }
 
+.wb-cod {
+  margin: 6px 0 2px;
+  padding: 6px 8px;
+  border: 2px solid #111827;
+  border-radius: 4px;
+  font-size: 1.05em;
+  font-weight: 800;
+  color: #111827;
+  background: #fde68a;
+  word-break: break-word;
+  /* Backgrounds are dropped by default in print; force it so the COLLECT line
+     still reads as an instruction on paper, which is where couriers see it. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .wb-paid {
   font-weight: 700;
   color: #15803d;
