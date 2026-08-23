@@ -624,7 +624,9 @@ describe('Checkout', () => {
       await userEvent.click(screen.getByText(/Place COD Order/i));
 
       await waitFor(() => expect(screen.getByText('Order Confirmed')).toBeInTheDocument());
-      expect(screen.getByText(/Cash on Delivery/i)).toBeInTheDocument();
+      // Named in both the badge and the copyable order summary, hence getAllByText.
+      expect(screen.getAllByText(/Cash on Delivery/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/due on delivery/i)).toBeInTheDocument();
       expect(screen.getByText(/pay the courier/i)).toBeInTheDocument();
     });
 

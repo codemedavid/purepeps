@@ -13,6 +13,9 @@ import { useCheckoutInfo } from '../hooks/useCheckoutInfo';
 import { useOrderHistory } from '../hooks/useOrderHistory';
 import posthog, { identifyUser } from '../lib/posthog';
 import UpgradeTierModal from './UpgradeTierModal';
+import PaymentOptionPicker from './checkout/PaymentOptionPicker';
+import CodInstructions from './checkout/CodInstructions';
+import { codAmountDue, isProofRequired, paymentTypeLabel, type PaymentType } from '../constants/payment';
 
 interface CheckoutProps {
     cartItems: CartItem[];
@@ -99,6 +102,9 @@ const Checkout: React.FC<CheckoutProps> = ({
     const [shippingLocation, setShippingLocation] = useState<string>(savedInfo?.shippingLocation ?? '');
 
     // Payment
+    // How the customer chose to pay. Pay Now keeps the original flow (online
+    // method + receipt); COD collects nothing here — the courier takes cash.
+    const [paymentType, setPaymentType] = useState<PaymentType>('pay_now');
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
     const [notes, setNotes] = useState('');
 
@@ -135,6 +141,15 @@ const Checkout: React.FC<CheckoutProps> = ({
 
     // Calculate final total (Subtotal + Shipping - Discount)
     const finalTotal = Math.max(0, totalPrice + shippingFee - discountAmount);
+
+    const isPayNow = isProofRequired(paymentType);
+    // Cash the courier collects. Identical to finalTotal — there is no COD
+    // surcharge — but derived through the shared helper so the checkout screen,
+    // the waybill and the admin view can never disagree about the figure.
+    const codDue = codAmountDue({
+        total_price: Math.max(0, totalPrice - discountAmount),
+        shipping_fee: shippingFee,
+    });
 
     // Handle Promo Code Application
     const handleApplyPromoCode = async () => {
@@ -244,7 +259,9 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
-        if (!paymentProof) {
+        // COD pays nothing up front, so there is no receipt to demand. The
+        // server enforces the same rule (enforce_payment_type_on_order).
+        if (isPayNow && !paymentProof) {
             alert('Please upload a screenshot of your payment proof to proceed.');
             return;
         }
@@ -286,12 +303,14 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
-        const paymentMethod = paymentMethods.find(pm => pm.id === selectedPaymentMethod);
+        const paymentMethod = isPayNow
+            ? paymentMethods.find(pm => pm.id === selectedPaymentMethod)
+            : undefined;
 
         try {
             // 1. Upload Payment Proof First
             let paymentProofUrl = null;
-            if (paymentProof) {
+            if (isPayNow && paymentProof) {
                 try {
                     paymentProofUrl = await uploadImage(paymentProof);
                 } catch (uploadError: any) {
@@ -355,6 +374,7 @@ const Checkout: React.FC<CheckoutProps> = ({
                     shipping_fee: shippingFee,
                     courier_id: selectedCourierId || null,
                     shipping_location: shippingLocation,
+                    payment_type: paymentType,
                     payment_method_id: paymentMethod?.id || null,
                     payment_method_name: paymentMethod?.name || null,
                     payment_proof_url: paymentProofUrl,
@@ -387,6 +407,15 @@ const Checkout: React.FC<CheckoutProps> = ({
                 // Tier-gate rejections are already shopper-friendly (they name the
                 // category and the fix). Show as-is, without the support footer.
                 if (lowerMessage.includes('access tier') || lowerMessage.includes('group-buy access')) {
+                    alert(orderError.message);
+                    return;
+                }
+
+                // Payment-option rejections from enforce_payment_type_on_order are
+                // already written for shoppers (COD switched off, no method chosen).
+                if (lowerMessage.includes('cash on delivery') ||
+                    lowerMessage.includes('payment option') ||
+                    lowerMessage.includes('online payment method')) {
                     alert(orderError.message);
                     return;
                 }
@@ -467,6 +496,7 @@ const Checkout: React.FC<CheckoutProps> = ({
                 final_total: finalTotal,
                 item_count: orderItems.length,
                 items_description: items_description,
+                payment_type: paymentType,
                 payment_method: paymentMethod?.name,
                 shipping_address: `${address}, ${barangay}, ${city}, ${state} ${zipCode}`,
                 courier: couriers.find(c => c.id === selectedCourierId)?.name || 'N/A',
@@ -533,12 +563,14 @@ Product Total: ₱${totalPrice.toLocaleString('en-PH', { minimumFractionDigits: 
 Shipping Fee: ₱${shippingFee.toLocaleString('en-PH', { minimumFractionDigits: 0 })} (${shippingLocation.replace('_', ' & ')})
 ${discountAmount > 0 ? `Discount (${appliedPromo?.code}): -₱${discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 0 })}\n` : ''}Grand Total: ₱${finalTotal.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
 
-💳 PAYMENT METHOD
-${paymentMethod?.name || 'N/A'}
-      ${paymentMethod ? `Account: ${paymentMethod.account_number}` : ''}
+💳 PAYMENT OPTION
+${paymentTypeLabel(paymentType)}
+${isPayNow
+                ? `${paymentMethod?.name || 'N/A'}${paymentMethod ? `\n      Account: ${paymentMethod.account_number}` : ''}`
+                : `COLLECT ON DELIVERY: ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
 
 📸 PROOF OF PAYMENT
-${paymentProofUrl ? 'Screenshot attached to order.' : 'Pending'}
+${!isPayNow ? 'Not required — cash on delivery.' : paymentProofUrl ? 'Screenshot attached to order.' : 'Pending'}
 
 📋 ORDER NUMBER: ${customOrderNumber}
 
@@ -587,8 +619,21 @@ Please confirm this order. Thank you!
                             Order Confirmed
                         </h1>
                         <p className="text-gray-600 mb-4 text-base md:text-lg leading-relaxed">
-                            Your order has been received. Save your order reference below — we'll review your payment and confirm your order shortly.
+                            {isPayNow
+                                ? "Your order has been received. Save your order reference below — we'll review your payment and confirm your order shortly."
+                                : `Your order has been received. Save your order reference below — we'll confirm it shortly, then you pay the courier ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} in cash on arrival.`}
                         </p>
+
+                        <div className="flex justify-center mb-6">
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-200 bg-brand-50/40 text-sm font-semibold text-brand-700">
+                                {paymentTypeLabel(paymentType)}
+                                {!isPayNow && (
+                                    <span className="text-charcoal-900">
+                                        · ₱{codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} due on delivery
+                                    </span>
+                                )}
+                            </span>
+                        </div>
 
                         {/* Order ID Display */}
                         {orderNumber && (
@@ -646,7 +691,11 @@ Please confirm this order. Thank you!
                             <ul className="space-y-3 text-sm text-gray-700">
                                 <li className="flex items-start gap-3">
                                     <span className="font-bold text-brand-500">1.</span>
-                                    <span>Confirmation within 24 hours of payment receipt.</span>
+                                    <span>
+                                        {isPayNow
+                                            ? 'Confirmation within 24 hours of payment receipt.'
+                                            : 'Confirmation within 24 hours — no payment needed until delivery.'}
+                                    </span>
                                 </li>
                                 <li className="flex items-start gap-3">
                                     <span className="font-bold text-brand-500">2.</span>
@@ -700,6 +749,14 @@ Please confirm this order. Thank you!
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
 
+                            <PaymentOptionPicker
+                                value={paymentType}
+                                onChange={setPaymentType}
+                                codAmount={codDue}
+                            />
+
+                            {isPayNow ? (
+                                <>
                             {/* Payment Methods */}
                             <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
                                 <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-4 flex items-center gap-2">
@@ -794,6 +851,13 @@ Please confirm this order. Thank you!
                                     </label>
                                 </div>
                             </div>
+                                </>
+                            ) : (
+                                <CodInstructions
+                                    amountDue={codDue}
+                                    courierName={couriers.find(c => c.id === selectedCourierId)?.name}
+                                />
+                            )}
 
                             {/* Notes */}
                             <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
@@ -810,10 +874,14 @@ Please confirm this order. Thank you!
 
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={!paymentProof || isUploadingProof}
+                                disabled={(isPayNow && !paymentProof) || isUploadingProof}
                                 className="w-full btn-primary py-4 text-base shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                {isUploadingProof ? 'Uploading Proof...' : 'Complete Order'}
+                                {isUploadingProof
+                                    ? 'Uploading Proof...'
+                                    : isPayNow
+                                        ? 'Complete Order'
+                                        : 'Place COD Order'}
                             </button>
                         </div>
 
