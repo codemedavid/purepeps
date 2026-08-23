@@ -5,6 +5,16 @@ import { useMenu } from '../hooks/useMenu';
 import { useCouriers } from '../hooks/useCouriers';
 import posthog from '../lib/posthog';
 import { ORDER_STATUS_OPTIONS, orderStatusLabel } from '../utils/orderTracking';
+import { planOrderConfirmation } from '../utils/orderConfirmation';
+import {
+  COD_STATUS_OPTIONS,
+  PAY_NOW_STATUS_OPTIONS,
+  codAmountDue,
+  paymentStatusColor,
+  paymentStatusLabel,
+  paymentTypeLabel,
+  resolveRefundStatus,
+} from '../constants/payment';
 import { toFacebookProfileUrl } from '../utils/facebookLink';
 import { buildWaybillData, canPrintWaybill } from '../utils/waybill';
 import { WaybillModal } from './waybill/WaybillModal';
@@ -37,6 +47,10 @@ interface Order {
   total_price: number;
   payment_method_id: string | null;
   payment_method_name: string | null;
+  payment_type: string | null;
+  refunded_total: number | null;
+  manually_confirmed_at: string | null;
+  manually_confirmed_by: string | null;
   payment_proof_url: string | null;
   contact_method: string | null;
   order_status: string;
@@ -137,6 +151,19 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       return;
     }
 
+    // Work out what confirming should actually write. A failed or refunded
+    // payment needs a second, explicit yes — asked BEFORE any stock moves, so
+    // declining leaves inventory untouched.
+    const { data: authData } = await supabase.auth.getUser();
+    const plan = planOrderConfirmation(order, {
+      now: new Date().toISOString(),
+      adminEmail: authData?.user?.email ?? null,
+    });
+
+    if (plan.requiresOverride && !confirm(`${plan.warning}\n\nConfirm anyway?`)) {
+      return;
+    }
+
     try {
       setIsProcessing(true);
 
@@ -233,8 +260,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       const { error: updateError } = await supabase
         .from('orders')
         .update({
-          order_status: 'confirmed',
-          payment_status: 'paid',
+          ...plan.updates,
           updated_at: new Date().toISOString()
         })
         .eq('id', order.id);
@@ -279,6 +305,62 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       console.error('Error confirming order:', error);
       const errorMessage = error instanceof Error ? error.message : error?.message || 'Unknown error';
       alert(`Failed to confirm order: ${errorMessage}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  /**
+   * Set an order's payment status by hand.
+   *
+   * Choosing a refund state asks for the amount, so refunded_total and the
+   * status token cannot drift apart (the DB stores the amount; 'refunded' vs
+   * 'partially_refunded' is derived from it — see resolveRefundStatus).
+   */
+  const handleUpdatePaymentStatus = async (order: Order, newStatus: string) => {
+    if (newStatus === order.payment_status) return;
+
+    const updates: Record<string, unknown> = {
+      payment_status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (newStatus === 'refunded' || newStatus === 'partially_refunded') {
+      const due = codAmountDue(order);
+      const suggested = newStatus === 'refunded' ? String(due) : '';
+      const entered = prompt(
+        `How much was refunded? (order total ₱${due.toLocaleString('en-PH')})`,
+        suggested,
+      );
+      if (entered === null) return;
+
+      const amount = Number(entered);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert('Please enter a refund amount greater than zero.');
+        return;
+      }
+      if (amount > due) {
+        alert(`A refund cannot exceed the order total of ₱${due.toLocaleString('en-PH')}.`);
+        return;
+      }
+
+      // Keep the stored token honest about the amount actually returned.
+      updates.refunded_total = amount;
+      updates.payment_status = resolveRefundStatus(due, amount) ?? newStatus;
+    }
+
+    try {
+      setIsProcessing(true);
+      const { error } = await supabase.from('orders').update(updates).eq('id', order.id);
+      if (error) throw error;
+
+      await loadOrders();
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder({ ...selectedOrder, ...(updates as Partial<Order>) });
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      alert('Failed to update payment status. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -500,6 +582,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
           onBack={() => setSelectedOrder(null)}
           onConfirm={() => handleConfirmOrder(selectedOrder)}
           onUpdateStatus={handleUpdateOrderStatus}
+          onUpdatePaymentStatus={handleUpdatePaymentStatus}
           onSaveTracking={handleSaveTracking}
           onPrintWaybill={() => setPrintOrder(selectedOrder)}
           isProcessing={isProcessing}
@@ -694,10 +777,25 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, onPrintWayb
               <span className="hidden sm:inline">{orderStatusLabel(order.order_status)}</span>
               <span className="sm:hidden">{order.order_status.charAt(0).toUpperCase()}</span>
             </span>
-            <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gold-100 text-gold-700'
-              }`}>
-              {order.payment_status === 'paid' ? '✓ Paid' : 'Pending'}
+            <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold border ${paymentStatusColor(order.payment_status)}`}>
+              {paymentStatusLabel(order.payment_status, order.payment_type)}
             </span>
+            <span className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold border ${order.payment_type === 'cod'
+              ? 'bg-amber-50 text-amber-800 border-amber-300'
+              : 'bg-gray-50 text-gray-600 border-gray-200'
+              }`}>
+              {order.payment_type === 'cod'
+                ? `COD ₱${codAmountDue(order).toLocaleString('en-PH')}`
+                : paymentTypeLabel(order.payment_type)}
+            </span>
+            {order.manually_confirmed_at && (
+              <span
+                className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold border bg-red-50 text-red-700 border-red-300"
+                title={`Manually confirmed despite the payment state by ${order.manually_confirmed_by || 'an admin'}`}
+              >
+                Manually confirmed
+              </span>
+            )}
             {order.group_buy_batch_id && (
               <span className="px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold bg-brand-100 text-brand-700 border border-brand-300 flex items-center gap-1">
                 <Layers className="w-3 h-3" />
@@ -769,6 +867,7 @@ interface OrderDetailsViewProps {
   onBack: () => void;
   onConfirm: () => void;
   onUpdateStatus: (orderId: string, status: string) => void;
+  onUpdatePaymentStatus: (order: Order, status: string) => void;
   onSaveTracking: (orderId: string, trackingNumber: string, shippingProvider: string, shippingNote: string) => void;
   onPrintWaybill: () => void;
   isProcessing: boolean;
@@ -780,6 +879,7 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
   onBack,
   onConfirm,
   onUpdateStatus,
+  onUpdatePaymentStatus,
   onSaveTracking,
   onPrintWaybill,
   isProcessing
@@ -1063,13 +1163,55 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
           <div>
             <h3 className="font-bold text-gray-900 mb-2 md:mb-3 text-sm md:text-base">Payment Information</h3>
             <div className="bg-gray-50 rounded-lg p-3 md:p-4 space-y-1.5 md:space-y-2 text-xs md:text-sm text-gray-900">
-              <p><span className="font-semibold">Method:</span> {order.payment_method_name || 'N/A'}</p>
+              <p><span className="font-semibold">Option:</span> {paymentTypeLabel(order.payment_type)}</p>
+              {order.payment_type === 'cod' ? (
+                <p>
+                  <span className="font-semibold">To collect on delivery:</span>{' '}
+                  ₱{codAmountDue(order).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </p>
+              ) : (
+                <p><span className="font-semibold">Method:</span> {order.payment_method_name || 'N/A'}</p>
+              )}
               <p className="flex items-center gap-2 flex-wrap"><span className="font-semibold">Status:</span>
-                <span className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gold-100 text-gold-700'
-                  }`}>
-                  {order.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                <span className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold border ${paymentStatusColor(order.payment_status)}`}>
+                  {paymentStatusLabel(order.payment_status, order.payment_type)}
                 </span>
               </p>
+              {order.refunded_total != null && Number(order.refunded_total) > 0 && (
+                <p>
+                  <span className="font-semibold">Refunded:</span>{' '}
+                  ₱{Number(order.refunded_total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </p>
+              )}
+              {order.manually_confirmed_at && (
+                <p className="text-red-700">
+                  <span className="font-semibold">Manually confirmed</span> by{' '}
+                  {order.manually_confirmed_by || 'an admin'} on{' '}
+                  {new Date(order.manually_confirmed_at).toLocaleString('en-PH', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })} — the payment was not verified.
+                </p>
+              )}
+              <label className="flex items-center gap-2 flex-wrap pt-1">
+                <span className="font-semibold">Set payment status:</span>
+                <select
+                  value={order.payment_status}
+                  onChange={(e) => onUpdatePaymentStatus(order, e.target.value)}
+                  disabled={isProcessing}
+                  className="px-2 py-1 border border-gray-300 rounded text-xs md:text-sm bg-white"
+                >
+                  {!(order.payment_type === 'cod' ? COD_STATUS_OPTIONS : PAY_NOW_STATUS_OPTIONS)
+                    .some((o) => o.value === order.payment_status) && (
+                      <option value={order.payment_status}>
+                        {paymentStatusLabel(order.payment_status, order.payment_type)}
+                      </option>
+                    )}
+                  {(order.payment_type === 'cod' ? COD_STATUS_OPTIONS : PAY_NOW_STATUS_OPTIONS).map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
 
