@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Checkout from './Checkout';
 import type { CartItem, Product, ProductVariation } from '../types';
@@ -7,6 +7,7 @@ import type { CartItem, Product, ProductVariation } from '../types';
 // Mock posthog
 vi.mock('../lib/posthog', () => ({
   default: { capture: vi.fn() },
+  identifyUser: vi.fn(),
 }));
 
 // Mock hooks
@@ -47,6 +48,8 @@ vi.mock('../hooks/useImageUpload', () => ({
 const mockPromoSingle = vi.fn();
 const mockInsertSingle = vi.fn();
 const mockUpdateEq = vi.fn().mockResolvedValue({ error: null });
+const mockOrderInsert = vi.fn();
+const mockRpc = vi.fn();
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -58,15 +61,12 @@ vi.mock('../lib/supabase', () => ({
           }),
         }),
       }),
-      insert: () => ({
-        select: () => ({
-          single: (...args: unknown[]) => mockInsertSingle(...args),
-        }),
-      }),
+      insert: (...args: unknown[]) => mockOrderInsert(...args),
       update: () => ({
         eq: (...args: unknown[]) => mockUpdateEq(...args),
       }),
     }),
+    rpc: (...args: unknown[]) => mockRpc(...args),
     storage: {
       from: () => ({
         upload: () => Promise.resolve({ data: { path: 'proof.png' }, error: null }),
@@ -136,6 +136,14 @@ describe('Checkout', () => {
       data: { id: 'order-1', order_number: 'TBS-0001' },
       error: null,
     });
+    // orders.insert is awaited directly — Checkout deliberately drops .select()
+    // because anon has no SELECT on orders (see 20260621000000).
+    mockOrderInsert.mockResolvedValue({ error: null });
+    mockRpc.mockImplementation((name: string) =>
+      name === 'next_order_number'
+        ? Promise.resolve({ data: 'TBS-000123', error: null })
+        : Promise.resolve({ data: null, error: null }),
+    );
   });
 
   // --- Initial Rendering ---
@@ -473,6 +481,165 @@ describe('Checkout', () => {
       expect(
         screen.queryByText(/outside your access tier/i),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Payment Options (Pay Now / Cash on Delivery) ---
+  // Checkout offers two ways to pay. Pay Now is the pre-existing flow: pick an
+  // online method, pay, upload proof. COD collects nothing up front — the
+  // courier takes cash on delivery — so it must NOT demand a method or a
+  // receipt, and it must tell the customer exactly what to have ready.
+
+  describe('payment options', () => {
+    /** Fill the details step and advance to the payment step. */
+    const goToPaymentStep = async () => {
+      await userEvent.type(screen.getByPlaceholderText('Juan Dela Cruz'), 'Juan Dela Cruz');
+      await userEvent.type(screen.getByPlaceholderText('juan@example.com'), 'juan@example.com');
+      await userEvent.type(screen.getByPlaceholderText('09XX XXX XXXX'), '09171234567');
+      await userEvent.type(screen.getByPlaceholderText('House/Unit, Street Name'), '12 Mabini St');
+      await userEvent.type(screen.getByPlaceholderText('Brgy. Name'), 'Brgy. Poblacion');
+      await userEvent.type(screen.getByPlaceholderText('City'), 'Makati');
+      await userEvent.type(screen.getByPlaceholderText('Province'), 'Metro Manila');
+      await userEvent.type(screen.getByPlaceholderText('ZIP Code'), '1200');
+
+      await userEvent.click(screen.getByText('LBC Express'));
+      await waitFor(() => expect(screen.getByText(/Metro Manila \(LBC\)/)).toBeInTheDocument());
+      await userEvent.click(screen.getByText(/Metro Manila \(LBC\)/));
+
+      const proceed = screen.getByText('Proceed to Payment').closest('button') as HTMLButtonElement;
+      await waitFor(() => expect(proceed).not.toBeDisabled());
+      await userEvent.click(proceed);
+
+      await waitFor(() =>
+        expect(screen.getByRole('radio', { name: /Cash on Delivery/i })).toBeInTheDocument(),
+      );
+    };
+
+    const attachProof = () => {
+      const input = document.getElementById('payment-proof-upload') as HTMLInputElement;
+      const file = new File(['receipt'], 'receipt.png', { type: 'image/png' });
+      fireEvent.change(input, { target: { files: [file] } });
+    };
+
+    const placedOrder = () => mockOrderInsert.mock.calls[0][0][0];
+
+    it('offers both Pay Now and Cash on Delivery', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      expect(screen.getByRole('radio', { name: /Pay Now/i })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Cash on Delivery/i })).toBeInTheDocument();
+    });
+
+    it('starts on Pay Now and shows the online payment method to pay to', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      expect(screen.getByRole('radio', { name: /Pay Now/i })).toBeChecked();
+      expect(screen.getByText('GCash')).toBeInTheDocument();
+      expect(screen.getByText('09123456789')).toBeInTheDocument();
+    });
+
+    it('hides the online method picker and proof upload once COD is chosen', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+
+      expect(screen.queryByText('Select Payment Method')).not.toBeInTheDocument();
+      expect(screen.queryByText('Upload Proof of Payment')).not.toBeInTheDocument();
+      expect(document.getElementById('payment-proof-upload')).toBeNull();
+    });
+
+    it('tells the COD customer the exact cash to prepare, including shipping', async () => {
+      // 3000 subtotal + 150 Metro Manila shipping, no COD surcharge.
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+
+      expect(screen.getAllByText(/3,150/).length).toBeGreaterThan(0);
+    });
+
+    it('still blocks a Pay Now order until proof of payment is attached', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      expect(screen.getByText('Complete Order').closest('button')).toBeDisabled();
+    });
+
+    it('lets a COD order be placed with no proof of payment at all', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+
+      const place = screen.getByText(/Place COD Order/i).closest('button');
+      expect(place).not.toBeDisabled();
+    });
+
+    it('records a COD order as payment_type cod with no method or receipt', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+      await userEvent.click(screen.getByText(/Place COD Order/i));
+
+      await waitFor(() => expect(mockOrderInsert).toHaveBeenCalled());
+
+      const order = placedOrder();
+      expect(order.payment_type).toBe('cod');
+      expect(order.payment_method_id).toBeNull();
+      expect(order.payment_method_name).toBeNull();
+      expect(order.payment_proof_url).toBeNull();
+      // A COD order is still born unpaid and unconfirmed.
+      expect(order.payment_status).toBe('pending');
+      expect(order.order_status).toBe('new');
+    });
+
+    it('records a Pay Now order as payment_type pay_now with the chosen method', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
+
+      await waitFor(() => expect(mockOrderInsert).toHaveBeenCalled());
+
+      const order = placedOrder();
+      expect(order.payment_type).toBe('pay_now');
+      expect(order.payment_method_id).toBe('pm-1');
+      expect(order.payment_method_name).toBe('GCash');
+      expect(order.payment_proof_url).toBe('https://test.supabase.co/proof.png');
+    });
+
+    it('confirms a COD order with cash-on-arrival wording, not payment review', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+      await userEvent.click(screen.getByText(/Place COD Order/i));
+
+      await waitFor(() => expect(screen.getByText('Order Confirmed')).toBeInTheDocument());
+      expect(screen.getByText(/Cash on Delivery/i)).toBeInTheDocument();
+      expect(screen.getByText(/pay the courier/i)).toBeInTheDocument();
+    });
+
+    it('confirms a Pay Now order with payment-review wording', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
+
+      await waitFor(() => expect(screen.getByText('Order Confirmed')).toBeInTheDocument());
+      expect(screen.getByText(/review your payment/i)).toBeInTheDocument();
     });
   });
 });
