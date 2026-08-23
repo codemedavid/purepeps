@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import AccessRequestsManager from './AccessRequestsManager';
 import AdminLogin from './AdminLogin';
+import FeatureVisibilityManager from './FeatureVisibilityManager';
 import BlossomLogo from './BlossomLogo';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -33,7 +34,7 @@ const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers' | 'features'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
@@ -1311,6 +1312,24 @@ const AdminDashboard: React.FC = () => {
   // Guides view removed (Peptalk disabled)
 
 
+  // Feature Visibility View
+  if (currentView === 'features') {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+          <FeatureVisibilityManager />
+        </div>
+      </div>
+    );
+  }
+
   // Settings View
   if (currentView === 'settings') {
     // SiteSettingsManager doesn't seem to have onBack prop based on earlier view_file, 
@@ -1638,6 +1657,18 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-violet-600 transition-colors">Payments</span>
                     <span className="text-xs text-gray-500">Manage methods</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('features')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <ToggleRight className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">Features</span>
+                    <span className="text-xs text-gray-500">Show or hide pages</span>
                   </div>
                 </button>
                 <button

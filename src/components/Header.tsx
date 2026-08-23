@@ -1,5 +1,32 @@
 import React, { useState } from 'react';
 import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, Lock, Check } from 'lucide-react';
+import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
+import type { FeatureFlags, FeatureId } from '../utils/featureFlags';
+
+interface NavItem {
+  feature: FeatureId;
+  /** Full label, used in the side navigation drawer. */
+  label: string;
+  /** Shorter label for the space-constrained desktop bar. Defaults to `label`. */
+  shortLabel?: string;
+  /** Destination, or null for Products, which returns to the storefront. */
+  href: string | null;
+  Icon: typeof FlaskConical;
+}
+
+/**
+ * The site navigation, in order. Rendering both the desktop bar and the side
+ * drawer from one list keeps them from drifting apart, and means a feature
+ * switched off in Admin -> Features disappears from both at once.
+ */
+const NAV_ITEMS: readonly NavItem[] = [
+  { feature: 'products', label: 'Products', href: null, Icon: FlaskConical },
+  { feature: 'calculator', label: 'Calculator', href: '/calculator', Icon: Calculator },
+  { feature: 'protocols', label: 'Protocols', href: '/protocols', Icon: FlaskConical },
+  { feature: 'track_order', label: 'Track Order', shortLabel: 'Track', href: '/track-order', Icon: Truck },
+  { feature: 'faq', label: 'FAQ', href: '/faq', Icon: HelpCircle },
+  { feature: 'lab_reports', label: 'Lab Reports', href: '/coa', Icon: Shield },
+];
 
 interface HeaderProps {
   cartItemsCount: number;
@@ -8,6 +35,8 @@ interface HeaderProps {
   onGetAccess: () => void;
   isVerified: boolean;
   hideMobileStorefrontActions?: boolean;
+  /** Overrides the live flags. Only tests and previews need this. */
+  features?: Partial<FeatureFlags>;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -17,8 +46,13 @@ const Header: React.FC<HeaderProps> = ({
   onGetAccess,
   isVerified,
   hideMobileStorefrontActions = false,
+  features,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { flags } = useFeatureFlagsContext();
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => features?.[item.feature] ?? flags[item.feature],
+  );
 
   return (
     <>
@@ -43,49 +77,23 @@ const Header: React.FC<HeaderProps> = ({
             {/* Right Side Navigation */}
             <div className="flex items-center gap-2 md:gap-6 ml-auto">
               {/* Desktop Navigation */}
-              <nav className="hidden md:flex items-center gap-1 lg:gap-2">
-                <button
-                  onClick={onMenuClick}
-                  className="text-sm font-medium text-charcoal-700 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <FlaskConical className="w-4 h-4" />
-                  Products
-                </button>
-                <a
-                  href="/calculator"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Calculator className="w-4 h-4" />
-                  Calculator
-                </a>
-                <a
-                  href="/protocols"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <FlaskConical className="w-4 h-4" />
-                  Protocols
-                </a>
-                <a
-                  href="/track-order"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Truck className="w-4 h-4" />
-                  Track
-                </a>
-                <a
-                  href="/faq"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  FAQ
-                </a>
-                <a
-                  href="/coa"
-                  className="text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  Lab Reports
-                </a>
+              <nav className="hidden md:flex items-center gap-1 lg:gap-2" aria-label="Main navigation">
+                {visibleNavItems.map(({ feature, label, shortLabel, href, Icon }) => {
+                  const className =
+                    'text-sm font-medium text-charcoal-600 hover:text-brand-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-2';
+
+                  return href === null ? (
+                    <button key={feature} onClick={onMenuClick} className={className}>
+                      <Icon className="w-4 h-4" />
+                      {shortLabel ?? label}
+                    </button>
+                  ) : (
+                    <a key={feature} href={href} className={className}>
+                      <Icon className="w-4 h-4" />
+                      {shortLabel ?? label}
+                    </a>
+                  );
+                })}
               </nav>
 
               {/* Cart Button */}
@@ -171,68 +179,34 @@ const Header: React.FC<HeaderProps> = ({
             {/* Navigation Items */}
             <nav className="flex-1 overflow-y-auto p-4">
               <div className="flex flex-col space-y-1">
-                <button
-                  onClick={() => {
-                    onMenuClick();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <FlaskConical className="w-[18px] h-[18px]" />
-                  </div>
-                  Products
-                </button>
+                {visibleNavItems.map(({ feature, label, href, Icon }) => {
+                  const className =
+                    'flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors';
+                  const icon = (
+                    <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
+                      <Icon className="w-[18px] h-[18px]" />
+                    </div>
+                  );
 
-                <a
-                  href="/calculator"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <Calculator className="w-[18px] h-[18px]" />
-                  </div>
-                  Calculator
-                </a>
-
-                <a
-                  href="/protocols"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <FlaskConical className="w-[18px] h-[18px]" />
-                  </div>
-                  Protocols
-                </a>
-
-                <a
-                  href="/track-order"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <Truck className="w-[18px] h-[18px]" />
-                  </div>
-                  Track Order
-                </a>
-
-                <a
-                  href="/faq"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <HelpCircle className="w-[18px] h-[18px]" />
-                  </div>
-                  FAQ
-                </a>
-
-                <a
-                  href="/coa"
-                  className="flex items-center gap-3 p-4 rounded-xl text-left font-medium text-charcoal-800 hover:bg-brand-50 transition-colors"
-                >
-                  <div className="p-2 rounded-lg bg-brand-50 text-brand-600">
-                    <Shield className="w-[18px] h-[18px]" />
-                  </div>
-                  Lab Reports
-                </a>
+                  return href === null ? (
+                    <button
+                      key={feature}
+                      onClick={() => {
+                        onMenuClick();
+                        setMobileMenuOpen(false);
+                      }}
+                      className={className}
+                    >
+                      {icon}
+                      {label}
+                    </button>
+                  ) : (
+                    <a key={feature} href={href} className={className}>
+                      {icon}
+                      {label}
+                    </a>
+                  );
+                })}
               </div>
             </nav>
           </div>

@@ -47,6 +47,26 @@ vi.mock('./hooks/useCart', () => ({
   }),
 }));
 
+// Feature visibility is a settings read; this journey is about navigation, so
+// the flags resolve immediately with every feature on.
+vi.mock('./contexts/FeatureFlagsContext', () => ({
+  FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useFeatureFlagsContext: () => ({
+    flags: {
+      products: true,
+      calculator: true,
+      protocols: true,
+      track_order: true,
+      faq: true,
+      lab_reports: true,
+    },
+    loading: false,
+    error: null,
+    setFeatureEnabled: vi.fn(),
+    refetch: vi.fn(),
+  }),
+}));
+
 vi.mock('./contexts/AccessContext', () => ({
   AccessProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAccessContext: () => ({

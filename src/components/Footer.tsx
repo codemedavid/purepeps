@@ -1,8 +1,27 @@
 import React from 'react';
 import { HelpCircle, Truck, FlaskConical, Shield } from 'lucide-react';
+import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
+import type { FeatureId } from '../utils/featureFlags';
+
+interface QuickLink {
+  feature: FeatureId;
+  label: string;
+  href: string;
+  Icon: typeof FlaskConical;
+}
+
+const QUICK_LINKS: readonly QuickLink[] = [
+  { feature: 'products', label: 'Products', href: '#', Icon: FlaskConical },
+  { feature: 'track_order', label: 'Track Order', href: '/track-order', Icon: Truck },
+  { feature: 'faq', label: 'FAQ', href: '/faq', Icon: HelpCircle },
+  { feature: 'lab_reports', label: 'Lab Reports', href: '/coa', Icon: Shield },
+];
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
+  const { flags } = useFeatureFlagsContext();
+  // A switched-off feature must leave no live entry point, here included.
+  const visibleLinks = QUICK_LINKS.filter((link) => flags[link.feature]);
 
   return (
     <footer className="bg-charcoal-900 pt-16 pb-8 border-t border-charcoal-800">
@@ -24,37 +43,21 @@ const Footer: React.FC = () => {
           </div>
 
           {/* Quick Links */}
-          <div className="flex flex-col items-center md:items-start gap-3">
-            <h3 className="text-white font-semibold text-sm uppercase tracking-wider mb-2">Quick Links</h3>
-            <a
-              href="#"
-              className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
-            >
-              <FlaskConical className="w-4 h-4" />
-              Products
-            </a>
-            <a
-              href="/track-order"
-              className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
-            >
-              <Truck className="w-4 h-4" />
-              Track Order
-            </a>
-            <a
-              href="/faq"
-              className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
-            >
-              <HelpCircle className="w-4 h-4" />
-              FAQ
-            </a>
-            <a
-              href="/coa"
-              className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
-            >
-              <Shield className="w-4 h-4" />
-              Lab Reports
-            </a>
-          </div>
+          {visibleLinks.length > 0 && (
+            <div className="flex flex-col items-center md:items-start gap-3">
+              <h3 className="text-white font-semibold text-sm uppercase tracking-wider mb-2">Quick Links</h3>
+              {visibleLinks.map(({ feature, label, href, Icon }) => (
+                <a
+                  key={feature}
+                  href={href}
+                  className="text-charcoal-300 hover:text-brand-400 transition-colors flex items-center gap-2 text-sm"
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </a>
+              ))}
+            </div>
+          )}
 
         </div>
 

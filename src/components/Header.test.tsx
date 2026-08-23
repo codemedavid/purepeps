@@ -48,7 +48,7 @@ describe('Header — feature visibility', () => {
     await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
 
     for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
-      expect(screen.getByRole('link', { name: label }) ?? screen.getByText(label)).toBeTruthy();
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
   });
 
@@ -59,7 +59,7 @@ describe('Header — feature visibility', () => {
     await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
 
     expect(screen.queryByText('FAQ')).not.toBeInTheDocument();
-    expect(screen.getByText('Protocols')).toBeInTheDocument();
+    expect(screen.getAllByText('Protocols').length).toBeGreaterThan(0);
   });
 
   it('drops a disabled feature from the desktop nav too', () => {
