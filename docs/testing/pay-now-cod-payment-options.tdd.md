@@ -61,8 +61,10 @@ All 9 pre-existing failures were in unrelated in-progress work (feature flags, h
 ## Final validation
 
 ```
-npm test               =>  Tests 1062 passed (1062), 0 failed
-                           Test Files 2 failed | 89 passed (91)
+npm test               =>  Tests 1069 passed (1071), 2 flaky failures (see below)
+                           Test Files 4 failed | 87 passed (91)
+                           — 2 of those files are the pre-existing orphans;
+                             the other 2 pass in isolation
 npm run build          =>  built in 28.18s, ok
 npx tsc --noEmit       =>  no new errors (see Gaps for pre-existing)
 ```
@@ -87,5 +89,15 @@ The 2 failing test FILES are the pre-existing orphans carried from the baseline;
 - **CRITICAL**: `20260824000100` recreated the `orders_public_insert` RLS policy from the `20260621000000` text and dropped `AND is_claim = false`, which `20260624000300` had added to stop anon forging a leftover claim against any order. Restored. Root cause: I checked for the newest definition of `get_group_buy_progress` but not of the RLS policy.
 - Duplicate migration prefix `20260824000200` — mine renumbered to `000150`.
 - Seven further findings (orphaned upload, kill switch with no client half, uncleared `refunded_total`, COD blocked on leftover claims, shared VALIDATE handler, list numbering, and the `groupBuyOverview` confirmed-order drift) are all fixed and covered by tests above.
+
+**Fixed after a second peer code review** (6 findings in these files, each verified here first):
+- Waybill printed two conflicting figures — `grandTotal` (from undiscounted `order_items`) vs the COD line (from discounted `total_price`). The discount is now recovered and shown, both figures share components, and a fully-COD sheet collects exactly the printed total.
+- `countsAsConfirmedOrder` short-circuited on `payment_type === 'cod'` before checking `payment_status`, so a refused COD delivery marked Failed kept its cap slot — the same bug class the migration closed for Pay Now. Fixed client-side and in the SQL; marker bumped to `payment-aware-v2`.
+- The COD kill switch's two halves disagreed on a missing settings row (client ON, server reject). Client now matches on the absent row; a failed read defers to the server.
+- `.wb-cod` had no CSS rule at all. Now styled and print-colour-forced.
+- Selecting COD before availability resolved left a disabled card selected with a live submit button.
+- Stale `20260824000200` cross-reference after the rename.
+
+**Suite flakiness under load.** Full-suite runs intermittently fail 1–3 different tests each time (`Cart`, `MenuItemCard`, `useCart.server`, `BatchCloseoutPanel`, `App`, and occasionally a Checkout COD test). Every one passes in isolation; `Checkout.test.tsx` was run twice consecutively at 32/32. These are timing-sensitive component tests under parallel load, made worse by a second session writing to the same working tree during runs. Not stable regressions, but the suite is not reliably green in a single pass.
 
 **Two pre-existing fixtures changed, not the code.** `groupBuyOverview.test.ts` asserted that a *delivered but never-paid* order counts as confirmed — the payment-blind rule this work replaces, in a state the app cannot produce (confirming marks an order paid). The fixtures were made realistic rather than the predicate weakened.
