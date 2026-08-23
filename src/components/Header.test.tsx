@@ -39,3 +39,64 @@ describe('Header', () => {
     expect(cartButton).toHaveClass('hidden', 'md:block');
   });
 });
+
+describe('Header — feature visibility', () => {
+  it('shows every side-nav entry when all features are on', async () => {
+    const user = userEvent.setup();
+    renderHeader();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+
+    for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
+      expect(screen.getByRole('link', { name: label }) ?? screen.getByText(label)).toBeTruthy();
+    }
+  });
+
+  it('drops a disabled feature from the side nav', async () => {
+    const user = userEvent.setup();
+    renderHeader({ features: { faq: false } });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+
+    expect(screen.queryByText('FAQ')).not.toBeInTheDocument();
+    expect(screen.getByText('Protocols')).toBeInTheDocument();
+  });
+
+  it('drops a disabled feature from the desktop nav too', () => {
+    renderHeader({ features: { lab_reports: false } });
+
+    expect(screen.queryByText('Lab Reports')).not.toBeInTheDocument();
+  });
+
+  it('hides the Products entry without touching the cart', async () => {
+    const user = userEvent.setup();
+    renderHeader({ features: { products: false } });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+
+    expect(screen.queryByText('Products')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View cart' })).toBeInTheDocument();
+  });
+
+  it('hides every entry when all six features are off', async () => {
+    const user = userEvent.setup();
+    renderHeader({
+      features: {
+        products: false,
+        calculator: false,
+        protocols: false,
+        track_order: false,
+        faq: false,
+        lab_reports: false,
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+
+    for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    // The drawer itself still opens; only the feature entries are gone.
+    expect(screen.getByRole('button', { name: 'View cart' })).toBeInTheDocument();
+  });
+});
