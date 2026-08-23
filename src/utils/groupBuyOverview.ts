@@ -1,4 +1,5 @@
 import type { BatchOrder, GroupBuyProgressItem } from '../types';
+import { countsAsConfirmedOrder } from '../constants/payment';
 import { resellableUnits, freedUnits, productDemandState } from './groupBuy';
 import type { BatchPhase, ProductDemandState } from './groupBuy';
 
@@ -128,7 +129,9 @@ export function summarizeItemRevenue(orders: BatchOrder[]): ItemRevenueSummary {
   for (const order of orders) {
     if (isCancelled(order)) continue;
     const paid = order.payment_status === PAID;
-    const confirmed = order.order_status !== NEW; // already non-cancelled here
+    // Must match get_group_buy_progress (20260824000150): a failed or unpaid
+    // Pay Now order is NOT confirmed unless an admin manually confirmed it.
+    const confirmed = countsAsConfirmedOrder(order);
     const seenInOrder = new Set<string>();
 
     for (const item of order.order_items ?? []) {
@@ -338,7 +341,7 @@ export function summarizeVariationBreakdown(
 
   for (const order of orders) {
     if (isCancelled(order)) continue;
-    const confirmed = order.order_status !== NEW;
+    const confirmed = countsAsConfirmedOrder(order);
     const seenInOrder = new Set<string>();
 
     for (const item of order.order_items ?? []) {

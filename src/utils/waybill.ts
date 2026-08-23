@@ -7,6 +7,11 @@
 // structural input. Only fields that actually exist are rendered; everything
 // missing collapses to `null`, which the UI shows as "N/A".
 
+import {
+  codAmountDue as codAmountDueFor,
+  paymentStatusLabel,
+} from '../constants/payment';
+
 export const WAYBILL_STORE_NAME = 'PURE PEPS';
 export const WAYBILL_TITLE = 'PURE PEPS — WAYBILL / ORDER SUMMARY';
 
@@ -69,6 +74,7 @@ export interface WaybillOrderInput {
   subtotal?: number | null;
   total_price?: number | null;
   payment_method_name?: string | null;
+  payment_type?: string | null;
   payment_proof_url?: string | null;
   additional_payment_proof_url?: string | null;
   payment_status?: string | null;
@@ -131,6 +137,10 @@ export interface WaybillData {
   paymentMethod: string | null;
   paymentStatusLabel: string;
   isPaymentConfirmed: boolean;
+  /** True when the courier must collect cash for at least one order on this sheet. */
+  isCashOnDelivery: boolean;
+  /** Exact cash to collect on delivery. 0 when nothing is owed. */
+  codAmountDue: number;
   items: WaybillLineItem[];
   itemsSubtotal: number;
   grandTotal: number;
@@ -142,13 +152,6 @@ export interface WaybillData {
   trackingUrl: string;
   qrValue: string;
 }
-
-const PAYMENT_STATUS_LABELS: Readonly<Record<string, string>> = {
-  paid: 'Paid',
-  submitted: 'Under review',
-  pending: 'Pending',
-  failed: 'Failed',
-};
 
 function cleanText(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -246,6 +249,23 @@ export function buildGroupWaybillData(
   );
   const primaryPaymentStatus = cleanText(primary.payment_status) ?? 'pending';
 
+  // Cash the courier still has to collect. Only COD orders that have NOT been
+  // remitted count, and every such order on a consolidated sheet is summed —
+  // the courier hands over one parcel but may be carrying several orders.
+  const codOrders = orders.filter(
+    (order) =>
+      cleanText(order.payment_type) === 'cod' &&
+      (cleanText(order.payment_status) ?? 'pending') !== 'paid',
+  );
+  const isCashOnDelivery = codOrders.length > 0;
+  const codAmountDue = codOrders.reduce(
+    (sum, order) => sum + codAmountDueFor({
+      total_price: toNumber(order.total_price),
+      shipping_fee: toNumber(order.shipping_fee),
+    }),
+    0,
+  );
+
   return {
     storeName: cleanText(options.storeName) ?? WAYBILL_STORE_NAME,
     title: WAYBILL_TITLE,
@@ -285,8 +305,10 @@ export function buildGroupWaybillData(
     paymentMethod: cleanText(primary.payment_method_name),
     paymentStatusLabel: isPaymentConfirmed
       ? 'Paid'
-      : PAYMENT_STATUS_LABELS[primaryPaymentStatus] ?? primaryPaymentStatus,
+      : paymentStatusLabel(primaryPaymentStatus, cleanText(primary.payment_type)),
     isPaymentConfirmed,
+    isCashOnDelivery,
+    codAmountDue,
     items,
     itemsSubtotal,
     grandTotal,

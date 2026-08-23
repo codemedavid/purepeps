@@ -314,6 +314,12 @@ export interface BatchOrder {
   payment_proof_url: string | null;
   // Receipt covering the balance owed after items were added post-payment.
   additional_payment_proof_url: string | null;
+  // 'pay_now' | 'cod'. Absent on rows predating the payment-option split.
+  payment_type?: string | null;
+  refunded_total?: number | null;
+  // Set when an admin confirmed this order despite an unverified payment.
+  manually_confirmed_at?: string | null;
+  manually_confirmed_by?: string | null;
   // 'pending' | 'submitted' (balance receipt under review) | 'paid' | 'failed'.
   payment_status: string;
   order_status: string;
@@ -353,6 +359,10 @@ export interface OrderBundleRow {
   batch_status: GroupBuyStatus | null;
   // Total confirmed paid so far (NULL if never confirmed paid).
   paid_total: number | null;
+  // 'pay_now' | 'cod'. Absent on rows predating the payment-option split.
+  payment_type?: string | null;
+  refunded_total?: number | null;
+  manually_confirmed_at?: string | null;
   // Outstanding balance owed after items were added post-payment (0 when none).
   balance_due: number;
 }

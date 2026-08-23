@@ -202,3 +202,79 @@ describe('formatBatchLabel', () => {
     expect(formatBatchLabel(null, null)).toBeNull();
   });
 });
+
+// --- Cash on Delivery ---
+// The courier reads this sheet to know whether to take money. A COD waybill
+// that does not say COLLECT is a direct cash-loss path, so these assertions
+// guard money, not cosmetics.
+
+describe('waybill — cash on delivery', () => {
+  const codOrder = (overrides: Partial<WaybillOrderInput> = {}) =>
+    order({
+      payment_type: 'cod',
+      payment_status: 'pending',
+      payment_method_name: null,
+      ...overrides,
+    });
+
+  it('flags a COD order as collect-on-delivery', () => {
+    const data = buildWaybillData(codOrder());
+
+    expect(data.isCashOnDelivery).toBe(true);
+  });
+
+  it('states the exact cash to collect: items plus shipping', () => {
+    // 3345.60 items + 100 shipping, no COD surcharge.
+    const data = buildWaybillData(codOrder());
+
+    expect(data.codAmountDue).toBeCloseTo(3445.6, 2);
+  });
+
+  it('never reads as paid while the cash is still uncollected', () => {
+    const data = buildWaybillData(codOrder());
+
+    expect(data.isPaymentConfirmed).toBe(false);
+    expect(data.paymentStatusLabel).toBe('Collect on Delivery');
+  });
+
+  it('stops flagging collection once the courier has remitted', () => {
+    const data = buildWaybillData(codOrder({ payment_status: 'paid' }));
+
+    expect(data.isPaymentConfirmed).toBe(true);
+    expect(data.codAmountDue).toBe(0);
+  });
+
+  it('leaves a prepaid Pay Now order alone', () => {
+    const data = buildWaybillData(order({ payment_type: 'pay_now' }));
+
+    expect(data.isCashOnDelivery).toBe(false);
+    expect(data.codAmountDue).toBe(0);
+    expect(data.isPaymentConfirmed).toBe(true);
+  });
+
+  it('treats a legacy order with no payment_type as prepaid', () => {
+    const data = buildWaybillData(order({ payment_type: undefined }));
+
+    expect(data.isCashOnDelivery).toBe(false);
+  });
+
+  it('sums the cash to collect across a consolidated COD waybill', () => {
+    // Two COD orders on one sheet: the courier must collect BOTH totals.
+    const data = buildGroupWaybillData([
+      codOrder({ id: 'aaa', order_number: 'PP-0001' }),
+      codOrder({ id: 'bbb', order_number: 'PP-0002', shipping_fee: 0 }),
+    ]);
+
+    expect(data.isCashOnDelivery).toBe(true);
+    expect(data.codAmountDue).toBeCloseTo(3445.6 + 3345.6, 2);
+  });
+
+  it('collects only the unpaid orders when a consolidated sheet is mixed', () => {
+    const data = buildGroupWaybillData([
+      codOrder({ id: 'aaa', order_number: 'PP-0001' }),
+      codOrder({ id: 'bbb', order_number: 'PP-0002', shipping_fee: 0, payment_status: 'paid' }),
+    ]);
+
+    expect(data.codAmountDue).toBeCloseTo(3445.6, 2);
+  });
+});

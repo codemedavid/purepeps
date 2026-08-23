@@ -347,6 +347,11 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
       // Keep the stored token honest about the amount actually returned.
       updates.refunded_total = amount;
       updates.payment_status = resolveRefundStatus(due, amount) ?? newStatus;
+    } else {
+      // Leaving a refund state (e.g. a refund bounced and the order is paid
+      // after all) must clear the amount too, or the details panel keeps
+      // reporting a refund that no longer exists.
+      updates.refunded_total = null;
     }
 
     try {

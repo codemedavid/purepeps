@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { paymentStatusColor, paymentStatusLabel, paymentTypeLabel } from '../constants/payment';
 import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
@@ -7,6 +8,7 @@ import posthog from '../lib/posthog';
 import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders, groupBundlesByRoot } from '../utils/orderTracking';
 import type { OrderBundleRow } from '../types';
 import LeftoverClaimPanel from './groupbuy/LeftoverClaimPanel';
+import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 type TrackingOrder = OrderBundleRow;
 
@@ -213,7 +215,7 @@ const OrderTracking: React.FC = () => {
         Clock;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-white via-gold-50/10 to-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className={`min-h-screen bg-gradient-to-br from-white via-gold-50/10 to-white py-12 px-4 sm:px-6 lg:px-8 ${BOTTOM_NAV_CLEARANCE}`}>
             <div className="max-w-3xl mx-auto">
                 {/* Back Button */}
                 <a
@@ -675,7 +677,15 @@ const OrderTracking: React.FC = () => {
                                             </div>
                                             <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-200 text-sm">
                                                 <span className="text-gray-500">
-                                                    Payment: <span className="font-semibold text-navy-900">{seqOrder.payment_method_name || 'Not specified'}</span>
+                                                    Payment:{' '}
+                                                    <span className="font-semibold text-navy-900">
+                                                        {seqOrder.payment_type === 'cod'
+                                                            ? paymentTypeLabel(seqOrder.payment_type)
+                                                            : seqOrder.payment_method_name || paymentTypeLabel(seqOrder.payment_type)}
+                                                    </span>
+                                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${paymentStatusColor(seqOrder.payment_status)}`}>
+                                                        {paymentStatusLabel(seqOrder.payment_status, seqOrder.payment_type)}
+                                                    </span>
                                                 </span>
                                                 <span className="font-bold text-navy-900">
                                                     ₱{(seqOrder.total_price + (seqOrder.shipping_fee || 0)).toLocaleString()}

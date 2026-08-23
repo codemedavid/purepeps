@@ -11,9 +11,9 @@ vi.mock('../lib/posthog', () => ({
 }));
 
 // Mock hooks
-const mockPaymentMethods = [
-  { id: 'pm-1', name: 'GCash', account_number: '09123456789', account_name: 'Joo Babe', qr_code_url: '', active: true, sort_order: 1, created_at: '', updated_at: '' },
-];
+const GCASH = { id: 'pm-1', name: 'GCash', account_number: '09123456789', account_name: 'Joo Babe', qr_code_url: '', active: true, sort_order: 1, created_at: '', updated_at: '' };
+// Mutable so a test can model "no payment methods configured". Restored in beforeEach.
+const mockPaymentMethods = [GCASH];
 
 const mockLocations = [
   { id: 'lbc_metro', name: 'Metro Manila (LBC)', fee: 150, is_active: true, order_index: 1, courier_id: 'cour-1', created_at: '', updated_at: '' },
@@ -36,9 +36,10 @@ vi.mock('../hooks/useCouriers', () => ({
   useCouriers: () => ({ couriers: mockCouriers, loading: false }),
 }));
 
+const mockUploadImage = vi.fn();
 vi.mock('../hooks/useImageUpload', () => ({
   useImageUpload: () => ({
-    uploadImage: vi.fn().mockResolvedValue('https://test.supabase.co/proof.png'),
+    uploadImage: (...args: unknown[]) => mockUploadImage(...args),
     uploading: false,
     uploadProgress: 0,
   }),
@@ -139,6 +140,8 @@ describe('Checkout', () => {
     // orders.insert is awaited directly — Checkout deliberately drops .select()
     // because anon has no SELECT on orders (see 20260621000000).
     mockOrderInsert.mockResolvedValue({ error: null });
+    mockUploadImage.mockResolvedValue('https://test.supabase.co/proof.png');
+    mockPaymentMethods.splice(0, mockPaymentMethods.length, GCASH);
     mockRpc.mockImplementation((name: string) =>
       name === 'next_order_number'
         ? Promise.resolve({ data: 'TBS-000123', error: null })
@@ -628,6 +631,24 @@ describe('Checkout', () => {
       expect(screen.getAllByText(/Cash on Delivery/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/due on delivery/i)).toBeInTheDocument();
       expect(screen.getByText(/pay the courier/i)).toBeInTheDocument();
+    });
+
+    it('refuses a Pay Now order with no method BEFORE uploading the receipt', async () => {
+      // Validating after the upload orphans the file: the order never lands but
+      // the receipt is already sitting in the storage bucket forever.
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+      mockPaymentMethods.length = 0; // no methods configured -> none can be selected
+
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      attachProof();
+      await userEvent.click(screen.getByText('Complete Order'));
+
+      expect(mockUploadImage).not.toHaveBeenCalled();
+      expect(mockOrderInsert).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/payment method/i));
+      alertSpy.mockRestore();
     });
 
     it('confirms a Pay Now order with payment-review wording', async () => {

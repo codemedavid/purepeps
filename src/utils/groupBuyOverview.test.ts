@@ -211,7 +211,10 @@ describe('summarizeItemRevenue', () => {
 
   it('counts confirmed vs pending units by order status', () => {
     const summary = summarizeItemRevenue([
-      order({ order_status: 'delivered', order_items: [lineItem({ product_id: 'p1', quantity: 4, total: 4000 })] }),
+      // Confirming an order marks it paid (planOrderConfirmation), so a
+      // delivered order is paid by construction. Confirmed now depends on the
+      // payment too, not order_status alone — see 20260824000150.
+      order({ order_status: 'delivered', payment_status: 'paid', order_items: [lineItem({ product_id: 'p1', quantity: 4, total: 4000 })] }),
       order({ order_status: 'new', order_items: [lineItem({ product_id: 'p1', quantity: 3, total: 3000 })] }),
     ]);
     expect(summary.rows[0].unitsConfirmed).toBe(4);
@@ -517,6 +520,7 @@ describe('summarizeVariationBreakdown', () => {
     const byProduct = summarizeVariationBreakdown([
       order({
         order_status: 'confirmed',
+        payment_status: 'paid',
         order_items: [lineItem({ product_id: 'p1', variation_id: 'v1', variation_name: '5mg', quantity: 2 })],
       }),
       order({
@@ -525,6 +529,7 @@ describe('summarizeVariationBreakdown', () => {
       }),
       order({
         order_status: 'confirmed',
+        payment_status: 'paid',
         order_items: [lineItem({ product_id: 'p1', variation_id: 'v2', variation_name: '10mg', quantity: 3 })],
       }),
     ]);
@@ -586,5 +591,60 @@ describe('summarizeVariationBreakdown', () => {
       }),
     ]);
     expect(byProduct.get('p1')?.map((r) => r.variation_name)).toEqual(['Acet', 'Zinc']);
+  });
+});
+
+// --- Confirmed must agree with the database ---
+// get_group_buy_progress (20260824000150) stopped counting a failed or unpaid
+// Pay Now order as confirmed. These summaries feed the admin closeout panel; if
+// they keep the old order_status-only rule the panel and the cap maths disagree.
+
+describe('summarizeItemRevenue — confirmed matches the DB predicate', () => {
+  const orderWith = (overrides: Partial<BatchOrder>): BatchOrder =>
+    ({
+      id: 'o1',
+      order_status: 'confirmed',
+      payment_status: 'paid',
+      payment_type: 'pay_now',
+      manually_confirmed_at: null,
+      order_items: [
+        { product_id: 'p1', product_name: 'BPC-157', quantity: 2, price: 100, total: 200 },
+      ],
+      ...overrides,
+    }) as BatchOrder;
+
+  const unitsConfirmed = (order: BatchOrder) =>
+    summarizeItemRevenue([order]).rows[0].unitsConfirmed;
+
+  it('counts a confirmed, paid Pay Now order', () => {
+    expect(unitsConfirmed(orderWith({}))).toBe(2);
+  });
+
+  it('does NOT count a Pay Now order whose payment failed', () => {
+    expect(unitsConfirmed(orderWith({ payment_status: 'failed' }))).toBe(0);
+  });
+
+  it('does NOT count a Pay Now order that was advanced but never paid', () => {
+    expect(unitsConfirmed(orderWith({ payment_status: 'pending' }))).toBe(0);
+  });
+
+  it('counts a failed Pay Now order the admin manually confirmed', () => {
+    expect(
+      unitsConfirmed(
+        orderWith({ payment_status: 'failed', manually_confirmed_at: '2026-08-24T00:00:00Z' }),
+      ),
+    ).toBe(2);
+  });
+
+  it('counts an unpaid COD order — unpaid by design', () => {
+    expect(unitsConfirmed(orderWith({ payment_type: 'cod', payment_status: 'pending' }))).toBe(2);
+  });
+
+  it('still does not count anything sitting at new', () => {
+    expect(unitsConfirmed(orderWith({ order_status: 'new' }))).toBe(0);
+  });
+
+  it('treats a legacy row with no payment_type as Pay Now', () => {
+    expect(unitsConfirmed(orderWith({ payment_type: undefined, payment_status: 'paid' }))).toBe(2);
   });
 });

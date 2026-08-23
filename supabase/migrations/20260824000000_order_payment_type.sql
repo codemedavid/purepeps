@@ -2,7 +2,7 @@
 --
 -- Checkout gains two payment options. This migration adds the columns; the
 -- enforcement (RLS + trigger) and the confirmed-order redefinition follow in
--- 20260824000100 and 20260824000200.
+-- 20260824000100 and 20260824000150.
 --
 --   payment_type  — how the customer chose to pay.
 --       'pay_now' : the existing flow — pick an online payment method, pay via
@@ -89,12 +89,20 @@ BEGIN
   END IF;
 END $$;
 
+-- Validated one per block: sharing a handler would mean a failure on the first
+-- constraint silently skips the second, leaving it NOT VALID with no notice.
 DO $$
 BEGIN
   ALTER TABLE public.orders VALIDATE CONSTRAINT orders_payment_type_check;
+EXCEPTION WHEN check_violation THEN
+  RAISE NOTICE 'orders_payment_type_check left NOT VALID — existing rows violate it. New writes are still checked.';
+END $$;
+
+DO $$
+BEGIN
   ALTER TABLE public.orders VALIDATE CONSTRAINT orders_refunded_total_check;
 EXCEPTION WHEN check_violation THEN
-  RAISE NOTICE 'payment_type/refunded_total left NOT VALID — existing rows violate it. New writes are still checked.';
+  RAISE NOTICE 'orders_refunded_total_check left NOT VALID — existing rows violate it. New writes are still checked.';
 END $$;
 
 DO $$

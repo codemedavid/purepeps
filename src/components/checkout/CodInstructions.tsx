@@ -1,5 +1,5 @@
 import React from 'react';
-import { Banknote, Truck } from 'lucide-react';
+import { Banknote } from 'lucide-react';
 
 interface CodInstructionsProps {
     /** Exact cash the courier collects: order total plus shipping, no surcharge. */
@@ -48,7 +48,7 @@ const CodInstructions: React.FC<CodInstructionsProps> = ({ amountDue, courierNam
                     </span>
                 </li>
                 <li className="flex items-start gap-3">
-                    <Truck className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" aria-hidden="true" />
+                    <span className="font-bold text-brand-500">3.</span>
                     <span>
                         {courierName
                             ? `${courierName} will collect payment when they hand over your parcel.`

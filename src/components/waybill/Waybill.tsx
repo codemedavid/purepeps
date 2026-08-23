@@ -133,6 +133,14 @@ export function Waybill({ data }: Props) {
                 {data.isPaymentConfirmed ? '☑' : '☐'} {data.paymentStatusLabel}
               </span>
             </p>
+            {data.isCashOnDelivery && (
+              /* The courier reads this to know money is owed. Deliberately the
+                 loudest thing on the sheet — a missed COD is lost cash. */
+              <p className="wb-cod">
+                <strong>COLLECT ON DELIVERY:</strong>{' '}
+                ₱{data.codAmountDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              </p>
+            )}
           </div>
         </section>
 

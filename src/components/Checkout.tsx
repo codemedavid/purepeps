@@ -16,6 +16,7 @@ import UpgradeTierModal from './UpgradeTierModal';
 import PaymentOptionPicker from './checkout/PaymentOptionPicker';
 import CodInstructions from './checkout/CodInstructions';
 import { codAmountDue, isProofRequired, paymentTypeLabel, type PaymentType } from '../constants/payment';
+import { useCodAvailability } from '../hooks/useCodAvailability';
 
 interface CheckoutProps {
     cartItems: CartItem[];
@@ -57,6 +58,7 @@ const Checkout: React.FC<CheckoutProps> = ({
     const { couriers } = useCouriers();
     const { stickers } = useStickers();
     const { savedInfo, saveInfo, clearInfo } = useCheckoutInfo();
+    const { codEnabled } = useCodAvailability();
     const { addOrder } = useOrderHistory();
     const [step, setStep] = useState<'details' | 'payment' | 'confirmation'>('details');
 
@@ -260,7 +262,15 @@ const Checkout: React.FC<CheckoutProps> = ({
         }
 
         // COD pays nothing up front, so there is no receipt to demand. The
-        // server enforces the same rule (enforce_payment_type_on_order).
+        // server enforces the same rules (enforce_payment_type_on_order).
+        if (isPayNow && !selectedPaymentMethod) {
+            // Checked BEFORE the upload below: the server now rejects a Pay Now
+            // insert with no method, so uploading first would strand the receipt
+            // in storage on every retry.
+            alert('Please select an online payment method to proceed.');
+            return;
+        }
+
         if (isPayNow && !paymentProof) {
             alert('Please upload a screenshot of your payment proof to proceed.');
             return;
@@ -753,6 +763,7 @@ Please confirm this order. Thank you!
                                 value={paymentType}
                                 onChange={setPaymentType}
                                 codAmount={codDue}
+                                codAvailable={codEnabled}
                             />
 
                             {isPayNow ? (

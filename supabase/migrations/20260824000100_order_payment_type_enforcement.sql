@@ -55,14 +55,20 @@ BEGIN
   END IF;
 
   IF NEW.payment_type = 'cod' THEN
-    SELECT lower(btrim(s.value)) IN ('true', '1', 'yes')
-    INTO v_cod_enabled
-    FROM public.site_settings s
-    WHERE s.id = 'cod_enabled';
+    -- The kill switch governs NEW checkouts only. A leftover claim inherits its
+    -- parent order's payment_type, so enforcing it here too would strand an
+    -- existing COD customer mid-batch the moment an admin switches COD off —
+    -- punishing them for a decision taken after they ordered.
+    IF NOT COALESCE(NEW.is_claim, false) THEN
+      SELECT lower(btrim(s.value)) IN ('true', '1', 'yes')
+      INTO v_cod_enabled
+      FROM public.site_settings s
+      WHERE s.id = 'cod_enabled';
 
-    IF NOT COALESCE(v_cod_enabled, false) THEN
-      RAISE EXCEPTION 'Cash on delivery is not available right now. Please choose Pay Now instead.'
-        USING ERRCODE = 'check_violation';
+      IF NOT COALESCE(v_cod_enabled, false) THEN
+        RAISE EXCEPTION 'Cash on delivery is not available right now. Please choose Pay Now instead.'
+          USING ERRCODE = 'check_violation';
+      END IF;
     END IF;
 
     -- Wipe rather than validate: a COD order has paid nothing, so any method or
@@ -102,6 +108,11 @@ CREATE TRIGGER trg_enforce_payment_type_on_order
 --
 -- RLS WITH CHECK runs AFTER BEFORE-ROW triggers, so it sees the values the
 -- trigger settled on — the two layers agree by construction.
+--
+-- The LATEST prior definition of this policy is 20260624000300 (claims
+-- hardening), NOT 20260621000000 (lockdown). Every clause from it is carried
+-- forward below — dropping is_claim = false would silently reopen the forged
+-- claim hole that migration was written to close.
 -- ===========================================================================
 DO $$
 BEGIN
@@ -114,6 +125,12 @@ BEGIN
         order_status = 'new'
         AND payment_status = 'pending'
         AND payment_type IN ('pay_now', 'cod')
+        -- CRITICAL, carried forward from 20260624000300: without this, anon can
+        -- POST is_claim=true with a victim's parent_order_id and forge a
+        -- leftover claim, bypassing claim_group_buy_leftover's email auth and
+        -- its cap re-check. Normal checkout inserts is_claim=false (the column
+        -- default), so this costs the storefront nothing.
+        AND is_claim = false
       );
   END IF;
 END $$;
