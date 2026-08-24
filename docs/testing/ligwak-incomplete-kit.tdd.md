@@ -90,8 +90,8 @@ Impact beyond Ligwak: the client understated confirmed units in admin KPIs and t
 Fixed in `86ca045`. Only the 8-line fix was staged; the unrelated uncommitted COD work in `payment.ts` was deliberately left in the working tree.
 
 ## Coverage & Known Gaps
-- **Ligwak suites: 156 passed / 15 files** (`npx vitest run` over the 15 ligwak test files).
-- **Full suite: 1427 passed / 112 files.** Two suites fail: `useReturningCustomer.test.ts` and `checkoutPrefill.test.ts`. Both are **pre-existing orphaned tests** committed at `bbb47eb` whose implementations were never committed; they fail with `Failed to resolve import`, are unrelated to Ligwak, and were failing before this work began.
+- **Ligwak suites: 165 passed / 15 files** (after the code-review fixes) (`npx vitest run` over the 15 ligwak test files).
+- **Full suite: 1436 passed / 112 files.** Two suites fail: `useReturningCustomer.test.ts` and `checkoutPrefill.test.ts`. Both are **pre-existing orphaned tests** committed at `bbb47eb` whose implementations were never committed; they fail with `Failed to resolve import`, are unrelated to Ligwak, and were failing before this work began.
 - **`npx tsc --noEmit` — 0 errors** project-wide. **`npm run build`** — built in 3.52s.
 - **Coverage percentage NOT measured.** `@vitest/coverage-v8` is not installed and there is no `test:coverage` script; installing a dependency was out of scope for this change. The 80% target is therefore **unverified by tooling** — test counts above are the substitute evidence. To measure: `npm i -D @vitest/coverage-v8` then `npx vitest run --coverage`.
 - **`npm run lint` cannot run.** ESLint 9.36 crashes on *every* file, including untouched ones (`TypeError: … reading 'allowShortCircuit'` — an eslint/@typescript-eslint version mismatch in `node_modules`). Pre-existing and unrelated.
@@ -123,6 +123,36 @@ Fixed in `86ca045`. Only the 8-line fix was staged; the unrelated uncommitted CO
 | `1f2d87f` | GREEN — both, 19 passed |
 | *(RED)* | management page |
 | `bce5d31` | GREEN — wiring, 1427 passed, tsc + build clean |
+
+## Code Review Round (post-implementation)
+
+`/code-review` was run after the feature was complete. Its parent orchestrator died twice on API 529 (server-side load), but two sub-reviewers completed and reported. Four findings were accepted and fixed in `d338aeb`; two were assessed as pre-existing and are left for a decision.
+
+### Fixed
+| # | Severity | Defect | Fix |
+|---|---|---|---|
+| 1 | CRITICAL | `paid_total` treated as a per-LINE ceiling in both the TS engine and the SQL allocator. An order that paid ₱5,000 with two ligwak lines worth ₱4,000 each was offered **₱8,500** back. | One pot per order: TS decrements a per-order map; SQL uses a running window total exclusive of the current row. Reproducer: `ligwakBatch.test.ts:never refunds more across an order s lines than the order received`. |
+| 2 | CRITICAL | `record_ligwak_refund` validated only `amount > 0`. The "never exceed the calculated amount" rule lived **only in the admin modal**, so a retried request or any direct RPC caller bypassed it, and an already-refunded record could be re-recorded without limit. | Ceiling and a not-already-refunded guard moved into the RPC. |
+| 3 | HIGH | `ligwak_audit_events.ligwak_record_id` was `ON DELETE CASCADE`, so recalculating destroyed the trail of what had been decided and paid. | `ON DELETE SET NULL`. An append-only trail that deletes itself is not a trail. |
+| 4 | HIGH | `recalculate_kit_allocation` guarded only `refund_processing`/`refunded`. A record in `refund_failed` (money still owed), or one carrying a reference, proof, notes or a notified customer, was cascade-deleted and recreated blank. | Guard broadened to all recorded refund work. |
+
+Finding 1 is the same shape as the shipping-fee defect caught during implementation — **a per-order resource being spent per-line**. The original fixtures hid it by always giving `paid_total` generous headroom; the new tests exercise partially-paid orders.
+
+### Assessed, not fixed — needs a product decision
+**COD orders count as confirmed demand without the item payment ever being verified.** `get_group_buy_progress` (`20260824000150:64-77`) OR-in `payment_type = 'cod'` unconditionally, and `preview_kit_allocation` mirrors it deliberately.
+
+The reviewer is right that this is inconsistent with the corrected model: `20260824000500` establishes that items are *always* bought online with a receipt under both options, and the insert trigger always resets `payment_status` to `'pending'`. So a COD order sitting at `'pending'` has an **unreviewed item receipt**, yet counts as confirmed the moment an admin moves `order_status` off `'new'`.
+
+The root ambiguity is that **`payment_status` does double duty for COD**: `paymentStatusLabel` renders `pending` as "Collect on Delivery" and `isCodCollectible` reads `payment_status <> 'paid'` as "courier still collects the fee" — so it tracks the *shipping fee*, while nothing separately tracks whether the *item receipt* was verified.
+
+Not changed unilaterally because:
+- It lives in `get_group_buy_progress`, so a fix alters **cap enforcement across the whole storefront**, far beyond Ligwak.
+- Fixing it only in Ligwak would break the invariant this feature was built on — that ligwak is computed over exactly the demand the caps counted.
+- It contradicts tests written deliberately to the documented existing semantics (`ligwak.test.ts:counts an unpaid COD order`).
+
+Resolving it likely needs a separate field (e.g. `items_verified_at`) so fee collection and item verification stop sharing one column. **Until then, an unverified COD receipt can occupy a kit slot and push a verified Pay Now order into ligwak.**
+
+**`orders.refunded_total` has no upper-bound constraint.** `20260824000000:40-41` documents "Must be <= total_price + shipping_fee"; the actual CHECK only enforces `>= 0`. Written directly from `OrdersManager.tsx:354`. Pre-existing, in uncommitted branch work, not touched here.
 
 ## Follow-up — REQUIRED BEFORE RELEASE
 1. **Four migrations are not applied to the remote Supabase project.** The feature is inert until they run, in order:
