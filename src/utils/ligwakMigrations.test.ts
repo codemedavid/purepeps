@@ -160,10 +160,14 @@ describe('ligwak RPCs', () => {
     }
   });
 
+  // Checked per function body rather than by counting occurrences, so a passing
+  // mention of the phrase in a comment cannot stand in for a real declaration.
   it('runs every RPC as definer with a pinned search_path', () => {
-    const definers = rpcs.match(/SECURITY DEFINER/g) ?? [];
-    expect(definers.length).toBeGreaterThanOrEqual(GUARDED_RPCS.length);
-    expect((rpcs.match(/SET search_path = public/g) ?? []).length).toBe(definers.length);
+    for (const name of [...GUARDED_RPCS, 'finalize_group_buy_batch']) {
+      const body = functionBody(name);
+      expect(body, `${name} must be SECURITY DEFINER`).toContain('SECURITY DEFINER');
+      expect(body, `${name} must pin search_path`).toContain('SET search_path = public');
+    }
   });
 });
 
