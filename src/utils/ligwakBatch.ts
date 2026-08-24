@@ -157,6 +157,11 @@ export function buildBatchLigwak(
   // once. An order that is entirely ligwak across three lines produces three
   // records, and only the first of them may carry the fee.
   const shippingClaimed = new Set<string>();
+  // Refund money still unspent on each order. paid_total belongs to the ORDER,
+  // so an order with two ligwak lines must not cap each of them against the same
+  // undecremented figure — that is how the combined refunds come to exceed what
+  // the customer ever paid.
+  const headroomLeft = new Map<string, number>();
   const records: LigwakRecordDraft[] = [];
 
   for (const allocation of allocations) {
@@ -172,13 +177,29 @@ export function buildBatchLigwak(
         isEntirelyLigwak(entry.orderId) && !shippingClaimed.has(entry.orderId);
       if (claimsShipping) shippingClaimed.add(entry.orderId);
 
+      if (!headroomLeft.has(entry.orderId)) {
+        headroomLeft.set(
+          entry.orderId,
+          Math.max(
+            0,
+            Number(order.paid_total ?? 0) - Number(order.refunded_total ?? 0),
+          ),
+        );
+      }
+
       const refund = computeLigwakRefund({
         order,
         linePrice: item.price,
         lineQuantity: entry.quantity,
         ligwakQty: entry.ligwakQty,
         isEntireOrderLigwak: claimsShipping,
+        headroomRemaining: headroomLeft.get(entry.orderId),
       });
+
+      headroomLeft.set(
+        entry.orderId,
+        Math.max(0, (headroomLeft.get(entry.orderId) ?? 0) - refund.refundAmount),
+      );
 
       records.push({
         orderId: entry.orderId,

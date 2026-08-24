@@ -25,7 +25,21 @@ export function useKitAllocation(batchId: string | null) {
       .eq('batch_id', batchId)
       .eq('status', 'locked')
       .limit(1);
-    if (queryError) return;
+
+    // Surfaced, not swallowed. Failing quietly here leaves `locked` false, so
+    // the panel offers "Lock allocation" for a batch that may already be
+    // locked — and the admin then meets an unexplained "already has a locked
+    // kit allocation" error from the RPC with no trace of the real cause.
+    if (queryError) {
+      setError(
+        getActionErrorMessage(
+          queryError,
+          'Could not check whether this allocation is already locked.',
+        ),
+      );
+      return;
+    }
+
     setLocked((data ?? []).length > 0);
   }, [batchId]);
 

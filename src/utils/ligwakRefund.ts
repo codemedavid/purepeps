@@ -49,6 +49,15 @@ export interface LigwakRefundInput {
    * shipping fee the customer already paid comes back as well.
    */
   readonly isEntireOrderLigwak: boolean;
+  /**
+   * Refund money still available on this ORDER, when the caller is walking
+   * several ligwak lines of the same order.
+   *
+   * paid_total is a property of the order, not of a line, so sibling lines draw
+   * from ONE pot. Left undefined for a single-line calculation, where the pot is
+   * simply paid_total - refunded_total.
+   */
+  readonly headroomRemaining?: number;
 }
 
 export interface LigwakRefundResult {
@@ -107,10 +116,15 @@ export function computeLigwakRefund(input: LigwakRefundInput): LigwakRefundResul
       : 0;
 
   // Ceiling: money that never reached us cannot be sent back, and money already
-  // returned must not be returned twice.
+  // returned must not be returned twice. When the caller is walking several
+  // ligwak lines of one order it passes the pot that is actually LEFT, since
+  // every line of that order spends from the same paid_total.
   const received = Math.max(0, Number(order.paid_total ?? 0));
   const alreadyRefunded = Math.max(0, Number(order.refunded_total ?? 0));
-  const headroom = Math.max(0, received - alreadyRefunded);
+  const headroom =
+    input.headroomRemaining != null
+      ? Math.max(0, input.headroomRemaining)
+      : Math.max(0, received - alreadyRefunded);
 
   const requested = vialsRefund + shippingOwed;
   const refundAmount = toCentavos(Math.min(requested, headroom));

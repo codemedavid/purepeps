@@ -210,11 +210,31 @@ BEGIN
      AND sc.product_id = a.product_id
      AND COALESCE(sc.variation_id, '') = COALESCE(a.variation_id, '')
   ),
-  final AS (
+  -- paid_total belongs to the ORDER, not to a line. An order with two ligwak
+  -- lines spends from ONE pot, so each line has to know what the lines before
+  -- it already claimed — otherwise both cap against the same undecremented
+  -- figure and their combined refunds exceed what the customer ever paid.
+  --
+  -- The running window is EXCLUSIVE of the current row (it ends at the
+  -- preceding one), giving exactly "already claimed by my siblings".
+  claimed AS (
     SELECT
       pr.*,
-      LEAST(pr.vials_refund + pr.shipping_owed, pr.headroom) AS refund_amount
+      COALESCE(SUM(pr.vials_refund + pr.shipping_owed) OVER (
+        PARTITION BY pr.order_id
+        ORDER BY pr.product_id, COALESCE(pr.variation_id, '')
+        ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+      ), 0) AS claimed_before
     FROM priced pr
+  ),
+  final AS (
+    SELECT
+      c.*,
+      GREATEST(0, LEAST(
+        c.vials_refund + c.shipping_owed,
+        c.headroom - c.claimed_before
+      )) AS refund_amount
+    FROM claimed c
   ),
   -- One header per queue, with its ledger nested inside.
   allocations AS (
@@ -485,14 +505,27 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- Once a refund is in flight, reshuffling would strand money against a record
-  -- that no longer exists. Settle or reverse those first.
+  -- Recalculating DELETES the allocation, and the ligwak_records cascade with
+  -- it. So the guard cannot be about money already sent alone — any refund work
+  -- recorded against a record would be destroyed with it:
+  --
+  --   * refund_processing / refunded — money in flight or already gone.
+  --   * refund_failed                — money still OWED; losing this row loses
+  --                                    the debt.
+  --   * a reference, an uploaded proof, or admin notes — the evidence of what
+  --     was decided and why.
+  --   * customer_notified_at         — the customer has been told a refund is
+  --     coming, and would be silently un-told.
   IF EXISTS (
     SELECT 1 FROM public.ligwak_records
     WHERE batch_id = p_batch_id
-      AND refund_status IN ('refund_processing', 'refunded')
+      AND (refund_status IN ('refund_processing', 'refunded', 'refund_failed')
+           OR refund_reference IS NOT NULL
+           OR refund_proof_url IS NOT NULL
+           OR admin_notes IS NOT NULL
+           OR customer_notified_at IS NOT NULL)
   ) THEN
-    RAISE EXCEPTION 'Refunds have already been processed for this batch. Recalculating would strand them.'
+    RAISE EXCEPTION 'This batch already has refund work recorded against its ligwak records (a refund in flight, a failed refund still owed, a reference, proof, notes, or a customer already notified). Resolve or clear those before recalculating.'
       USING ERRCODE = 'integrity_constraint_violation';
   END IF;
 
@@ -590,8 +623,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_from   TEXT;
-  v_record public.ligwak_records%ROWTYPE;
+  v_from       TEXT;
+  v_calculated NUMERIC;
+  v_record     public.ligwak_records%ROWTYPE;
 BEGIN
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Not authorized to record a ligwak refund.';
@@ -602,9 +636,30 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  SELECT refund_status INTO v_from FROM public.ligwak_records WHERE id = p_record_id;
+  SELECT refund_status, refund_amount
+    INTO v_from, v_calculated
+    FROM public.ligwak_records
+   WHERE id = p_record_id;
+
   IF v_from IS NULL THEN
     RAISE EXCEPTION 'No such ligwak record.' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  -- The ceiling has to live HERE, not only in the admin modal. A retried
+  -- request, a second tab, or any future caller reaches this function directly,
+  -- and the calculated figure is already capped at what the customer paid.
+  IF p_amount > v_calculated THEN
+    RAISE EXCEPTION 'That refund of % would exceed the % calculated for this customer''s ligwak vials.',
+      p_amount, v_calculated
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Recording twice over the same record would pay the customer twice and
+  -- overwrite the reference of the transfer that already went out. Moving the
+  -- record off 'refunded' first is an audited, deliberate act.
+  IF v_from = 'refunded' THEN
+    RAISE EXCEPTION 'This ligwak refund is already recorded as refunded. Change its status first if it genuinely needs re-recording.'
+      USING ERRCODE = 'unique_violation';
   END IF;
 
   UPDATE public.ligwak_records

@@ -206,7 +206,10 @@ CREATE TABLE IF NOT EXISTS public.ligwak_audit_events (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   batch_id         UUID REFERENCES public.group_buy_batches(id) ON DELETE CASCADE,
   allocation_id    UUID REFERENCES public.group_buy_kit_allocations(id) ON DELETE CASCADE,
-  ligwak_record_id UUID REFERENCES public.ligwak_records(id) ON DELETE CASCADE,
+  -- SET NULL, deliberately NOT CASCADE: an append-only trail that deletes
+  -- itself is not a trail. Recalculating an allocation drops its ligwak_records,
+  -- and the history of what was decided, notified and paid must outlive them.
+  ligwak_record_id UUID REFERENCES public.ligwak_records(id) ON DELETE SET NULL,
 
   event_type       TEXT NOT NULL CHECK (event_type IN (
                      'locked',
