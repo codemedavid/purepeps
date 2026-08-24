@@ -130,6 +130,8 @@ export interface ConfirmableOrder {
   readonly payment_type?: string | null;
   readonly payment_status?: string | null;
   readonly manually_confirmed_at?: string | null;
+  /** Confirmed received. Distinguishes a reviewed balance receipt from an unpaid one. */
+  readonly paid_total?: number | null;
 }
 
 /**
@@ -156,6 +158,12 @@ export function countsAsConfirmedOrder(order: ConfirmableOrder): boolean {
   // much as for Pay Now. A refused COD delivery must release its cap slot,
   // otherwise the only way to free it is cancelling, which erases the record.
   if (SETTLED_AGAINST_STATUSES.includes(order.payment_status ?? '')) return false;
+
+  // A balance receipt under review on an order that WAS paid.
+  // submit_additional_payment moves such an order to 'submitted', and dropping
+  // it out of confirmed demand would silently free a cap slot the customer has
+  // already paid for. Mirrors the matching OR-branch in the SQL filter.
+  if (order.payment_status === 'submitted' && order.paid_total != null) return true;
 
   // COD is legitimately unpaid until the courier collects.
   return order.payment_type === 'cod' || order.payment_status === 'paid';
