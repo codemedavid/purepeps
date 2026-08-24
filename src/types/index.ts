@@ -286,6 +286,86 @@ export interface OrderLineItem {
   purity_percentage?: number;
 }
 
+// A line item enriched for the customer-facing Order History: the same stored
+// item plus its exact strength in mg. quantity_mg lives on product_variations
+// and was not copied into order_items historically, so the history RPC recovers
+// it by join (a value stored on the item itself wins — see the RPC's comment).
+export interface OrderHistoryLineItem extends OrderLineItem {
+  quantity_mg?: number | null;
+}
+
+// One recorded change of state, from public.order_status_events, plus the batch's
+// shared international leg merged in under 'fulfillment_stage'.
+export interface OrderStatusEvent {
+  event_type: 'placed' | 'order_status' | 'payment_status' | 'fulfillment_stage';
+  from_value: string | null;
+  to_value: string | null;
+  occurred_at: string;
+}
+
+// One row of the detailed customer-facing Order History
+// (get_order_history_by_email / get_order_history_by_number).
+//
+// This is deliberately NOT OrderBundleRow. That type backs the status-only
+// lookup any order number can reach; this one carries the customer's own
+// personal and checkout data and is returned only to a lookup that proved
+// ownership. Keep the two apart.
+export interface OrderHistoryRow {
+  id: string;
+  order_number: string | null;
+  created_at: string;
+
+  // Who placed it
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  contact_method: string | null;
+
+  // What else was entered at checkout
+  shipping_address: string | null;
+  shipping_barangay: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip_code: string | null;
+  shipping_country: string | null;
+  shipping_location: string | null;
+  shipping_provider: string | null;
+  shipping_note: string | null;
+  tracking_number: string | null;
+  selected_sticker_name: string | null;
+  /** The customer's own note / special instructions. Admin notes are never sent. */
+  notes: string | null;
+
+  // Which group buy it rides in
+  group_buy_batch_id: string | null;
+  batch_name: string | null;
+  batch_number: number | null;
+  batch_status: GroupBuyStatus | null;
+  fulfillment_stage: FulfillmentStage | null;
+
+  // What was ordered, and what it cost
+  order_items: OrderHistoryLineItem[];
+  total_price: number;
+  shipping_fee: number;
+  discount_applied: number | null;
+  promo_code: string | null;
+  paid_total: number | null;
+  balance_due: number;
+  refunded_total: number | null;
+
+  // How it is being paid, and where it stands
+  payment_type: string | null;
+  payment_method_name: string | null;
+  payment_status: string;
+  order_status: string | null;
+
+  // How it got here
+  status_events: OrderStatusEvent[];
+
+  is_claim: boolean;
+  parent_order_id: string | null;
+}
+
 // An order as managed inside a group-buy batch (admin side).
 export interface BatchOrder {
   id: string;
@@ -348,7 +428,9 @@ export interface OrderBundleRow {
   shipping_note: string | null;
   total_price: number;
   shipping_fee: number;
-  order_items: { product_name: string; quantity: number }[];
+  // The RPC returns the whole stored JSONB; this was narrowed by hand and
+  // hid the price/variation fields that were always present.
+  order_items: OrderLineItem[];
   created_at: string;
   promo_code: string | null;
   discount_applied: number | null;

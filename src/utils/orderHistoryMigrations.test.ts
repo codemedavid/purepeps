@@ -37,8 +37,17 @@ describe('order status events migration', () => {
   it('records batch stage changes once per batch, never once per order', () => {
     expect(events).toContain('AFTER UPDATE ON public.group_buy_batches');
     expect(events).toContain('NEW.fulfillment_stage IS DISTINCT FROM OLD.fulfillment_stage');
-    // Write amplification guard: the batch trigger must not fan out into orders.
-    expect(events).not.toMatch(/INSERT INTO public\.order_status_events[\s\S]{0,400}FROM public\.orders/);
+    // Write-amplification guard: the batch trigger writes ONE row for the batch.
+    // Fanning out into order_status_events would mean an insert per order every
+    // time an admin bumps a stage. Scoped to that function's body so the
+    // one-off backfill over public.orders is not mistaken for a fan-out.
+    const batchTrigger = events.slice(
+      events.indexOf('FUNCTION public.record_group_buy_stage_change()'),
+      events.indexOf('4. Backfill'),
+    );
+    expect(batchTrigger).toContain('INSERT INTO public.group_buy_stage_events');
+    expect(batchTrigger).not.toContain('INSERT INTO public.order_status_events');
+    expect(batchTrigger).not.toContain('FROM public.orders');
   });
 
   it('backfills only a placed event for pre-existing orders', () => {
