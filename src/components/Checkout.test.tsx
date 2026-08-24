@@ -514,9 +514,13 @@ describe('Checkout', () => {
       await userEvent.click(proceed);
 
       await waitFor(() =>
-        expect(screen.getByRole('radio', { name: /Cash on Delivery/i })).toBeInTheDocument(),
+        expect(screen.getByRole('radio', { name: /Shipping Fee on Delivery/i })).toBeInTheDocument(),
       );
     };
+
+    /** The COD option — pay for items online, hand the shipping fee to the courier. */
+    const chooseFeeOnDelivery = () =>
+      userEvent.click(screen.getByRole('radio', { name: /Shipping Fee on Delivery/i }));
 
     const attachProof = () => {
       const input = document.getElementById('payment-proof-upload') as HTMLInputElement;
@@ -526,12 +530,12 @@ describe('Checkout', () => {
 
     const placedOrder = () => mockOrderInsert.mock.calls[0][0][0];
 
-    it('offers both Pay Now and Cash on Delivery', async () => {
+    it('offers both ways of settling the shipping fee', async () => {
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
       expect(screen.getByRole('radio', { name: /Pay Now/i })).toBeInTheDocument();
-      expect(screen.getByRole('radio', { name: /Cash on Delivery/i })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Shipping Fee on Delivery/i })).toBeInTheDocument();
     });
 
     it('starts on Pay Now and shows the online payment method to pay to', async () => {
@@ -543,25 +547,63 @@ describe('Checkout', () => {
       expect(screen.getByText('09123456789')).toBeInTheDocument();
     });
 
-    it('hides the online method picker and proof upload once COD is chosen', async () => {
+    it('KEEPS the method picker and proof upload when the fee is paid on delivery', async () => {
+      // The items are still bought online — only the fee moves. Hiding these
+      // would leave the shopper no way to pay for what they are ordering.
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
-      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+      await chooseFeeOnDelivery();
 
-      expect(screen.queryByText('Select Payment Method')).not.toBeInTheDocument();
-      expect(screen.queryByText('Upload Proof of Payment')).not.toBeInTheDocument();
-      expect(document.getElementById('payment-proof-upload')).toBeNull();
+      expect(screen.getByText('Select Payment Method')).toBeInTheDocument();
+      expect(screen.getByText('Upload Proof of Payment')).toBeInTheDocument();
+      expect(document.getElementById('payment-proof-upload')).not.toBeNull();
     });
 
-    it('tells the COD customer the exact cash to prepare, including shipping', async () => {
-      // 3000 subtotal + 150 Metro Manila shipping, no COD surcharge.
+    it('asks for the SHIPPING FEE in cash, not the order total', async () => {
+      // 3000 subtotal + 150 Metro Manila shipping. The courier collects ₱150.
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
-      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+      await chooseFeeOnDelivery();
 
-      expect(screen.getAllByText(/3,150/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Cash to prepare/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/150\.00/).length).toBeGreaterThan(0);
+      // The old model's figure must not appear as cash to prepare anywhere.
+      expect(screen.queryByText(/3,150\.00 in cash/i)).not.toBeInTheDocument();
+    });
+
+    it('leads the summary with what is actually being transferred now', async () => {
+      // 3000 items + 150 shipping. Deferring the fee must not leave ₱3,150
+      // standing as the headline the shopper pays against.
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await chooseFeeOnDelivery();
+
+      expect(screen.getByText('Pay online now')).toBeInTheDocument();
+      expect(screen.getByText('Cash to courier')).toBeInTheDocument();
+      // The grand total stays visible as a reference, but demoted.
+      expect(screen.getByText('Order total')).toBeInTheDocument();
+      expect(screen.queryByText('Total')).not.toBeInTheDocument();
+    });
+
+    it('keeps a single Total on the Pay Now path, where nothing is deferred', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      expect(screen.getByText('Total')).toBeInTheDocument();
+      expect(screen.queryByText('Pay online now')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cash to courier')).not.toBeInTheDocument();
+    });
+
+    it('bills items only online when the fee is paid on delivery', async () => {
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      await chooseFeeOnDelivery();
+
+      expect(screen.getByText(/your items only/i)).toBeInTheDocument();
     });
 
     it('still blocks a Pay Now order until proof of payment is attached', async () => {
@@ -571,33 +613,85 @@ describe('Checkout', () => {
       expect(screen.getByText('Complete Order').closest('button')).toBeDisabled();
     });
 
-    it('lets a COD order be placed with no proof of payment at all', async () => {
+    it('still blocks a fee-on-delivery order until proof for the ITEMS is attached', async () => {
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
-      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
+      await chooseFeeOnDelivery();
 
-      const place = screen.getByText(/Place COD Order/i).closest('button');
-      expect(place).not.toBeDisabled();
+      expect(screen.getByText('Complete Order').closest('button')).toBeDisabled();
+
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
     });
 
-    it('records a COD order as payment_type cod with no method or receipt', async () => {
+    it('records a fee-on-delivery order WITH its online method and receipt', async () => {
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
-      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
-      await userEvent.click(screen.getByText(/Place COD Order/i));
+      await chooseFeeOnDelivery();
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
 
       await waitFor(() => expect(mockOrderInsert).toHaveBeenCalled());
 
       const order = placedOrder();
       expect(order.payment_type).toBe('cod');
-      expect(order.payment_method_id).toBeNull();
-      expect(order.payment_method_name).toBeNull();
-      expect(order.payment_proof_url).toBeNull();
-      // A COD order is still born unpaid and unconfirmed.
+      // The items were paid for online, so this evidence must survive.
+      expect(order.payment_method_id).toBe('pm-1');
+      expect(order.payment_method_name).toBe('GCash');
+      expect(order.payment_proof_url).toBe('https://test.supabase.co/proof.png');
+      // Still born unpaid and unconfirmed — an admin reviews the receipt.
       expect(order.payment_status).toBe('pending');
       expect(order.order_status).toBe('new');
+      // The fee is not folded into the item total either way.
+      expect(order.total_price).toBe(3000);
+      expect(order.shipping_fee).toBe(150);
+    });
+
+    it('persists each line item exact strength in mg for the order history', async () => {
+      // quantity_mg lives on product_variations. Storing it on the item too means
+      // the order history still states the true strength after the variation is
+      // edited or deleted.
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
+
+      await waitFor(() => expect(mockOrderInsert).toHaveBeenCalled());
+
+      expect(placedOrder().order_items[0]).toMatchObject({
+        variation_name: '5mg',
+        quantity_mg: 5,
+      });
+    });
+
+    it('stores the pre-discount subtotal alongside the discounted total', async () => {
+      // total_price is (subtotal - discount); without subtotal stored, every
+      // reader has to reconstruct it. Only claim orders used to write it.
+      render(<Checkout {...defaultProps} />);
+      await goToPaymentStep();
+
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
+
+      await waitFor(() => expect(mockOrderInsert).toHaveBeenCalled());
+
+      const order = placedOrder();
+      expect(order.subtotal).toBe(3000);
+      expect(order.total_price).toBe(3000);
     });
 
     it('records a Pay Now order as payment_type pay_now with the chosen method', async () => {
@@ -619,18 +713,25 @@ describe('Checkout', () => {
       expect(order.payment_proof_url).toBe('https://test.supabase.co/proof.png');
     });
 
-    it('confirms a COD order with cash-on-arrival wording, not payment review', async () => {
+    it('confirms a fee-on-delivery order naming the fee, and still reviews the receipt', async () => {
       render(<Checkout {...defaultProps} />);
       await goToPaymentStep();
 
-      await userEvent.click(screen.getByRole('radio', { name: /Cash on Delivery/i }));
-      await userEvent.click(screen.getByText(/Place COD Order/i));
+      await chooseFeeOnDelivery();
+      attachProof();
+      await waitFor(() =>
+        expect(screen.getByText('Complete Order').closest('button')).not.toBeDisabled(),
+      );
+      await userEvent.click(screen.getByText('Complete Order'));
 
       await waitFor(() => expect(screen.getByText('Order Confirmed')).toBeInTheDocument());
       // Named in both the badge and the copyable order summary, hence getAllByText.
       expect(screen.getAllByText(/Cash on Delivery/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/due on delivery/i)).toBeInTheDocument();
-      expect(screen.getByText(/pay the courier/i)).toBeInTheDocument();
+      expect(screen.getByText(/shipping fee on delivery/i)).toBeInTheDocument();
+      // The receipt for the items is reviewed exactly as for Pay Now, and the
+      // "shipping fee only" qualifier appears in both the blurb and the summary.
+      expect(screen.getByText(/review your payment/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/shipping fee only/i).length).toBeGreaterThan(0);
     });
 
     it('refuses a Pay Now order with no method BEFORE uploading the receipt', async () => {

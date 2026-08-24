@@ -157,11 +157,12 @@ describe('OrderHistoryPanel', () => {
 
     await expand(user, 'TBS-000123');
 
-    expect(screen.getByText('₱5,000.00')).toBeInTheDocument();
-    expect(screen.getByText('-₱500.00')).toBeInTheDocument();
-    expect(screen.getByText('SAVE500')).toBeInTheDocument();
-    expect(screen.getByText('₱200.00')).toBeInTheDocument();
-    expect(screen.getByText('₱4,700.00')).toBeInTheDocument();
+    const charges = screen.getByRole('region', { name: /charges/i });
+    expect(within(charges).getByText('₱5,000.00')).toBeInTheDocument();   // subtotal
+    expect(within(charges).getByText('-₱500.00')).toBeInTheDocument();     // discount
+    expect(within(charges).getByText('SAVE500')).toBeInTheDocument();
+    expect(within(charges).getByText('₱200.00')).toBeInTheDocument();      // shipping
+    expect(within(charges).getByText('₱4,700.00')).toBeInTheDocument();    // total
   });
 
   it('says the courier collects only the shipping fee on a COD order', async () => {

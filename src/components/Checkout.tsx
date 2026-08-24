@@ -15,7 +15,7 @@ import posthog, { identifyUser } from '../lib/posthog';
 import UpgradeTierModal from './UpgradeTierModal';
 import PaymentOptionPicker from './checkout/PaymentOptionPicker';
 import CodInstructions from './checkout/CodInstructions';
-import { codAmountDue, isProofRequired, paymentTypeLabel, type PaymentType } from '../constants/payment';
+import { codAmountDue, onlinePaymentDue, paymentTypeLabel, type PaymentType } from '../constants/payment';
 import { useCodAvailability } from '../hooks/useCodAvailability';
 
 interface CheckoutProps {
@@ -156,14 +156,19 @@ const Checkout: React.FC<CheckoutProps> = ({
         if (!codEnabled && paymentType === 'cod') setPaymentType('pay_now');
     }, [codEnabled, paymentType]);
 
-    const isPayNow = isProofRequired(paymentType);
-    // Cash the courier collects. Identical to finalTotal — there is no COD
-    // surcharge — but derived through the shared helper so the checkout screen,
-    // the waybill and the admin view can never disagree about the figure.
-    const codDue = codAmountDue({
+    // The payment option moves the SHIPPING FEE between two moments; it never
+    // changes what is owed. Items are bought online under both options, so a
+    // receipt is always required — only the amount on it differs.
+    const isPayNow = paymentType === 'pay_now';
+    const orderMoney = {
         total_price: Math.max(0, totalPrice - discountAmount),
         shipping_fee: shippingFee,
-    });
+    };
+    // Cash the courier collects: the shipping fee alone. Derived through the
+    // shared helper so the checkout screen, the waybill and the admin view can
+    // never disagree about the figure.
+    const codDue = codAmountDue(orderMoney);
+    const dueOnline = onlinePaymentDue(orderMoney, paymentType);
 
     // Handle Promo Code Application
     const handleApplyPromoCode = async () => {
@@ -276,7 +281,7 @@ const Checkout: React.FC<CheckoutProps> = ({
 
         // COD pays nothing up front, so there is no receipt to demand. The
         // server enforces the same rules (enforce_payment_type_on_order).
-        if (isPayNow && !selectedPaymentMethod) {
+        if (!selectedPaymentMethod) {
             // Checked BEFORE the upload below: the server now rejects a Pay Now
             // insert with no method, so uploading first would strand the receipt
             // in storage on every retry.
@@ -284,7 +289,7 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
-        if (isPayNow && !paymentProof) {
+        if (!paymentProof) {
             alert('Please upload a screenshot of your payment proof to proceed.');
             return;
         }
@@ -326,7 +331,7 @@ const Checkout: React.FC<CheckoutProps> = ({
             return;
         }
 
-        const paymentMethod = isPayNow
+        const paymentMethod = true
             ? paymentMethods.find(pm => pm.id === selectedPaymentMethod)
             : undefined;
 
@@ -335,7 +340,7 @@ const Checkout: React.FC<CheckoutProps> = ({
 
             // 1. Upload Payment Proof First
             let paymentProofUrl = null;
-            if (isPayNow && paymentProof) {
+            if (paymentProof) {
                 try {
                     paymentProofUrl = await uploadImage(paymentProof);
                 } catch (uploadError: any) {
@@ -363,7 +368,11 @@ const Checkout: React.FC<CheckoutProps> = ({
                     quantity: item.quantity,
                     price: currentPrice,
                     total: currentPrice * item.quantity,
-                    purity_percentage: item.product.purity_percentage
+                    purity_percentage: item.product.purity_percentage,
+                    // The exact strength, stored ON the item rather than left to a
+                    // join. product_variations can be edited or deleted later; the
+                    // order history must keep stating what was actually bought.
+                    quantity_mg: item.variation?.quantity_mg ?? null
                 };
             });
 
@@ -395,6 +404,10 @@ const Checkout: React.FC<CheckoutProps> = ({
                     shipping_state: state,
                     shipping_zip_code: zipCode,
                     order_items: orderItems,
+                    // The pre-discount item total. Historically only claim orders
+                    // wrote this, so every reader had to rebuild it by adding the
+                    // discount back onto total_price.
+                    subtotal: totalPrice,
                     total_price: Math.max(0, totalPrice - discountAmount), // Store subtotal minus discount (not including shipping)
                     shipping_fee: shippingFee,
                     courier_id: selectedCourierId || null,
@@ -590,12 +603,14 @@ ${discountAmount > 0 ? `Discount (${appliedPromo?.code}): -₱${discountAmount.t
 
 💳 PAYMENT OPTION
 ${paymentTypeLabel(paymentType)}
+${paymentMethod?.name || 'N/A'}${paymentMethod ? `\n      Account: ${paymentMethod.account_number}` : ''}
+Paid online: ₱${dueOnline.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
 ${isPayNow
-                ? `${paymentMethod?.name || 'N/A'}${paymentMethod ? `\n      Account: ${paymentMethod.account_number}` : ''}`
-                : `COLLECT ON DELIVERY: ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
+                ? 'Shipping fee settled online — collect nothing on delivery.'
+                : `COLLECT ON DELIVERY (shipping fee only): ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
 
 📸 PROOF OF PAYMENT
-${!isPayNow ? 'Not required — cash on delivery.' : paymentProofUrl ? 'Screenshot attached to order.' : 'Pending'}
+${paymentProofUrl ? 'Screenshot attached to order.' : 'Pending'}
 
 📋 ORDER NUMBER: ${customOrderNumber}
 
@@ -652,7 +667,7 @@ Please confirm this order. Thank you!
                         <p className="text-gray-600 mb-4 text-base md:text-lg leading-relaxed">
                             {isPayNow
                                 ? "Your order has been received. Save your order reference below — we'll review your payment and confirm your order shortly."
-                                : `Your order has been received. Save your order reference below — we'll confirm it shortly, then you pay the courier ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} in cash on arrival.`}
+                                : `Your order has been received. Save your order reference below — we'll review your payment and confirm your order shortly. Have ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} in cash ready for the courier — that is the shipping fee only.`}
                         </p>
 
                         <div className="flex justify-center mb-6">
@@ -660,7 +675,7 @@ Please confirm this order. Thank you!
                                 {paymentTypeLabel(paymentType)}
                                 {!isPayNow && (
                                     <span className="text-charcoal-900">
-                                        · ₱{codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} due on delivery
+                                        · ₱{codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} shipping fee on delivery
                                     </span>
                                 )}
                             </span>
@@ -725,7 +740,7 @@ Please confirm this order. Thank you!
                                     <span>
                                         {isPayNow
                                             ? 'Confirmation within 24 hours of payment receipt.'
-                                            : 'Confirmation within 24 hours — no payment needed until delivery.'}
+                                            : 'Confirmation within 24 hours of payment receipt. Only the shipping fee is left for delivery day.'}
                                     </span>
                                 </li>
                                 <li className="flex items-start gap-3">
@@ -783,12 +798,22 @@ Please confirm this order. Thank you!
                             <PaymentOptionPicker
                                 value={paymentType}
                                 onChange={setPaymentType}
-                                codAmount={codDue}
+                                itemsTotal={orderMoney.total_price}
+                                shippingFee={shippingFee}
                                 codAvailable={codEnabled}
                             />
 
-                            {isPayNow ? (
-                                <>
+                            {/* Payment method + receipt are collected for BOTH options:
+                                the items are bought online either way. Only the amount
+                                on the receipt differs. */}
+                            {!isPayNow && (
+                                <CodInstructions
+                                    amountDue={codDue}
+                                    courierName={couriers.find(c => c.id === selectedCourierId)?.name}
+                                />
+                            )}
+
+                            <>
                             {/* Payment Methods */}
                             <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
                                 <h2 className="font-heading text-lg font-bold text-charcoal-900 mb-4 flex items-center gap-2">
@@ -854,6 +879,11 @@ Please confirm this order. Thank you!
                                     <Upload className="w-5 h-5 text-brand-600" />
                                     Upload Proof of Payment
                                 </h2>
+                                <p className="text-xs text-gray-500 -mt-2 mb-4">
+                                    {isPayNow
+                                        ? `Your receipt should show ₱${dueOnline.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — your items plus the shipping fee.`
+                                        : `Your receipt should show ₱${dueOnline.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — your items only. The ₱${codDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} shipping fee is paid in cash on delivery.`}
+                                </p>
                                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-brand-400 transition-colors bg-gray-50/50">
                                     <input
                                         type="file"
@@ -884,12 +914,6 @@ Please confirm this order. Thank you!
                                 </div>
                             </div>
                                 </>
-                            ) : (
-                                <CodInstructions
-                                    amountDue={codDue}
-                                    courierName={couriers.find(c => c.id === selectedCourierId)?.name}
-                                />
-                            )}
 
                             {/* Notes */}
                             <div className="bg-white rounded shadow-clinical p-6 border border-gray-100">
@@ -906,16 +930,14 @@ Please confirm this order. Thank you!
 
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={(isPayNow && !paymentProof) || isUploadingProof || isPlacingOrder}
+                                disabled={!paymentProof || isUploadingProof || isPlacingOrder}
                                 className="w-full btn-primary py-4 text-base shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {isUploadingProof
                                     ? 'Uploading Proof...'
                                     : isPlacingOrder
                                         ? 'Placing Order...'
-                                        : isPayNow
-                                            ? 'Complete Order'
-                                            : 'Place COD Order'}
+                                        : 'Complete Order'}
                             </button>
                         </div>
 
@@ -948,7 +970,12 @@ Please confirm this order. Thank you!
                                         <span>₱{totalPrice.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-gray-600">Shipping</span>
+                                        <span className="text-gray-600">
+                                            Shipping
+                                            {!isPayNow && (
+                                                <span className="text-gray-400"> · on delivery</span>
+                                            )}
+                                        </span>
                                         <span>₱{shippingFee.toLocaleString()}</span>
                                     </div>
                                     {discountAmount > 0 && (
@@ -957,10 +984,33 @@ Please confirm this order. Thank you!
                                             <span>-₱{discountAmount.toLocaleString()}</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between font-bold text-charcoal-900 text-lg pt-2">
-                                        <span>Total</span>
-                                        <span>₱{finalTotal.toLocaleString()}</span>
-                                    </div>
+
+                                    {/* The headline figure must be what the shopper is about to
+                                        transfer. Leading with the grand total while the shipping
+                                        fee has been deferred asks them to send ₱150 they do not
+                                        owe yet — so on the COD path the total steps back to a
+                                        reference line and the split becomes the headline. */}
+                                    {isPayNow ? (
+                                        <div className="flex justify-between font-bold text-charcoal-900 text-lg pt-2">
+                                            <span>Total</span>
+                                            <span>₱{finalTotal.toLocaleString()}</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-between text-gray-500 pt-2">
+                                                <span>Order total</span>
+                                                <span>₱{finalTotal.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between font-bold text-charcoal-900 text-lg pt-2 border-t border-gray-100">
+                                                <span>Pay online now</span>
+                                                <span>₱{dueOnline.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between text-gray-600">
+                                                <span>Cash to courier</span>
+                                                <span>₱{codDue.toLocaleString()}</span>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -8,6 +8,7 @@ import posthog from '../lib/posthog';
 import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOrders, groupBundlesByRoot } from '../utils/orderTracking';
 import type { OrderBundleRow } from '../types';
 import LeftoverClaimPanel from './groupbuy/LeftoverClaimPanel';
+import OrderHistorySection from './orderhistory/OrderHistorySection';
 import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 type TrackingOrder = OrderBundleRow;
@@ -749,6 +750,15 @@ const OrderTracking: React.FC = () => {
                                 onClaimed={() => order.order_number && void trackOrder(order.order_number)}
                             />
                         )}
+
+                        {/* Full order history. An email lookup already proved the
+                            address, so it loads straight away; an order-number
+                            lookup is asked to confirm the email first, because an
+                            order number alone must not unlock a home address. */}
+                        <OrderHistorySection
+                            verifiedEmail={searchMode === 'email' ? email : null}
+                            orderNumber={order.order_number}
+                        />
                     </div>
                 )}
             </div>
