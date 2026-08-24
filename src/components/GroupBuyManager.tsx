@@ -27,6 +27,9 @@ import type { BatchOrder, FulfillmentStage, OrderLineItem } from '../types';
 import { BatchKpiStrip } from './groupbuy/BatchKpiStrip';
 import { BatchSwitcher } from './groupbuy/BatchSwitcher';
 import { GroupBuyTabs } from './groupbuy/GroupBuyTabs';
+import KitAllocationPanel from './groupbuy/KitAllocationPanel';
+import LigwakManager from './ligwak/LigwakManager';
+import { useKitAllocation } from '../hooks/useKitAllocation';
 import type { GroupBuyTab } from './groupbuy/GroupBuyTabs';
 import { BatchOverviewTab } from './groupbuy/BatchOverviewTab';
 import { BatchOrdersPanel } from './groupbuy/BatchOrdersPanel';
@@ -80,6 +83,7 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GroupBuyTab>('overview');
+  const kitAllocation = useKitAllocation(selectedBatch?.id ?? null);
   const [openModal, setOpenModal] = useState<{ open: boolean; closesCurrent: boolean }>({
     open: false,
     closesCurrent: false,
@@ -643,6 +647,33 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
                   </p>
                 </div>
               ))}
+
+            {activeTab === 'ligwak' && (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+                  <KitAllocationPanel
+                    preview={kitAllocation.preview}
+                    locked={kitAllocation.locked}
+                    loading={kitAllocation.loading}
+                    error={kitAllocation.error}
+                    onPreview={kitAllocation.previewAllocation}
+                    onLock={kitAllocation.lockAllocation}
+                    onRecalculate={kitAllocation.recalculateAllocation}
+                  />
+                </div>
+
+                {/* Only meaningful once the allocation is locked — before that
+                    there are no ligwak records to manage, only a preview. */}
+                {kitAllocation.locked && (
+                  <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <LigwakManager
+                      batchId={selectedBatch.id}
+                      onBack={() => setActiveTab('overview')}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {activeTab === 'shipping' && (
               <div className="space-y-4">

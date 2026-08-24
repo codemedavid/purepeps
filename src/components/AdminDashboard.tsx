@@ -4,7 +4,7 @@ import AdminLogin from './AdminLogin';
 import FeatureVisibilityManager from './FeatureVisibilityManager';
 import BlossomLogo from './BlossomLogo';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight, PackageX } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -28,13 +28,14 @@ import CourierManager from './CourierManager';
 import StickerManager from './StickerManager';
 import ProtocolManager from './ProtocolManager';
 import GroupBuyManager from './GroupBuyManager';
+import LigwakManager from './ligwak/LigwakManager';
 // GuideManager removed (Peptalk functionality disabled)
 
 const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'tiers' | 'features'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'ligwak' | 'tiers' | 'features'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
@@ -1220,6 +1221,17 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  // Ligwak Management View — every batch's ligwak records in one place. The
+  // per-batch view lives inside Group Buy > Ligwak, next to the allocation it
+  // came from.
+  if (currentView === 'ligwak') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <LigwakManager onBack={() => setCurrentView('dashboard')} />
+      </div>
+    );
+  }
+
   // Access Requests View
   if (currentView === 'access-requests') {
     return (
@@ -1544,6 +1556,18 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">Group Buy</span>
                     <span className="text-xs text-gray-500">Batches & caps</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('ligwak')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <PackageX className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors">Ligwak</span>
+                    <span className="text-xs text-gray-500">Incomplete kits & refunds</span>
                   </div>
                 </button>
                 <button

@@ -5,6 +5,7 @@ import { paymentStatusColor, paymentStatusLabel, paymentTypeLabel } from '../../
 import { orderStatusLabel } from '../../utils/orderTracking';
 import { deriveCharges, describeVariation } from '../../utils/orderHistory';
 import OrderStatusTimeline, { formatMoment } from './OrderStatusTimeline';
+import LigwakNotice from './LigwakNotice';
 import type { OrderHistoryRow } from '../../types';
 
 interface Props {
@@ -200,6 +201,10 @@ const OrderHistoryDetail: React.FC<Props> = ({ order }) => {
                     )}
                 </p>
             </Block>
+
+            {/* Placed above the customer's own notes: if part of this order fell
+                outside a complete kit, that is the first thing they need to see. */}
+            <LigwakNotice ligwak={order.ligwak ?? []} />
 
             {order.notes && (
                 <Block icon={<StickyNote className="w-4 h-4" />} title="Your notes">
