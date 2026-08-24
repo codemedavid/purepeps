@@ -27,6 +27,10 @@ export interface Product {
   // variation's own minimum overrides this — see resolveMinOrder().
   minimum_order_quantity?: number;
 
+  // Vials that make one COMPLETE kit for this product. NULL/absent means inherit
+  // DEFAULT_VIALS_PER_KIT — see resolveKitSize(). Drives the Ligwak allocation.
+  vials_per_kit?: number | null;
+
   // Images and metadata
   image_url: string | null;
   safety_sheet_url: string | null;
@@ -53,6 +57,10 @@ export interface ProductVariation {
   // Minimum vials a shopper must order for this variation (default 2). Overrides
   // the parent product's minimum when this variation is selected.
   minimum_order_quantity?: number;
+
+  // Vials that make one COMPLETE kit for this variation. Overrides the parent
+  // product's kit size — different strengths ship in their own kits.
+  vials_per_kit?: number | null;
   created_at: string;
 }
 
