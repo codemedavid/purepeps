@@ -75,10 +75,10 @@ describe('row level security', () => {
 
   it('indexes the lookups the public page and admin queue actually run', () => {
     expect(sql).toMatch(
-      /CREATE INDEX IF NOT EXISTS \S+ ON public\.product_reviews \(product_id, status\)/,
+      /CREATE INDEX IF NOT EXISTS \S+\s+ON public\.product_reviews \(product_id, status\)/,
     );
     expect(sql).toMatch(
-      /CREATE INDEX IF NOT EXISTS \S+ ON public\.product_reviews \(status, created_at DESC\)/,
+      /CREATE INDEX IF NOT EXISTS \S+\s+ON public\.product_reviews \(status, created_at DESC\)/,
     );
   });
 });
