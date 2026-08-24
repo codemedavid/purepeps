@@ -58,7 +58,8 @@ describe('KitAllocationPanel', () => {
   it('summarises each queue: kit size, complete kits and ligwak vials', () => {
     renderPanel();
 
-    expect(screen.getByText(/Retatrutide/)).toBeInTheDocument();
+    // By role: the product name also appears in the table's sr-only caption.
+    expect(screen.getByRole('heading', { name: /Retatrutide/ })).toBeInTheDocument();
     expect(screen.getByTestId('complete-kits')).toHaveTextContent('1');
     expect(screen.getByTestId('ligwak-vials')).toHaveTextContent('5');
     expect(screen.getByText(/10 vials per kit/i)).toBeInTheDocument();
@@ -67,9 +68,11 @@ describe('KitAllocationPanel', () => {
   it('shows which customers and quantities completed each kit', () => {
     renderPanel();
 
+    // Assert the whole row: Ana ordered 10 and all 10 were confirmed, so a bare
+    // getByText('10') is ambiguous by construction.
     const anaRow = screen.getByRole('row', { name: /Ana/ });
-    expect(within(anaRow).getByText('10')).toBeInTheDocument();
-    expect(within(anaRow).getByText(/Kit 1/)).toBeInTheDocument();
+    const cells = within(anaRow).getAllByRole('cell').map((cell) => cell.textContent);
+    expect(cells).toEqual(['1', 'Ana', 'PP-1001', '10', '10', '—', 'Kit 1']);
   });
 
   it('marks the customers carrying the incomplete kit', () => {
