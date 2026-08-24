@@ -40,7 +40,8 @@ describe('LigwakNotice', () => {
 
     expect(screen.getByText(/Retatrutide/)).toBeInTheDocument();
     expect(screen.getByText(/10mg/)).toBeInTheDocument();
-    expect(screen.getByText(/3/)).toBeInTheDocument();
+    // "3 vials", not a bare /3/ — that also matches the ₱3,000.00 refund.
+    expect(screen.getByText(/3\s+vials/)).toBeInTheDocument();
   });
 
   // A partly fulfilled order must say so plainly, or the customer reads the

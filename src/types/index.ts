@@ -372,6 +372,118 @@ export interface OrderHistoryRow {
 
   is_claim: boolean;
   parent_order_id: string | null;
+
+  /** The customer's own ligwak lines, empty when the order was unaffected. */
+  ligwak?: OrderHistoryLigwak[];
+}
+
+// ---------------------------------------------------------------------------
+// Ligwak — vials left outside a complete kit when a group buy closed.
+// ---------------------------------------------------------------------------
+
+// One customer's slice of a packing queue, from
+// group_buy_kit_allocation_entries. Immutable once its allocation is locked.
+export interface KitAllocationEntryRow {
+  order_id: string;
+  order_number: string | null;
+  sequence: number;
+  ordered_at: string;
+  customer_name?: string | null;
+  quantity: number;
+  confirmed_qty: number;
+  ligwak_qty: number;
+  /** 1-based kits this order's vials landed in. */
+  first_kit_index: number;
+  last_kit_index: number;
+}
+
+// One (product, variation) packing queue for a batch, with its ledger nested.
+// `kit_size` is SNAPSHOTTED: editing the product later must not move a locked
+// allocation.
+export interface KitAllocationRow {
+  id?: string;
+  product_id: string;
+  product_name: string | null;
+  variation_id: string | null;
+  variation_name: string | null;
+  kit_size: number;
+  total_confirmed_vials: number;
+  complete_kits: number;
+  ligwak_vials: number;
+  status?: 'draft' | 'locked';
+  entries: KitAllocationEntryRow[];
+}
+
+export interface KitAllocationTotals {
+  affected_orders: number;
+  ligwak_vials: number;
+  refund_owed: number;
+}
+
+// What preview_kit_allocation / lock_kit_allocation return.
+export interface KitAllocationPreview {
+  batch_id: string;
+  allocations: KitAllocationRow[];
+  records: LigwakRecord[];
+  totals: KitAllocationTotals;
+}
+
+// A row of public.ligwak_records — the admin-side refund workflow. Every
+// customer/product field is a SNAPSHOT taken when the allocation was locked, so
+// a later rename or edit cannot rewrite what was refunded.
+export interface LigwakRecord {
+  id: string;
+  allocation_id: string;
+  entry_id: string | null;
+  batch_id: string;
+  order_id: string;
+  order_number: string | null;
+  ordered_at: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  product_id: string;
+  product_name: string | null;
+  variation_id: string | null;
+  variation_name: string | null;
+  quantity_mg: number | null;
+  total_quantity: number;
+  confirmed_quantity: number;
+  ligwak_quantity: number;
+  refund_amount: number;
+  /** The shipping portion of refund_amount; non-zero only when nothing ships. */
+  shipping_refunded: number;
+  payment_type: string | null;
+  payment_status: string | null;
+  payment_method_name: string | null;
+  refund_status: string;
+  refund_reference: string | null;
+  refund_proof_url: string | null;
+  refunded_at: string | null;
+  reason: string | null;
+  admin_notes: string | null;
+  customer_notified_at: string | null;
+  /** Group buy name or number, joined for display. */
+  batch_label?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// The customer-facing slice of a ligwak record, as returned inside
+// get_order_history_by_email / _by_number. PUBLIC FIELDS ONLY — no admin notes,
+// no contact details. Keep this type narrow: widening it here would invite a
+// caller to expect fields the RPC deliberately does not send.
+export interface OrderHistoryLigwak {
+  product_name: string | null;
+  variation_name: string | null;
+  quantity_mg: number | null;
+  total_quantity: number;
+  confirmed_quantity: number;
+  ligwak_quantity: number;
+  refund_amount: number;
+  refund_status: string;
+  refund_reference: string | null;
+  refunded_at: string | null;
 }
 
 // An order as managed inside a group-buy batch (admin side).
