@@ -244,7 +244,7 @@ describe('public projection', () => {
   });
 
   it('drops every personally identifying field', () => {
-    const publicReview = toPublicReview(adminRow) as Record<string, unknown>;
+    const publicReview = toPublicReview(adminRow) as unknown as Record<string, unknown>;
     for (const field of [
       'reviewer_name',
       'reviewer_email',
@@ -285,7 +285,9 @@ describe('review statuses and disclaimer', () => {
   });
 
   it('is a finished sentence, not the truncated source copy', () => {
-    expect(REVIEW_DISCLAIMER).not.toMatch(/idance\./);
+    // \b anchors this to the truncated standalone word from the source copy;
+    // a bare /idance\./ would also match the legitimate "guidance." ending.
+    expect(REVIEW_DISCLAIMER).not.toMatch(/\bidance\./);
     expect(REVIEW_DISCLAIMER.trim()).toMatch(/\.$/);
   });
 });
