@@ -195,6 +195,32 @@ describe('allocation ordering is the database s job, not the client s', () => {
   });
 });
 
+describe('the money rules live in the database, not only the client', () => {
+  // paid_total belongs to the ORDER. Capping each ligwak line against the same
+  // undecremented figure lets two lines of one order refund more than it paid.
+  it('shares one refund ceiling across an order s ligwak lines', () => {
+    const body = functionBody('preview_kit_allocation');
+    // A running total over the order's own lines is the only way to know what
+    // is left; a bare paid_total - refunded_total cannot.
+    expect(body).toMatch(/OVER\s*\([^)]*PARTITION BY[^)]*order_id/);
+    expect(body).toMatch(/headroom/);
+  });
+
+  it('caps a recorded refund at the amount that was calculated', () => {
+    const body = functionBody('record_ligwak_refund');
+    // The client already checks this, but a retried request or any other caller
+    // bypasses the client entirely.
+    expect(body).toMatch(/refund_amount/);
+    expect(body).toMatch(/exceed/i);
+  });
+
+  it('refuses to record a refund twice over the same record', () => {
+    const body = functionBody('record_ligwak_refund');
+    expect(body).toMatch(/'refunded'/);
+    expect(body).toMatch(/already/i);
+  });
+});
+
 describe('locking is one-way and audited', () => {
   it('refuses to lock an allocation that is already locked', () => {
     expect(functionBody('lock_kit_allocation')).toMatch(/status = 'draft'|already locked/i);
@@ -218,6 +244,26 @@ describe('locking is one-way and audited', () => {
         'INSERT INTO public.ligwak_audit_events',
       );
     }
+  });
+
+  // An append-only trail that cascade-deletes is not a trail. Recalculating
+  // must not erase the record of what was decided and paid before it.
+  it('keeps the audit trail when a ligwak record is deleted', () => {
+    expect(schema).toMatch(
+      /ligwak_record_id[\s\S]{0,120}REFERENCES public\.ligwak_records\(id\) ON DELETE SET NULL/,
+    );
+  });
+
+  it('refuses to recalculate over refund work that would be destroyed', () => {
+    const body = functionBody('recalculate_kit_allocation');
+    // Not just money already sent: a reference number, an uploaded proof, notes
+    // or a customer already told a refund is coming would all vanish with the
+    // cascaded rows.
+    expect(body).toContain('customer_notified_at');
+    expect(body).toContain('refund_reference');
+    expect(body).toContain('refund_proof_url');
+    // refund_failed means money is STILL OWED — the most dangerous row to drop.
+    expect(body).toMatch(/refund_failed/);
   });
 
   it('blocks finalizing a batch whose kit allocation was never locked', () => {

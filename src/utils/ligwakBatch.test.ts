@@ -203,6 +203,95 @@ describe('buildBatchLigwak — an order is only entirely ligwak across ALL its l
   });
 });
 
+describe('buildBatchLigwak — an order s payment is a shared ceiling', () => {
+  // paid_total is a property of the ORDER, so two ligwak lines on the same order
+  // draw from ONE pot. Capping each line against the same undecremented figure
+  // lets their combined refunds exceed what the customer ever paid.
+  it('never refunds more across an order s lines than the order received', () => {
+    const items = [
+      line({ quantity: 4 }),
+      line({ variation_id: V5, variation_name: '5mg', quantity_mg: 5, quantity: 4 }),
+    ];
+    const result = buildBatchLigwak(
+      [
+        order('partial', '2026-08-01T09:00:00Z', items, {
+          // Both lines are ligwak and each is worth 4000, but only 5000 was
+          // ever received against the whole order.
+          subtotal: 8000,
+          total_price: 8000,
+          shipping_fee: 500,
+          paid_total: 5000,
+        }),
+      ],
+      kitSizeOf,
+    );
+
+    expect(result.records).toHaveLength(2);
+    const total = result.records.reduce((sum, r) => sum + r.refundAmount, 0);
+    expect(total).toBe(5000);
+  });
+
+  it('gives the first line its full refund and the second only what is left', () => {
+    const items = [
+      line({ quantity: 4 }),
+      line({ variation_id: V5, variation_name: '5mg', quantity_mg: 5, quantity: 4 }),
+    ];
+    const result = buildBatchLigwak(
+      [
+        order('partial', '2026-08-01T09:00:00Z', items, {
+          subtotal: 8000, total_price: 8000, shipping_fee: 500, paid_total: 5000,
+        }),
+      ],
+      kitSizeOf,
+    );
+
+    // The first line also claims the 500 shipping fee (nothing on this order
+    // ships), so it takes 4500 of the 5000 and leaves 500 for the second.
+    const amounts = result.records.map((r) => r.refundAmount);
+    expect(amounts).toEqual([4500, 500]);
+  });
+
+  it('leaves the second line at zero when the first exhausts the payment', () => {
+    const items = [
+      line({ quantity: 4 }),
+      line({ variation_id: V5, variation_name: '5mg', quantity_mg: 5, quantity: 4 }),
+    ];
+    const result = buildBatchLigwak(
+      [
+        order('thin', '2026-08-01T09:00:00Z', items, {
+          subtotal: 8000, total_price: 8000, shipping_fee: 500, paid_total: 3000,
+        }),
+      ],
+      kitSizeOf,
+    );
+
+    const amounts = result.records.map((r) => r.refundAmount);
+    expect(amounts).toEqual([3000, 0]);
+    // Nothing is owed on the exhausted line, so it must not sit in the review
+    // queue implying money is coming.
+    expect(result.records[1].refundStatus).toBe('no_refund_required');
+  });
+
+  it('keeps each order s ceiling independent of the others', () => {
+    const result = buildBatchLigwak(
+      [
+        order('a', '2026-08-01T09:00:00Z', [line({ quantity: 4 })], {
+          subtotal: 4000, total_price: 4000, shipping_fee: 500, paid_total: 2000,
+        }),
+        order('b', '2026-08-02T09:00:00Z', [line({ quantity: 3 })], {
+          subtotal: 3000, total_price: 3000, shipping_fee: 500, paid_total: 3500,
+        }),
+      ],
+      kitSizeOf,
+    );
+
+    // a is capped at its own 2000; b's shipping returns too (nothing ships).
+    const byOrder = new Map(result.records.map((r) => [r.orderId, r.refundAmount]));
+    expect(byOrder.get('a')).toBe(2000);
+    expect(byOrder.get('b')).toBe(3500);
+  });
+});
+
 describe('buildBatchLigwak — totals for the admin preview', () => {
   it('summarises affected orders, vials and money owed', () => {
     const result = buildBatchLigwak(
