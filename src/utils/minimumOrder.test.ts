@@ -9,6 +9,7 @@ import {
   resolveMinimumOrder,
   universalMinimumFromRows,
   universalMinimumToRows,
+  validateCartMinimums,
   type UniversalMinimumOrder,
 } from './minimumOrder';
 import type { CartItem, Product, ProductVariation } from '../types';
@@ -293,5 +294,89 @@ describe('universal settings storage', () => {
     const original: UniversalMinimumOrder = { enabled: true, quantity: 7, unit: 'kit' };
 
     expect(universalMinimumFromRows(universalMinimumToRows(original))).toEqual(original);
+  });
+});
+
+describe('validateCartMinimums', () => {
+  it('passes a cart that meets every minimum', () => {
+    const items: CartItem[] = [line(5)];
+
+    expect(validateCartMinimums(items, UNIVERSAL_ON)).toEqual([]);
+  });
+
+  it('accepts the client’s split across three variations', () => {
+    // 4 + 3 + 3 = 10. No single line reaches 10, and that is the whole point.
+    const items: CartItem[] = [
+      line(4, {
+        product: product({ use_universal_minimum: false, minimum_order_quantity: 10 }),
+        variation: variation({ id: 'v10' }),
+      }),
+      line(3, {
+        product: product({ use_universal_minimum: false, minimum_order_quantity: 10 }),
+        variation: variation({ id: 'v20' }),
+      }),
+      line(3, {
+        product: product({ use_universal_minimum: false, minimum_order_quantity: 10 }),
+        variation: variation({ id: 'v30' }),
+      }),
+    ];
+
+    expect(validateCartMinimums(items, UNIVERSAL_ON)).toEqual([]);
+  });
+
+  it('reports a product whose combined quantity is short', () => {
+    const items: CartItem[] = [line(2), line(1, { variation: variation({ id: 'v20' }) })];
+
+    const violations = validateCartMinimums(items, UNIVERSAL_ON);
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({
+      productId: 'prod-1',
+      productName: 'BPC-157',
+      required: 5,
+      actual: 3,
+    });
+  });
+
+  it('reports one violation per product, not one per line', () => {
+    // Three short lines of the same product is ONE thing to fix, and three
+    // copies of the same banner reads as three separate problems.
+    const items: CartItem[] = [
+      line(1, { variation: variation({ id: 'v10' }) }),
+      line(1, { variation: variation({ id: 'v20' }) }),
+      line(1, { variation: variation({ id: 'v30' }) }),
+    ];
+
+    expect(validateCartMinimums(items, UNIVERSAL_ON)).toHaveLength(1);
+  });
+
+  it('carries the message a shopper should act on', () => {
+    const violations = validateCartMinimums([line(2)], UNIVERSAL_ON);
+
+    expect(violations[0].message).toBe(
+      'This product requires a minimum order of 5 vials. Please update your quantity to continue.',
+    );
+  });
+
+  it('judges each variation alone when the product opts into that', () => {
+    const perVariation = product({ enforce_minimum_per_variation: true });
+    const items: CartItem[] = [
+      line(4, { product: perVariation, variation: variation({ id: 'v10' }) }),
+      line(3, { product: perVariation, variation: variation({ id: 'v20' }) }),
+    ];
+
+    // Combined this is 7 and would pass; judged separately both fall short.
+    const violations = validateCartMinimums(items, UNIVERSAL_ON);
+
+    expect(violations).toHaveLength(2);
+    expect(violations[0].variationName).toBe('10mg');
+  });
+
+  it('says nothing about an empty cart', () => {
+    expect(validateCartMinimums([], UNIVERSAL_ON)).toEqual([]);
+  });
+
+  it('says nothing when minimums are switched off site-wide', () => {
+    expect(validateCartMinimums([line(1)], UNIVERSAL_OFF)).toEqual([]);
   });
 });
