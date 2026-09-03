@@ -10,6 +10,7 @@ import {
   universalMinimumFromRows,
   universalMinimumToRows,
   validateCartMinimums,
+  validateOrderLineMinimums,
   type UniversalMinimumOrder,
 } from './minimumOrder';
 import type { CartItem, Product, ProductVariation } from '../types';
@@ -379,5 +380,58 @@ describe('validateCartMinimums', () => {
 
   it('says nothing when minimums are switched off site-wide', () => {
     expect(validateCartMinimums([line(1)], UNIVERSAL_OFF)).toEqual([]);
+  });
+});
+
+describe('validateOrderLineMinimums — admin-created orders', () => {
+  const catalog = [product()];
+
+  function orderLine(quantity: number, variationId: string | null = null) {
+    return {
+      product_id: 'prod-1',
+      product_name: 'BPC-157',
+      variation_id: variationId,
+      variation_name: variationId ? '10mg' : null,
+      quantity,
+      price: 1000,
+      total: 1000 * quantity,
+    };
+  }
+
+  it('applies the same rule an admin-built order must follow', () => {
+    const violations = validateOrderLineMinimums([orderLine(2)], catalog, UNIVERSAL_ON);
+
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toMatchObject({ productId: 'prod-1', required: 5, actual: 2 });
+  });
+
+  it('combines an order’s variations exactly as the storefront does', () => {
+    const violations = validateOrderLineMinimums(
+      [orderLine(3, 'v10'), orderLine(2, 'v20')],
+      catalog,
+      UNIVERSAL_ON,
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('passes an order that meets the minimum', () => {
+    expect(validateOrderLineMinimums([orderLine(5)], catalog, UNIVERSAL_ON)).toEqual([]);
+  });
+
+  it('ignores a line whose product is no longer in the catalog', () => {
+    // A discontinued product still sits on historical orders. Refusing to
+    // validate the rest of the order because of it would trap the admin.
+    const violations = validateOrderLineMinimums(
+      [{ ...orderLine(2), product_id: 'gone' }],
+      catalog,
+      UNIVERSAL_ON,
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('says nothing when minimums are switched off', () => {
+    expect(validateOrderLineMinimums([orderLine(1)], catalog, UNIVERSAL_OFF)).toEqual([]);
   });
 });
