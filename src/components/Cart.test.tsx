@@ -158,3 +158,84 @@ describe('Cart — group-buy availability', () => {
     expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeDisabled();
   });
 });
+
+describe('Cart — minimum order', () => {
+  const UNIVERSAL_ON = { enabled: true, quantity: 5, unit: 'vial' as const };
+
+  it('blocks checkout while a product is under its minimum', () => {
+    renderCart({
+      cartItems: [makeCartItem({ quantity: 2 })],
+      universalMinimum: UNIVERSAL_ON,
+    });
+
+    expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeDisabled();
+  });
+
+  it('names the product and the shortfall in the client’s words', () => {
+    renderCart({
+      cartItems: [makeCartItem({ quantity: 2 })],
+      universalMinimum: UNIVERSAL_ON,
+    });
+
+    expect(screen.getByText(/BPC-157/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /This product requires a minimum order of 5 vials\. Please update your quantity to continue\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('lets checkout through once the minimum is met', () => {
+    renderCart({
+      cartItems: [makeCartItem({ quantity: 5 })],
+      universalMinimum: UNIVERSAL_ON,
+    });
+
+    expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeEnabled();
+  });
+
+  it('counts variations of one product together', () => {
+    // 3 + 2 = 5. Neither line reaches 5 alone, and the cart must still pass.
+    const variation = (id: string, name: string): ProductVariation => ({
+      id,
+      product_id: 'prod-1',
+      name,
+      quantity_mg: 10,
+      price: 900,
+      disposable_pen_price: null,
+      reusable_pen_price: null,
+      discount_price: null,
+      discount_active: false,
+      stock_quantity: 10,
+      created_at: '',
+    });
+
+    renderCart({
+      cartItems: [
+        makeCartItem({ quantity: 3, variation: variation('v10', '10mg') }),
+        makeCartItem({ quantity: 2, variation: variation('v20', '20mg') }),
+      ],
+      universalMinimum: UNIVERSAL_ON,
+    });
+
+    expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeEnabled();
+  });
+
+  it('says nothing when no minimum is in force', () => {
+    renderCart({
+      cartItems: [makeCartItem({ quantity: 1 })],
+      universalMinimum: { enabled: false, quantity: 5, unit: 'vial' as const },
+    });
+
+    expect(screen.queryByText(/minimum order of/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeEnabled();
+  });
+
+  it('enforces nothing when no minimum setting was supplied at all', () => {
+    // Cart is rendered in places that do not read site settings. Absent means
+    // "no rule", never "guess one".
+    renderCart({ cartItems: [makeCartItem({ quantity: 1 })] });
+
+    expect(screen.getByRole('button', { name: /proceed to checkout/i })).toBeEnabled();
+  });
+});
