@@ -1,12 +1,14 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import {
   DEFAULT_STOREFRONT_NOTICE,
+  NOTICE_PAGE_IDS,
   STOREFRONT_NOTICE_KEYS,
   noticeFromSettings,
   noticeToSettingRows,
   getNoticeAcknowledgementKey,
   hasAcknowledgedNotice,
   acknowledgeNotice,
+  clearVisitAcknowledgements,
   createBlankStorefrontNotice,
   fromManilaDatetimeLocal,
   toManilaDatetimeLocal,
@@ -67,6 +69,7 @@ describe('notice acknowledgements', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    clearVisitAcknowledgements();
   });
 
   it('keys an acknowledgement by notice id and published version', () => {
@@ -94,14 +97,31 @@ describe('notice acknowledgements', () => {
     expect(localStorage.length).toBe(0);
   });
 
-  it('does not persist every-visit acknowledgements', () => {
+  it('remembers every-visit acknowledgements for this page load only', () => {
     const everyVisit = { ...notice, frequency: 'every_visit' as const };
 
     acknowledgeNotice(everyVisit, localStorage, sessionStorage);
 
-    expect(hasAcknowledgedNotice(everyVisit, localStorage, sessionStorage)).toBe(false);
+    expect(hasAcknowledgedNotice(everyVisit, localStorage, sessionStorage)).toBe(true);
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it('does not re-show a different every-visit notice after one acknowledgement this visit', () => {
+    const first = { ...notice, frequency: 'every_visit' as const, id: 'notice-a', version: 1 };
+    const otherPage = { ...notice, frequency: 'every_visit' as const, id: 'notice-b', version: 1 };
+
+    acknowledgeNotice(first, localStorage, sessionStorage);
+
+    expect(hasAcknowledgedNotice(otherPage, localStorage, sessionStorage)).toBe(true);
+  });
+
+  it('forgets every-visit acknowledgements after a full reload', () => {
+    const everyVisit = { ...notice, frequency: 'every_visit' as const };
+    acknowledgeNotice(everyVisit, localStorage, sessionStorage);
+    clearVisitAcknowledgements();
+
+    expect(hasAcknowledgedNotice(everyVisit, localStorage, sessionStorage)).toBe(false);
   });
 });
 
@@ -230,5 +250,14 @@ describe('noticeToSettingRows', () => {
       policyLines: 'A\nB',
     };
     expect(noticeFromSettings(noticeToSettingRows(edited))).toEqual(edited);
+  });
+});
+
+describe('NOTICE_PAGE_IDS', () => {
+  it('covers the Customer Reviews page like every other public page', () => {
+    // PublicNoticePage takes a NoticePageId, so a public route without one
+    // cannot be wrapped -- reviews would be the only page an admin could not
+    // target with a notice.
+    expect([...NOTICE_PAGE_IDS]).toContain('reviews');
   });
 });

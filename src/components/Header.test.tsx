@@ -47,9 +47,25 @@ describe('Header — feature visibility', () => {
 
     await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
 
-    for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
+    for (const label of [
+      'Products',
+      'Calculator',
+      'Protocols',
+      'Track Order',
+      'FAQ',
+      'Lab Reports',
+      'Customer Reviews',
+    ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
+  });
+
+  it('drops Customer Reviews from the side nav when the feature is off', () => {
+    // Reviews are hidden, not deleted: get_approved_reviews still holds every
+    // approved row, and switching the feature back restores them.
+    renderHeader({ features: { reviews: false } });
+
+    expect(screen.queryByText('Customer Reviews')).not.toBeInTheDocument();
   });
 
   it('drops a disabled feature from the side nav', async () => {
@@ -78,7 +94,7 @@ describe('Header — feature visibility', () => {
     expect(screen.getByRole('button', { name: 'View cart' })).toBeInTheDocument();
   });
 
-  it('hides every entry when all six features are off', async () => {
+  it('hides every entry when all seven features are off', async () => {
     const user = userEvent.setup();
     renderHeader({
       features: {
@@ -88,12 +104,21 @@ describe('Header — feature visibility', () => {
         track_order: false,
         faq: false,
         lab_reports: false,
+        reviews: false,
       },
     });
 
     await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
 
-    for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
+    for (const label of [
+      'Products',
+      'Calculator',
+      'Protocols',
+      'Track Order',
+      'FAQ',
+      'Lab Reports',
+      'Customer Reviews',
+    ]) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
     // The drawer itself still opens; only the feature entries are gone.
