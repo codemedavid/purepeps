@@ -2,9 +2,10 @@
 
 **Source plan**: produced inline via `/ecc:plan` (no `*.plan.md` artifact).
 **Branch**: `feat/pay-now-cod-payment-options`
-**Status**: core rule, storage, admin control and cart enforcement complete.
-The per-product admin fields and the product-page notice are **not** built —
-see "Known gaps".
+**Status**: complete. All six journeys served — the rule, its storage, the
+universal admin control, the per-product fields, the customer-facing notice,
+cart enforcement and admin-order validation. Not yet applied to a live
+database — see "Known gaps".
 
 | Part | Scope | Checkpoints |
 |---|---|---|
@@ -13,6 +14,10 @@ see "Known gaps".
 | 3 | Settings hook | `e7c1546` RED, `b2107f8` GREEN |
 | 4 | Admin panel | `2e8ebb6` RED, `7346601` GREEN |
 | 5 | Cart enforcement | `1d47bf5` RED, `9b1c81d` GREEN |
+| 6 | Product card + detail notice | `aefdb4a` RED, `2a15f4d` GREEN |
+| 7 | Per-product admin fields | `82a430b` RED, `f1d7016` GREEN |
+| 8 | useCart product-level floor | `23d3cad` RED, `222d447` GREEN |
+| 9 | Admin-order validation | `9196007` RED, `e163b37` GREEN, `bf4788e` GREEN |
 
 ## The decision that shapes everything
 
@@ -41,7 +46,7 @@ across variations (matches quote)" over keeping the current override behaviour.
    without losing the product's data.
 3. As an admin, I want to choose the unit — vial, piece, box or kit — so the
    customer-facing wording matches what I actually sell.
-4. As a shopper, I want to see the minimum before I add to cart.  *(not built)*
+4. As a shopper, I want to see the minimum before I add to cart.
 5. As a shopper, I want the cart to stop me and say what to fix.
 6. As a shopper buying several strengths of one product, I want my combined
    quantity to count toward the minimum.
@@ -151,7 +156,7 @@ disabled.
 
 ## Coverage and known gaps
 
-**Suite**: `npx vitest run` → `Tests 1627 passed (1627)`, zero failing tests.
+**Suite**: `npx vitest run` → `Tests 1657 passed (1657)`, zero failing tests.
 The 2 failing test **files** are the long-standing orphans
 (`checkoutPrefill.test.ts`, `useReturningCustomer.test.ts`) that import
 implementations which have never existed in git history.
@@ -159,33 +164,50 @@ implementations which have never existed in git history.
 **Typecheck**: `npx tsc --noEmit -p tsconfig.app.json` → **57** errors, one
 FEWER than the 58-error pre-change baseline. None in any file touched here.
 
-### Not built
+### Closed since the first report
 
-1. **Per-product admin fields.** `AdminDashboard`'s product form still edits
-   only `minimum_order_quantity`. The other five columns —
-   `use_universal_minimum`, `minimum_order_unit`, `minimum_order_enabled`,
-   `minimum_order_message`, `enforce_minimum_per_variation` — exist in the
-   database and are honoured by `resolveMinimumOrder`, but **cannot yet be set
-   from the UI**. Until they are, every product follows the universal setting
-   (the migration default), which is the intended starting state but not the
-   whole feature.
+All four gaps named in the previous revision are now closed.
 
-2. **The product-page notice.** Journey 4 is unserved: `minimumOrderNotice()`
-   is written and tested but rendered nowhere. The minimum is currently
-   discovered at the cart rather than on the product card or detail view, which
-   is later than the client asked for.
+**Part 6 — the customer-facing notice (`aefdb4a` → `2a15f4d`).** The minimum is
+stated on the product card and in the product details, and the detail view's
+quantity selector opens AT the minimum. The two rules coexist, so the selector
+floor takes the LARGER of the old per-line `resolveMinOrder` and the new
+product-level rule — that never lowers a minimum an admin already relies on.
 
-3. **`useCart` still clamps per line.** `resolveMinOrder` in
-   `src/constants/order.ts` and its call sites in `useCart.ts` are untouched, so
-   adding a product still raises a new line to the OLD per-line minimum. That is
-   harmless today — it only ever raises a quantity — but it means the "quantity
-   selector begins at the minimum" behaviour follows the old rule while the cart
-   validates by the new one. Reconciling them means rewriting the `useCart`
-   tests currently pinned to the override behaviour.
+**Part 7 — per-product admin fields (`82a430b` → `f1d7016`).** All six controls,
+extracted as `ProductMinimumOrderFields` rather than more markup inside a
+1700-line dashboard. Controls hide rather than disable, and nothing is cleared
+when switched off, so turning a rule back on restores the stored number.
 
-4. **Admin-created orders** are not covered. The client asked that they follow
-   the minimum too; `OrdersManager` and the group-buy order editor do not call
-   `validateCartMinimums`.
+Two real defects were fixed here, both found by the reproducer:
+
+- `pickProductDbFields` is an **allowlist** and the only route into the
+  `products` table. The five new columns were missing from it, so every save
+  would have silently dropped them with no error to notice.
+- The quantity input clamped to `>= 1` on every keystroke, making the field
+  impossible to retype: clearing it snapped back to `1`, so typing `8` produced
+  `18`. It now keeps a local draft while still pushing a clamped number up.
+
+**Part 8 — `useCart` (`23d3cad` → `222d447`).** A new line now opens at the
+product-level minimum, but only where a single line can be judged on its own: a
+product with no variation, or one enforcing per variation. A combining
+variation line is left alone, because clamping it would force the whole minimum
+onto whichever strength was picked first and make a 4+3+3 split impossible to
+enter. `useUniversalMinimum` also had to move above `useCart` in `App` — it was
+being read one line before it was declared, which would have thrown at runtime.
+
+**Part 9 — admin orders (`9196007` → `e163b37` → `bf4788e`).**
+`validateOrderLineMinimums` projects `OrderLineItem` rows onto cart lines and
+delegates to `validateCartMinimums`, so there is **one** implementation of the
+rule rather than two that would eventually disagree. A line whose product has
+left the catalogue is skipped rather than flagged.
+
+The editor shows a **warning, not a block**. The client asked admin orders to
+follow the minimum, but an admin editing an order *down* — cancelling ligwak
+vials, correcting an overcount — has a legitimate reason to land under it, and
+refusing the save would trap them mid-correction. The rule is made visible; the
+judgement stays with the admin. **Flagged for the client**: if they want a hard
+block on admin orders, that is a one-line change.
 
 **Not applied to a live database.** As with reviews, every SQL guarantee is
 asserted against the migration text.
