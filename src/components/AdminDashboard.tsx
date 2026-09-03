@@ -30,6 +30,7 @@ import ProtocolManager from './ProtocolManager';
 import GroupBuyManager from './GroupBuyManager';
 import LigwakManager from './ligwak/LigwakManager';
 import ReviewsAdminManager from './reviews/ReviewsAdminManager';
+import UniversalMinimumOrderPanel from './UniversalMinimumOrderPanel';
 // GuideManager removed (Peptalk functionality disabled)
 
 const AdminDashboard: React.FC = () => {
@@ -938,6 +939,13 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 md:py-4">
+            {/* Pinned above the catalogue: the client asked for this control at
+                the very top of Product Management, because it governs every
+                product rather than any one of them. */}
+            <div className="mb-4">
+              <UniversalMinimumOrderPanel />
+            </div>
+
             {/* Selection Info Banner */}
             {selectedProducts.size > 0 && (
               <div className="mb-3 bg-gray-50 border border-gray-200 rounded-lg p-2 md:p-3 flex items-center justify-between">
