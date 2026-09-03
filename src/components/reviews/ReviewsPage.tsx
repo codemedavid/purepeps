@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { MessageSquareQuote } from 'lucide-react';
+import { MessageSquareQuote, PenLine } from 'lucide-react';
 import { useProductReviews } from '../../hooks/useProductReviews';
 import { REVIEW_DISCLAIMER } from '../../utils/reviews';
 import { BOTTOM_NAV_CLEARANCE } from '../../utils/storefrontNavigation';
 import ReviewCard from './ReviewCard';
+import ReviewForm from './ReviewForm';
 import ReviewSummary from './ReviewSummary';
 
 /** Sentinel for the unfiltered option, so "" never doubles as a product name. */
@@ -23,6 +24,7 @@ const ALL_PRODUCTS = '__all__';
 export default function ReviewsPage() {
   const { reviews, loading, error } = useProductReviews();
   const [productFilter, setProductFilter] = useState<string>(ALL_PRODUCTS);
+  const [writing, setWriting] = useState(false);
 
   // Distinct product names, so a well-reviewed product appears once rather than
   // once per review.
@@ -55,6 +57,26 @@ export default function ReviewsPage() {
             their real name and contact details are never published.
           </p>
         </header>
+
+        {/* The form is opt-in. A shopper arrives to READ reviews, and leading
+            with a form makes the page look like a task rather than the social
+            proof it exists to show. The invitation is NOT conditional on
+            already having reviews — an empty page is when a first one counts
+            for most. */}
+        <div className="mt-8">
+          {writing ? (
+            <ReviewForm />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setWriting(true)}
+              className="mx-auto flex items-center gap-2 rounded-full border border-sakura-primary px-5 py-2 text-sm font-semibold text-sakura-deep transition-colors hover:bg-sakura-blush-soft"
+            >
+              <PenLine width={15} height={15} aria-hidden="true" />
+              Write a review
+            </button>
+          )}
+        </div>
 
         {/* Held back until the read settles: ReviewSummary's empty state says
             "No reviews yet", which is a claim about the shop that must not be
