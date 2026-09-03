@@ -19,11 +19,8 @@ vi.mock('../hooks/useCart', () => ({
   }),
 }));
 
-// Mock Header and Footer to simplify
-vi.mock('./Header', () => ({
-  default: () => <div data-testid="header">Header</div>,
-}));
-
+// Footer is stubbed to keep these tests focused; Header is deliberately real so
+// the page's mobile-navigation contract is exercised rather than mocked away.
 vi.mock('./Footer', () => ({
   default: () => <div data-testid="footer">Footer</div>,
 }));
@@ -221,6 +218,27 @@ describe('ProtocolGuide', () => {
 
       await userEvent.selectOptions(select, 'all');
       expect(screen.getByText('3 protocol(s) found')).toBeInTheDocument();
+    });
+  });
+
+  // --- Mobile Navigation ---
+
+  /**
+   * Mobile navigation on this page belongs to the bottom bar that its route
+   * wrapper renders (see `PublicNoticePage` in App.tsx). The header must not add
+   * a second one, or a phone gets two competing navigations on one screen.
+   */
+  describe('mobile navigation', () => {
+    it('leaves mobile navigation to the bottom bar instead of a burger drawer', () => {
+      render(<ProtocolGuide />);
+
+      expect(screen.queryByRole('button', { name: 'Toggle menu' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the header cart to desktop widths', () => {
+      render(<ProtocolGuide />);
+
+      expect(screen.getByRole('button', { name: 'View cart' })).toHaveClass('hidden', 'md:block');
     });
   });
 });
