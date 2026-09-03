@@ -209,3 +209,71 @@ export function minimumOrderShortfall(rule: MinimumOrderRule): string {
     `${pluralize(rule.unit, rule.quantity)}. Please update your quantity to continue.`
   );
 }
+
+export interface MinimumOrderViolation {
+  productId: string;
+  productName: string;
+  /** Set only when the product enforces its minimum per variation. */
+  variationId?: string;
+  variationName?: string;
+  /** Units required. */
+  required: number;
+  /** Units actually in the cart. */
+  actual: number;
+  unit: MinimumOrderUnit;
+  /** Ready to show; the admin's own wording when they supplied one. */
+  message: string;
+}
+
+/**
+ * Every minimum a cart fails, ready to render.
+ *
+ * Grouped by PRODUCT rather than by line. Three short lines of the same product
+ * are one thing for a shopper to fix, and repeating the same banner per line
+ * reads as three separate problems. When a product enforces per variation, each
+ * failing variation is reported separately — there the lines genuinely are
+ * independent problems.
+ *
+ * An empty result means the cart may proceed to checkout.
+ */
+export function validateCartMinimums(
+  items: readonly CartItem[],
+  universal: UniversalMinimumOrder,
+): MinimumOrderViolation[] {
+  const violations: MinimumOrderViolation[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    const rule = resolveMinimumOrder(item.product, universal);
+    if (!rule.enforced) continue;
+
+    // One key per thing being judged: the product when combining, the
+    // variation when not. Deduplicating on it is what collapses several short
+    // lines of one product into a single violation.
+    const key = rule.combineVariations
+      ? item.product.id
+      : `${item.product.id}::${item.variation?.id ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const actual = rule.combineVariations
+      ? combinedQuantityFor(items, item.product.id)
+      : combinedQuantityFor(items, item.product.id, item.variation?.id);
+
+    if (meetsMinimum(rule, actual)) continue;
+
+    violations.push({
+      productId: item.product.id,
+      productName: item.product.name,
+      ...(rule.combineVariations
+        ? {}
+        : { variationId: item.variation?.id, variationName: item.variation?.name }),
+      required: rule.quantity,
+      actual,
+      unit: rule.unit,
+      message: rule.message ?? minimumOrderShortfall(rule),
+    });
+  }
+
+  return violations;
+}
