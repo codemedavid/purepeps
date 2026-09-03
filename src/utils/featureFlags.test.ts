@@ -11,7 +11,7 @@ import {
 } from './featureFlags';
 
 describe('feature definitions', () => {
-  it('covers exactly the six admin-controlled features', () => {
+  it('covers exactly the seven admin-controlled features', () => {
     expect([...FEATURE_IDS]).toEqual([
       'products',
       'calculator',
@@ -19,6 +19,7 @@ describe('feature definitions', () => {
       'track_order',
       'faq',
       'lab_reports',
+      'reviews',
     ]);
   });
 
@@ -40,6 +41,21 @@ describe('feature definitions', () => {
     expect(getFeatureDefinition('track_order').path).toBe('/track-order');
     expect(getFeatureDefinition('faq').path).toBe('/faq');
     expect(getFeatureDefinition('lab_reports').path).toBe('/coa');
+    expect(getFeatureDefinition('reviews').path).toBe('/reviews');
+  });
+
+  it('reads Customer Reviews from the key its migration already seeded', () => {
+    // 20260826000100_review_feature_flags.sql seeded feature_reviews_enabled
+    // before any code read it. Using a different key here would strand an
+    // admin's saved choice in a row nothing looks at.
+    expect(getFeatureDefinition('reviews').settingKey).toBe('feature_reviews_enabled');
+  });
+
+  it('leaves the review MEDIA switch out of the navigation features', () => {
+    // feature_review_media_enabled governs whether reviewers may attach photos.
+    // It owns no page and no nav entry, so listing it here would render a bogus
+    // navigation toggle and a route that goes nowhere.
+    expect(FEATURE_SETTING_KEYS).not.toContain('feature_review_media_enabled');
   });
 
   it('leaves Products without a dedicated route because it is the storefront itself', () => {
@@ -90,6 +106,7 @@ describe('DEFAULT_FEATURE_FLAGS', () => {
       track_order: true,
       faq: true,
       lab_reports: true,
+      reviews: true,
     });
   });
 });
@@ -99,10 +116,21 @@ describe('featureFlagsFromRows', () => {
     const flags = featureFlagsFromRows([
       { id: 'feature_faq_enabled', value: 'false' },
       { id: 'coa_page_enabled', value: 'false' },
+      { id: 'feature_reviews_enabled', value: 'false' },
     ]);
 
     expect(flags.faq).toBe(false);
     expect(flags.lab_reports).toBe(false);
+    expect(flags.reviews).toBe(false);
+  });
+
+  it('keeps reviews visible when only the media switch is off', () => {
+    // Turning photos off must not take the whole review page down with it.
+    const flags = featureFlagsFromRows([
+      { id: 'feature_review_media_enabled', value: 'false' },
+    ]);
+
+    expect(flags.reviews).toBe(true);
   });
 
   it('leaves features without a row enabled', () => {
