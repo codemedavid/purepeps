@@ -130,7 +130,7 @@ describe('useFeatureFlags — writing', () => {
     }
   });
 
-  it('leaves the other five features untouched when one is switched off', async () => {
+  it('leaves the other six features untouched when one is switched off', async () => {
     const upsert = vi.fn().mockResolvedValue({ error: null });
     mockFrom.mockImplementation(() => ({ ...readReturning([]), upsert }));
 
@@ -148,6 +148,7 @@ describe('useFeatureFlags — writing', () => {
       track_order: true,
       faq: false,
       lab_reports: true,
+      reviews: true,
     });
   });
 

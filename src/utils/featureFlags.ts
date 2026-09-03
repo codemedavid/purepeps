@@ -1,7 +1,7 @@
 /**
  * Per-feature visibility switches.
  *
- * Six storefront features can be turned on or off individually from
+ * Seven storefront features can be turned on or off individually from
  * Admin → Features. Each switch is ONE `site_settings` row, so turning a
  * feature off never touches the products, protocols, FAQs, COA reports or
  * orders behind it — flipping the switch back restores the feature intact.
@@ -22,6 +22,7 @@ export const FEATURE_IDS = [
   'track_order',
   'faq',
   'lab_reports',
+  'reviews',
 ] as const;
 
 export type FeatureId = (typeof FEATURE_IDS)[number];
@@ -90,7 +91,27 @@ export const FEATURE_DEFINITIONS: readonly FeatureDefinition[] = [
     path: '/coa',
     description: 'The certificate-of-analysis / lab report page.',
   },
+  {
+    id: 'reviews',
+    settingKey: 'feature_reviews_enabled',
+    label: 'Customer Reviews',
+    path: '/reviews',
+    description:
+      'The customer review page and its submission form. Turning this off hides ' +
+      'published reviews without deleting them.',
+  },
 ];
+
+/**
+ * Whether reviewers may attach photos.
+ *
+ * Deliberately NOT a `FeatureId`. The ids above each own a navigation entry and
+ * a route; this one owns neither — it narrows what the review form accepts, and
+ * `submit_product_review` enforces it server-side regardless of the client. It
+ * is read on its own so switching photos off cannot take the review page down
+ * with it.
+ */
+export const REVIEW_MEDIA_SETTING_KEY = 'feature_review_media_enabled';
 
 export const FEATURE_SETTING_KEYS: readonly string[] = FEATURE_DEFINITIONS.map(
   (feature) => feature.settingKey,

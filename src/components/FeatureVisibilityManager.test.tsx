@@ -32,8 +32,16 @@ describe('FeatureVisibilityManager', () => {
 
     render(<FeatureVisibilityManager />);
 
-    expect(screen.getAllByRole('switch')).toHaveLength(6);
-    for (const label of ['Products', 'Calculator', 'Protocols', 'Track Order', 'FAQ', 'Lab Reports']) {
+    expect(screen.getAllByRole('switch')).toHaveLength(7);
+    for (const label of [
+      'Products',
+      'Calculator',
+      'Protocols',
+      'Track Order',
+      'FAQ',
+      'Lab Reports',
+      'Customer Reviews',
+    ]) {
       expect(screen.getByRole('switch', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     }
   });
