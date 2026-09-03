@@ -81,7 +81,9 @@ describe('ReviewCard', () => {
       />,
     );
 
-    const photos = screen.getAllByRole('img');
+    // Scoped by accessible name: StarRating is itself a role="img" composite
+    // graphic, so a bare getAllByRole('img') would count the stars as a photo.
+    const photos = screen.getAllByRole('img', { name: /review$/i });
     expect(photos).toHaveLength(2);
     expect(photos[0]).toHaveAttribute('src', 'https://img.example/a.jpg');
     expect(photos[0]).toHaveAccessibleName(/Sakura22/);
