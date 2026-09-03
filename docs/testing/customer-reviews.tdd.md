@@ -3,13 +3,14 @@
 **Source plan**: produced inline via `/ecc:plan` (no `*.plan.md` artifact was written).
 **Branch**: `feat/pay-now-cod-payment-options`
 **Status**: data layer complete (Part 1). Public **read** surface complete
-(Part 2). The submission form and the admin moderation queue are **not** built
-— see "Known gaps".
+(Part 2). Admin **moderation queue** complete (Part 3). The customer-facing
+**submission form** is the only piece outstanding — see "Known gaps".
 
 | Part | Scope | Checkpoints |
 |---|---|---|
 | 1 | Table, RLS, three RPCs, pure client logic | `09f0fa4` RED, `5ecca26` GREEN, `092ef68` RED, `d4d3c14` GREEN |
 | 2 | Feature flag, presentation, read hook, page, route + nav | `db3efe9` RED, `5674477` GREEN, `a574d17` RED, `291c2c7` GREEN, `4beea67` RED, `d3973ad` GREEN, `0241e62` RED, `4bfae96` GREEN, `fb65f51` RED, `f0a2956` GREEN |
+| 3 | Admin moderation hook, queue screen, dashboard wiring | `57016fb` RED, `432ff38` GREEN, `bba0e6f` RED, `9a79e23` GREEN |
 
 ---
 
@@ -292,12 +293,9 @@ in count and location to the pre-change baseline**; none in any file touched
 here. (A bare `tsc --noEmit` exits 0 while checking zero files — the `-p` flag
 is required.)
 
-**Still not built.** `ReviewForm` and its `useReviewSubmission` hook (journeys
-1–2), the admin moderation queue and its `useAdminReviews` hook (journeys 4–5),
-the `AdminDashboard` view, and reviews on `ProductDetailModal`. Until the admin
-queue exists, submitted reviews can only be approved by editing
-`product_reviews` directly in Supabase — so shipping the form before the queue
-would strand every review at `pending`.
+**Still not built at the time of Part 2.** The admin queue landed in Part 3.
+`ReviewForm` / `useReviewSubmission` (journeys 1–2) and reviews on
+`ProductDetailModal` remain outstanding.
 
 **Business rule confirmed with the client, not yet exercised against live data.**
 `get_reviewable_order` requires `order_status = 'delivered'`: a customer cannot
@@ -319,3 +317,88 @@ the defensible reading.
 - The working tree carried ~34 modified files from earlier sessions throughout
   this run. Every commit here was staged by explicit path; none of that work was
   swept into these checkpoints.
+
+
+---
+
+# Part 3 — Admin moderation queue
+
+Delivers journeys **4** (admin privately verifies identity against the order)
+and **5** (approve, reject, hide, delete, reply). Journeys 1–2 — the customer's
+submission form — remain the only outstanding piece of the feature.
+
+## Task report
+
+### Task 1 — `useAdminReviews` (`57016fb` RED → `432ff38` GREEN)
+
+- **RED**: `npx vitest run src/hooks/useAdminReviews.test.ts` →
+  `Failed to resolve import "./useAdminReviews"`.
+- **GREEN**: same command → `Tests 10 passed (10)`.
+
+This hook reads `product_reviews` **directly**, the opposite of
+`useProductReviews`. The asymmetry is the design: RLS confines the table to
+`public.is_admin()`, there is no moderation RPC, and this is the one surface
+where reviewer identity is *meant* to be visible.
+
+`moderated_at` and `moderated_by` are stamped inside a single `patch()` helper
+rather than at each call site, so a moderation action added later cannot ship
+without them. The table has no `updated_at` trigger, so that is maintained here
+too. A failed `auth.getUser()` degrades the stamp to `null` instead of blocking
+moderation — being unable to name the admin is not a reason to leave a review
+stuck in the queue.
+
+### Task 2 — `ReviewsAdminManager` + dashboard wiring (`bba0e6f` RED → `9a79e23` GREEN)
+
+- **RED**: `npx vitest run src/components/reviews/ReviewsAdminManager.test.tsx` →
+  `Failed to resolve import "./ReviewsAdminManager"`.
+- **GREEN**: same command → `Tests 15 passed (15)`, passing on the first run.
+
+Opens on Pending, the only tab holding work. Reviewer name, email, phone and
+order number sit in a bordered block labelled **"Verification · not shown
+publicly"**, a few lines below the public pseudonym the same card displays —
+an admin who cannot separate the two at a glance is one paste away from putting
+a customer's real name into a public reply. Delete is confirmation-gated and its
+copy points at Hide as the reversible alternative, because there is no undo and
+no audit table for reviews.
+
+## Test specification
+
+| # | What is guaranteed | Test | Type | Result | Evidence |
+|---|--------------------|------|------|--------|----------|
+| 40 | The admin queue loads every review newest-first with identity intact | `src/hooks/useAdminReviews.test.ts` — "loads every review, newest first" | unit | PASS | `npx vitest run src/hooks/useAdminReviews.test.ts` |
+| 41 | **Moderating stamps who and when, not just the new status** | same — "stamps who moderated and when", "carries the same stamp through reject and hide" | unit | PASS | same |
+| 42 | A lost admin session degrades the stamp to null rather than blocking moderation | same — "still moderates when the admin identity cannot be read" | unit | PASS | same |
+| 43 | **Replying never writes status**, so answering a pending review cannot publish it | same — "records a reply without changing the status" | unit | PASS | same |
+| 44 | An all-whitespace reply clears to null, not `''` | same — "clears a reply back to null" | unit | PASS | same |
+| 45 | A failed write throws rather than reporting success | same — "propagates a write failure" | unit | PASS | same |
+| 46 | The queue refetches after a write so it cannot drift from the database | same — "refetches after a successful write" | unit | PASS | same |
+| 47 | The screen opens on Pending and counts what is waiting | `src/components/reviews/ReviewsAdminManager.test.tsx` — "opens on Pending", "counts what is waiting" | unit | PASS | `npx vitest run src/components/reviews/ReviewsAdminManager.test.tsx` |
+| 48 | **Reviewer identity is labelled "not shown publicly"** beside the public pseudonym | same — "marks that identity as private", "shows the public pseudonym alongside" | unit | PASS | same |
+| 49 | Approve, reject and hide each dispatch the right status | same — "approves", "rejects", "hides a review that is already public" | unit | PASS | same |
+| 50 | **Delete does not call through when the admin backs out of the confirm** | same — "confirms before deleting" | unit | PASS | same |
+| 51 | A failed action surfaces instead of looking like it worked | same — "surfaces a failed action" | unit | PASS | same |
+| 52 | Loading, failed and empty are three distinct states in the queue too | same — "says the queue is clear", "distinguishes a failed load" | unit | PASS | same |
+
+## Coverage and known gaps
+
+**Suite**: `npx vitest run` → `Test Files 2 failed | 123 passed (125)`,
+`Tests 1525 passed (1525)`. 25 new tests over Part 2's 1500; zero failing tests.
+The two failing **files** are the long-standing orphans described above.
+
+**Typecheck**: `npx tsc --noEmit -p tsconfig.app.json` → 58 errors, unchanged in
+count from the pre-change baseline. The three reported against `AdminDashboard`
+are the same pre-existing three, shifted by the inserted view.
+
+**A methodology note worth keeping.** Two intermediate full-suite runs reported
+5 and then 23 failing tests across `Checkout`, `OrderItemsEditor` and others.
+Both were artefacts of **concurrent `vitest run` invocations competing for CPU**
+— several runs had been launched in the background and left overlapping. Each
+named file passed in isolation, the failure set differed between runs, and a
+single clean run with no other vitest process reported `1525 passed (1525)`.
+When judging this suite, run it **once, alone**; overlapping runs manufacture
+timeouts that read convincingly like regressions.
+
+**Still not built.** `ReviewForm` and its `useReviewSubmission` hook (journeys
+1–2), and approved reviews surfaced on `ProductDetailModal`. The moderation
+queue now exists, so the form is safe to build next: submissions will land in
+Pending and have somewhere to be approved from.
