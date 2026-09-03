@@ -31,6 +31,7 @@ export const NOTICE_PAGE_IDS = [
   'calculator',
   'track-order',
   'protocols',
+  'reviews',
 ] as const;
 export type NoticePageId = (typeof NOTICE_PAGE_IDS)[number];
 
@@ -137,6 +138,13 @@ export const DEFAULT_STOREFRONT_NOTICE: StorefrontNotice = {
 
 type VersionedNotice = Pick<StorefrontNotice, 'id' | 'version' | 'frequency'>;
 
+/** Survives SPA remounts in this tab, and is wiped by a full page reload. */
+const VISIT_ACK_ALL = 'storefront-notice:every-visit';
+const visitAcknowledgements = new Set<string>();
+
+export const isStorefrontPageId = (pageId: NoticePageId): boolean =>
+  pageId.startsWith('storefront.');
+
 export const getNoticeAcknowledgementKey = (notice: Pick<VersionedNotice, 'id' | 'version'>): string =>
   `storefront-notice:${notice.id}:v${notice.version}`;
 
@@ -148,7 +156,7 @@ export const hasAcknowledgedNotice = (
   const key = getNoticeAcknowledgementKey(notice);
   if (notice.frequency === 'once') return local.getItem(key) === 'acknowledged';
   if (notice.frequency === 'session') return session.getItem(key) === 'acknowledged';
-  return false;
+  return visitAcknowledgements.has(key) || visitAcknowledgements.has(VISIT_ACK_ALL);
 };
 
 export const acknowledgeNotice = (
@@ -157,8 +165,15 @@ export const acknowledgeNotice = (
   session: Pick<Storage, 'setItem'>,
 ): void => {
   const key = getNoticeAcknowledgementKey(notice);
+  visitAcknowledgements.add(key);
+  visitAcknowledgements.add(VISIT_ACK_ALL);
   if (notice.frequency === 'once') local.setItem(key, 'acknowledged');
   if (notice.frequency === 'session') session.setItem(key, 'acknowledged');
+};
+
+/** Test-only: simulates a full page reload by dropping in-memory visit acks. */
+export const clearVisitAcknowledgements = (): void => {
+  visitAcknowledgements.clear();
 };
 
 export const createBlankStorefrontNotice = (): StorefrontNotice => ({

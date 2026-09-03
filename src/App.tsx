@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useState, useEffect, useRef, type ReactNode } from 'react';
-import { BrowserRouter as Router, Routes, Route, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { usePostHog } from 'posthog-js/react';
 import { useCart } from './hooks/useCart';
 import Header from './components/Header';
@@ -14,12 +14,16 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import StorefrontNoticeGate from './components/StorefrontNoticeGate';
 import StorefrontBottomNav, { type MenuDestination, type StorefrontView } from './components/StorefrontBottomNav';
+import PublicPageBottomNav from './components/PublicPageBottomNav';
 import { AccessProvider, useAccessContext } from './contexts/AccessContext';
+import { FeatureFlagsProvider, useFeatureFlagsContext } from './contexts/FeatureFlagsContext';
+import FeatureRoute from './components/FeatureRoute';
 import type { NoticePageId } from './utils/storefrontNotice';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
 import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
 import { isViewOnlyActive } from './utils/groupBuySchedule';
+import { BOTTOM_NAV_CLEARANCE, STOREFRONT_PATH, readStorefrontRequest } from './utils/storefrontNavigation';
 
 /** How often the storefront re-checks whether a pending view-only gate has lifted. */
 const VIEW_ONLY_TICK_MS = 30_000;
@@ -31,9 +35,9 @@ const FAQ = lazy(() => import('./components/FAQ'));
 const PeptideCalculator = lazy(() => import('./components/PeptideCalculator'));
 const OrderTracking = lazy(() => import('./components/OrderTracking'));
 const ProtocolGuide = lazy(() => import('./components/ProtocolGuide'));
+const ReviewsPage = lazy(() => import('./components/reviews/ReviewsPage'));
 
 import { useMenu } from './hooks/useMenu';
-// import { useCOAPageSetting } from './hooks/useCOAPageSetting';
 
 function MainApp() {
     const { menuItems, loading: menuLoading } = useMenu();
@@ -43,6 +47,18 @@ function MainApp() {
     const cart = useCart({ email: access.email, products: menuItems });
     const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
+    // The Lab Reports entry only belongs in the bottom nav while the page it
+    // points at is switched on. Read through the same flags that guard the
+    // route, so the nav can never offer a destination FeatureRoute redirects.
+    const { flags: featureFlags } = useFeatureFlagsContext();
+
+    // A standalone public page hands navigation back by asking for a storefront
+    // view (its bottom nav's Home / Shop / Cart). MainApp mounts fresh on that
+    // route change, so the request seeds the initial view rather than switching
+    // it after a frame of the default one.
+    const navigate = useNavigate();
+    const location = useLocation();
+    const storefrontRequest = readStorefrontRequest(location.state);
 
     // Single access gate for the whole storefront: a category is orderable when it
     // is free (open to everyone) OR the verified member's tier unlocks it. Threaded
@@ -65,11 +81,23 @@ function MainApp() {
     // the authoritative gate and the UI corrects once the RPC resolves.
     const isBatchOpen = groupBuy.loading || groupBuy.isBatchOpen;
     const [now, setNow] = useState(() => new Date());
-    const [currentView, setCurrentView] = useState<StorefrontView>('menu');
-    const [menuDestination, setMenuDestination] = useState<MenuDestination>('home');
-    const [shopScrollRequest, setShopScrollRequest] = useState(0);
+    const [currentView, setCurrentView] = useState<StorefrontView>(
+        storefrontRequest === 'cart' ? 'cart' : 'menu',
+    );
+    const [menuDestination, setMenuDestination] = useState<MenuDestination>(
+        storefrontRequest === 'shop' ? 'shop' : 'home',
+    );
+    const [shopScrollRequest, setShopScrollRequest] = useState(storefrontRequest === 'shop' ? 1 : 0);
     const completedShopScrollRequest = useRef(0);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+    // Drop the request from history once it has seeded the view, so reloading —
+    // or stepping Back into this entry — does not reopen a view the shopper has
+    // since navigated away from.
+    useEffect(() => {
+        if (!storefrontRequest) return;
+        navigate(STOREFRONT_PATH, { replace: true, state: null });
+    }, [storefrontRequest, navigate]);
 
     const handleViewChange = (view: StorefrontView) => {
         // Checkout needs access — but a cart of only free items can check out
@@ -90,6 +118,13 @@ function MainApp() {
         setMenuDestination('shop');
         setCurrentView('menu');
         setShopScrollRequest((request) => request + 1);
+    };
+
+    // The hero's catalog CTA scrolls to the products itself, so this only moves the
+    // bottom navigation to Shop. It deliberately skips shopScrollRequest, whose
+    // anchor sits above the hero and would pull the page back up.
+    const handleBrowseCatalog = () => {
+        setMenuDestination('shop');
     };
 
     const handleReturnToMenu = () => {
@@ -157,13 +192,11 @@ function MainApp() {
     const availableCartItems = partitionCartAvailability(cart.cartItems, groupBuy.items).available;
 
     return (
-        <div className="min-h-screen bg-white font-inter flex flex-col pb-[calc(5.75rem+env(safe-area-inset-bottom))] md:pb-0">
-            {!access.checking && (
-                <StorefrontNoticeGate
-                    pageId={`storefront.${currentView}` as NoticePageId}
-                    shopperType={access.isVerified ? 'verified_member' : 'visitor'}
-                />
-            )}
+        <div className={`min-h-screen bg-white font-inter flex flex-col ${BOTTOM_NAV_CLEARANCE}`}>
+            <StorefrontNoticeGate
+                pageId={`storefront.${currentView}` as NoticePageId}
+                shopperType={access.isVerified ? 'verified_member' : 'visitor'}
+            />
 
             <Header
                 cartItemsCount={cart.getTotalItems()}
@@ -199,7 +232,7 @@ function MainApp() {
                         canAccessCategory={canAccessCategory}
                         tierName={access.tierName}
                         onGetAccess={() => handleViewChange('access')}
-                        onShopAll={handleShop}
+                        onBrowseCatalog={handleBrowseCatalog}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
                         isViewOnly={viewOnly}
@@ -264,6 +297,9 @@ function MainApp() {
                 activeView={currentView}
                 menuDestination={menuDestination}
                 cartItemCount={cart.getTotalItems()}
+                showLabReports={featureFlags.lab_reports}
+                showOrders={featureFlags.track_order}
+                showGuides={featureFlags.protocols}
                 onHome={handleHome}
                 onShop={handleShop}
                 onCart={() => handleViewChange('cart')}
@@ -300,37 +336,37 @@ function PublicNoticePage({ pageId, children }: { pageId: NoticePageId; children
     const access = useAccessContext();
     return (
         <>
-            {!access.checking && (
-                <StorefrontNoticeGate
-                    pageId={pageId}
-                    shopperType={access.isVerified ? 'verified_member' : 'visitor'}
-                />
-            )}
+            <StorefrontNoticeGate
+                pageId={pageId}
+                shopperType={access.isVerified ? 'verified_member' : 'visitor'}
+            />
             {children}
+            <PublicPageBottomNav />
         </>
     );
 }
 
 function App() {
-    //   const { coaPageEnabled } = useCOAPageSetting();
-
     return (
         <Router>
             <PostHogPageviewTracker />
             <ErrorBoundary>
+              <FeatureFlagsProvider>
                 <Suspense fallback={<LoadingSpinner />}>
                     <Routes>
                         <Route element={<PublicAccessLayout />}>
                             <Route path="/" element={<MainApp />} />
-                            <Route path="/coa" element={<PublicNoticePage pageId="coa"><COA /></PublicNoticePage>} />
-                            <Route path="/faq" element={<PublicNoticePage pageId="faq"><FAQ /></PublicNoticePage>} />
-                            <Route path="/calculator" element={<PublicNoticePage pageId="calculator"><PeptideCalculator /></PublicNoticePage>} />
-                            <Route path="/track-order" element={<PublicNoticePage pageId="track-order"><OrderTracking /></PublicNoticePage>} />
-                            <Route path="/protocols" element={<PublicNoticePage pageId="protocols"><ProtocolGuide /></PublicNoticePage>} />
+                            <Route path="/coa" element={<FeatureRoute feature="lab_reports"><PublicNoticePage pageId="coa"><COA /></PublicNoticePage></FeatureRoute>} />
+                            <Route path="/faq" element={<FeatureRoute feature="faq"><PublicNoticePage pageId="faq"><FAQ /></PublicNoticePage></FeatureRoute>} />
+                            <Route path="/calculator" element={<FeatureRoute feature="calculator"><PublicNoticePage pageId="calculator"><PeptideCalculator /></PublicNoticePage></FeatureRoute>} />
+                            <Route path="/track-order" element={<FeatureRoute feature="track_order"><PublicNoticePage pageId="track-order"><OrderTracking /></PublicNoticePage></FeatureRoute>} />
+                            <Route path="/protocols" element={<FeatureRoute feature="protocols"><PublicNoticePage pageId="protocols"><ProtocolGuide /></PublicNoticePage></FeatureRoute>} />
+                            <Route path="/reviews" element={<FeatureRoute feature="reviews"><PublicNoticePage pageId="reviews"><ReviewsPage /></PublicNoticePage></FeatureRoute>} />
                         </Route>
                         <Route path="/admin" element={<AdminDashboard />} />
                     </Routes>
                 </Suspense>
+              </FeatureFlagsProvider>
             </ErrorBoundary>
         </Router>
     );

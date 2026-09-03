@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, Lock, Check } from 'lucide-react';
+import { ShoppingCart, Menu, X, FlaskConical, HelpCircle, Truck, Calculator, Shield, Lock, Check, Star } from 'lucide-react';
 import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
 import type { FeatureFlags, FeatureId } from '../utils/featureFlags';
 
@@ -26,6 +26,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { feature: 'track_order', label: 'Track Order', shortLabel: 'Track', href: '/track-order', Icon: Truck },
   { feature: 'faq', label: 'FAQ', href: '/faq', Icon: HelpCircle },
   { feature: 'lab_reports', label: 'Lab Reports', href: '/coa', Icon: Shield },
+  { feature: 'reviews', label: 'Customer Reviews', shortLabel: 'Reviews', href: '/reviews', Icon: Star },
 ];
 
 interface HeaderProps {
