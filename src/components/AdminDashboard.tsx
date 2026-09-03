@@ -4,7 +4,7 @@ import AdminLogin from './AdminLogin';
 import FeatureVisibilityManager from './FeatureVisibilityManager';
 import BlossomLogo from './BlossomLogo';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight, PackageX } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight, PackageX, Star } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -29,13 +29,14 @@ import StickerManager from './StickerManager';
 import ProtocolManager from './ProtocolManager';
 import GroupBuyManager from './GroupBuyManager';
 import LigwakManager from './ligwak/LigwakManager';
+import ReviewsAdminManager from './reviews/ReviewsAdminManager';
 // GuideManager removed (Peptalk functionality disabled)
 
 const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'ligwak' | 'tiers' | 'features'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'ligwak' | 'tiers' | 'features' | 'reviews'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [managingVariationsProductId, setManagingVariationsProductId] = useState<string | null>(null);
@@ -1325,6 +1326,29 @@ const AdminDashboard: React.FC = () => {
 
 
   // Feature Visibility View
+  // Customer Reviews View — the moderation queue. Reviews are born pending and
+  // stay invisible until they are approved here.
+  if (currentView === 'reviews') {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <button
+            onClick={() => setCurrentView('dashboard')}
+            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+          <h1 className="mb-1 text-2xl font-bold text-gray-900">Customer Reviews</h1>
+          <p className="mb-6 text-sm text-gray-500">
+            Verify the purchase behind each review, then approve, reject or hide it.
+          </p>
+          <ReviewsAdminManager />
+        </div>
+      </div>
+    );
+  }
+
   if (currentView === 'features') {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -1568,6 +1592,18 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors">Ligwak</span>
                     <span className="text-xs text-gray-500">Incomplete kits & refunds</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('reviews')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-sakura-blush flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Star className="h-5 w-5 text-sakura-primary" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-sakura-primary transition-colors">Reviews</span>
+                    <span className="text-xs text-gray-500">Approve & reply</span>
                   </div>
                 </button>
                 <button
