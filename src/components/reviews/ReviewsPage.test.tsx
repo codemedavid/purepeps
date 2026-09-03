@@ -6,6 +6,11 @@ import { REVIEW_DISCLAIMER, type PublicReview } from '../../utils/reviews';
 
 const mockUseProductReviews = vi.fn();
 
+// The form owns its own hook; the page only decides whether to show it.
+vi.mock('./ReviewForm', () => ({
+  default: () => <div data-testid="review-form" />,
+}));
+
 vi.mock('../../hooks/useProductReviews', () => ({
   useProductReviews: (...args: unknown[]) => mockUseProductReviews(...args),
   default: (...args: unknown[]) => mockUseProductReviews(...args),
@@ -143,6 +148,37 @@ describe('ReviewsPage', () => {
     const options = screen.getAllByRole('option');
     // All products, BPC-157, TB-500
     expect(options).toHaveLength(3);
+  });
+
+  it('keeps the form behind a button so reviews are what the page opens on', async () => {
+    // A shopper arrives to READ reviews. Leading with a form makes the page
+    // look like a task rather than the social proof it exists to show.
+    withReviews([row()]);
+
+    render(<ReviewsPage />);
+
+    expect(screen.queryByTestId('review-form')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument();
+  });
+
+  it('opens the form on request', async () => {
+    const user = userEvent.setup();
+    withReviews([row()]);
+
+    render(<ReviewsPage />);
+    await user.click(screen.getByRole('button', { name: /write a review/i }));
+
+    expect(screen.getByTestId('review-form')).toBeInTheDocument();
+  });
+
+  it('still offers the form when there are no reviews yet', async () => {
+    // An empty page is exactly when a first review is most valuable, so the
+    // invitation must not be conditional on already having some.
+    withReviews([]);
+
+    render(<ReviewsPage />);
+
+    expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument();
   });
 
   it('recomputes the summary from the filtered set, not the whole list', async () => {
