@@ -177,12 +177,13 @@ describe('Cart — minimum order', () => {
       universalMinimum: UNIVERSAL_ON,
     });
 
-    expect(screen.getByText(/BPC-157/)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /This product requires a minimum order of 5 vials\. Please update your quantity to continue\./,
-      ),
-    ).toBeInTheDocument();
+    // Scoped to the banner: the product name also appears on the cart line
+    // itself, which is correct and not what this asserts.
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveTextContent('BPC-157');
+    expect(banner).toHaveTextContent(
+      'This product requires a minimum order of 5 vials. Please update your quantity to continue.',
+    );
   });
 
   it('lets checkout through once the minimum is met', () => {

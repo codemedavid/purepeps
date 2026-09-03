@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trash2, ShoppingBag, ArrowLeft, CreditCard, Plus, Minus, Sparkles, Activity, Lock } from 'lucide-react';
 import type { CartItem, GroupBuyProgressItem } from '../types';
+import { validateCartMinimums, type UniversalMinimumOrder } from '../utils/minimumOrder';
 import { findOverCapLines, isCartLineSoldOut } from '../utils/groupBuy';
 import { cartSubtotal } from '../utils/cart';
 
@@ -13,6 +14,13 @@ interface CartProps {
   onCheckout: () => void;
   isBatchOpen?: boolean;
   groupBuyItems?: GroupBuyProgressItem[];
+  /**
+   * The site-wide minimum order. OMITTED MEANS NO MINIMUM — Cart renders in
+   * places that do not read site settings, and a cart that silently refuses to
+   * check out because a setting failed to load is indistinguishable, to the
+   * shopper, from a real rule.
+   */
+  universalMinimum?: UniversalMinimumOrder;
 }
 
 const Cart: React.FC<CartProps> = ({
@@ -23,6 +31,7 @@ const Cart: React.FC<CartProps> = ({
   onContinueShopping,
   onCheckout,
   isBatchOpen = true,
+  universalMinimum,
   groupBuyItems = [],
 }) => {
   if (cartItems.length === 0) {
@@ -76,7 +85,14 @@ const Cart: React.FC<CartProps> = ({
   const capBlocked = overCapProducts.length > 0;
   // Nothing left to buy once every line is sold out.
   const noAvailableItems = availableItems.length === 0;
-  const checkoutDisabled = !isBatchOpen || capBlocked || noAvailableItems;
+  // Empty when no minimum applies, which is also what an absent
+  // universalMinimum produces — see the prop's note.
+  const minimumViolations = universalMinimum
+    ? validateCartMinimums(cartItems, universalMinimum)
+    : [];
+
+  const checkoutDisabled =
+    !isBatchOpen || capBlocked || noAvailableItems || minimumViolations.length > 0;
 
   return (
     <div className="min-h-screen bg-white py-6 md:py-8">
@@ -302,6 +318,24 @@ const Cart: React.FC<CartProps> = ({
               {isBatchOpen && capBlocked && (
                 <div className="mb-3 rounded bg-red-50 border border-red-200 p-3 text-xs text-red-700">
                   The group limit was reached for {overCapProducts.join(', ')}. Lower the quantity to continue.
+                </div>
+              )}
+              {isBatchOpen && minimumViolations.length > 0 && (
+                <div
+                  role="alert"
+                  className="mb-3 rounded bg-red-50 border border-red-200 p-3 text-xs text-red-700"
+                >
+                  <ul className="space-y-1">
+                    {minimumViolations.map((violation) => (
+                      <li key={`${violation.productId}-${violation.variationId ?? 'all'}`}>
+                        <span className="font-semibold">
+                          {violation.productName}
+                          {violation.variationName ? ` (${violation.variationName})` : ''}
+                        </span>{' '}
+                        {violation.message}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

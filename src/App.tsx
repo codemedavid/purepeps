@@ -21,6 +21,7 @@ import FeatureRoute from './components/FeatureRoute';
 import type { NoticePageId } from './utils/storefrontNotice';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
+import { useUniversalMinimum } from './hooks/useUniversalMinimum';
 import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
 import { isViewOnlyActive } from './utils/groupBuySchedule';
 import { BOTTOM_NAV_CLEARANCE, STOREFRONT_PATH, readStorefrontRequest } from './utils/storefrontNavigation';
@@ -47,6 +48,7 @@ function MainApp() {
     const cart = useCart({ email: access.email, products: menuItems });
     const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
+    const { universal: universalMinimum } = useUniversalMinimum();
     // The Lab Reports entry only belongs in the bottom nav while the page it
     // points at is switched on. Read through the same flags that guard the
     // route, so the nav can never offer a destination FeatureRoute redirects.
@@ -263,6 +265,7 @@ function MainApp() {
                         onCheckout={() => handleViewChange('checkout')}
                         isBatchOpen={isBatchOpen}
                         groupBuyItems={groupBuy.items}
+                        universalMinimum={universalMinimum}
                     />
                 )}
 
