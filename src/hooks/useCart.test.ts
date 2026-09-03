@@ -557,3 +557,65 @@ describe('useCart', () => {
     });
   });
 });
+
+describe('useCart — the product-level minimum', () => {
+  const UNIVERSAL_ON = { enabled: true, quantity: 5, unit: 'vial' as const };
+
+  // The suite's other beforeEach lives inside its own describe, so this block
+  // needs its own isolation: useCart persists to localStorage, and without a
+  // clear each test starts holding the previous test's cart.
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
+  });
+
+  it('opens a single-SKU line at the product minimum', () => {
+    // With no variations the line IS the combined quantity, so the shopper can
+    // be given the right number immediately rather than discovering it at the
+    // cart.
+    const { result } = renderHook(() => useCart({ universalMinimum: UNIVERSAL_ON }));
+
+    act(() => {
+      result.current.addToCart(mockProduct, undefined, 1);
+    });
+
+    expect(result.current.cartItems[0].quantity).toBe(5);
+  });
+
+  it('does NOT clamp a variation line, because variations combine', () => {
+    // Forcing 5 onto the first strength would make the client's 4+3+3 split
+    // impossible to enter.
+    const variation = { ...mockVariation, stock_quantity: 20 };
+    const { result } = renderHook(() => useCart({ universalMinimum: UNIVERSAL_ON }));
+
+    act(() => {
+      result.current.addToCart(mockProduct, variation, 3);
+    });
+
+    expect(result.current.cartItems[0].quantity).toBe(3);
+  });
+
+  it('clamps a variation line when the product enforces per variation', () => {
+    const perVariation = { ...mockProduct, enforce_minimum_per_variation: true };
+    const variation = { ...mockVariation, stock_quantity: 20 };
+    const { result } = renderHook(() => useCart({ universalMinimum: UNIVERSAL_ON }));
+
+    act(() => {
+      result.current.addToCart(perVariation, variation, 3);
+    });
+
+    expect(result.current.cartItems[0].quantity).toBe(5);
+  });
+
+  it('leaves quantities alone when no minimum setting is supplied', () => {
+    const { result } = renderHook(() => useCart());
+
+    act(() => {
+      result.current.addToCart(mockProduct, undefined, 1);
+    });
+
+    // Falls back to the pre-existing per-line default of 2, unchanged.
+    expect(result.current.cartItems[0].quantity).toBe(MIN_ORDER_QUANTITY);
+  });
+});
