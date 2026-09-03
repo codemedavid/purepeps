@@ -57,6 +57,7 @@ function variation(overrides: Partial<ProductVariation> = {}): ProductVariation 
     discount_price: null,
     discount_active: false,
     stock_quantity: 100,
+    created_at: '2025-01-01',
     ...overrides,
   };
 }
