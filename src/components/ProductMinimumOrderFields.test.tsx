@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -21,14 +22,27 @@ function value(overrides: Partial<ProductMinimumOrderValue> = {}): ProductMinimu
 
 const onChange = vi.fn();
 
-function renderFields(overrides: Partial<ProductMinimumOrderValue> = {}) {
-  render(
+/**
+ * Drives the component the way the product form does: it is CONTROLLED, so a
+ * harness that never feeds the new value back makes every keystroke append to
+ * a stale one ("2" + "8" = 28 rather than 8).
+ */
+function Harness({ initial }: { initial: ProductMinimumOrderValue }) {
+  const [current, setCurrent] = useState(initial);
+  return (
     <ProductMinimumOrderFields
-      value={value(overrides)}
+      value={current}
       universal={UNIVERSAL}
-      onChange={onChange}
-    />,
+      onChange={(next) => {
+        setCurrent(next);
+        onChange(next);
+      }}
+    />
   );
+}
+
+function renderFields(overrides: Partial<ProductMinimumOrderValue> = {}) {
+  render(<Harness initial={value(overrides)} />);
 }
 
 beforeEach(() => {

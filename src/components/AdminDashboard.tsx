@@ -31,12 +31,15 @@ import GroupBuyManager from './GroupBuyManager';
 import LigwakManager from './ligwak/LigwakManager';
 import ReviewsAdminManager from './reviews/ReviewsAdminManager';
 import UniversalMinimumOrderPanel from './UniversalMinimumOrderPanel';
+import ProductMinimumOrderFields from './ProductMinimumOrderFields';
+import { useUniversalMinimum } from '../hooks/useUniversalMinimum';
 // GuideManager removed (Peptalk functionality disabled)
 
 const AdminDashboard: React.FC = () => {
   const { isAdmin, loading: authLoading, error: authError, signIn, signOut } = useAdminAuth();
   const { products, loading, addProduct, updateProduct, deleteProduct, refreshProducts } = useMenu();
   const { categories } = useCategories();
+  const { universal: universalMinimum } = useUniversalMinimum();
   const [currentView, setCurrentView] = useState<'dashboard' | 'products' | 'add' | 'edit' | 'categories' | 'payments' | 'inventory' | 'orders' | 'shipping' | 'coa' | 'faq' | 'settings' | 'promo-codes' | 'couriers' | 'stickers' | 'protocols' | 'access-requests' | 'group-buy' | 'ligwak' | 'tiers' | 'features' | 'reviews'>('dashboard');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,6 +81,11 @@ const AdminDashboard: React.FC = () => {
     storage_conditions: 'Store at -20°C',
     stock_quantity: 0,
     minimum_order_quantity: 2,
+    use_universal_minimum: true,
+    minimum_order_unit: null,
+    minimum_order_enabled: true,
+    minimum_order_message: null,
+    enforce_minimum_per_variation: false,
     image_url: null,
     discount_active: false,
     inclusions: null
@@ -238,6 +246,14 @@ const AdminDashboard: React.FC = () => {
           'storage_conditions',
           'stock_quantity',
           'minimum_order_quantity',
+          // Added by 20260828000000_universal_minimum_order. This allowlist is
+          // the ONLY route into the products table, so a column missing here is
+          // silently dropped on save rather than erroring.
+          'use_universal_minimum',
+          'minimum_order_unit',
+          'minimum_order_enabled',
+          'minimum_order_message',
+          'enforce_minimum_per_variation',
           'available',
           'featured',
           'image_url',
@@ -777,17 +793,20 @@ const AdminDashboard: React.FC = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Minimum Order Quantity</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={formData.minimum_order_quantity ?? ''}
-                      onChange={(e) => setFormData({ ...formData, minimum_order_quantity: Math.max(1, Number(e.target.value) || 1) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent transition-all bg-white text-black placeholder-gray-400"
-                      placeholder="2"
+                  <div className="sm:col-span-2">
+                    <ProductMinimumOrderFields
+                      universal={universalMinimum}
+                      value={{
+                        minimum_order_enabled: formData.minimum_order_enabled ?? true,
+                        use_universal_minimum: formData.use_universal_minimum ?? true,
+                        minimum_order_quantity: formData.minimum_order_quantity ?? 2,
+                        minimum_order_unit: formData.minimum_order_unit ?? null,
+                        minimum_order_message: formData.minimum_order_message ?? null,
+                        enforce_minimum_per_variation:
+                          formData.enforce_minimum_per_variation ?? false,
+                      }}
+                      onChange={(next) => setFormData({ ...formData, ...next })}
                     />
-                    <p className="text-[11px] text-gray-500 mt-1">Shoppers must order at least this many. Variations can override this.</p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 pt-0 sm:pt-6">
