@@ -32,8 +32,13 @@ interface HeaderProps {
   cartItemsCount: number;
   onCartClick: () => void;
   onMenuClick: () => void;
-  onGetAccess: () => void;
-  isVerified: boolean;
+  /**
+   * Opens the access flow. Omitted by pages that do not own access state — the
+   * pill is then left out rather than rendered with a status it cannot vouch
+   * for (and a handler that would throw on tap).
+   */
+  onGetAccess?: () => void;
+  isVerified?: boolean;
   hideMobileStorefrontActions?: boolean;
   /** Overrides the live flags. Only tests and previews need this. */
   features?: Partial<FeatureFlags>;
@@ -44,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({
   onCartClick,
   onMenuClick,
   onGetAccess,
-  isVerified,
+  isVerified = false,
   hideMobileStorefrontActions = false,
   features,
 }) => {
@@ -111,17 +116,19 @@ const Header: React.FC<HeaderProps> = ({
               </button>
 
               {/* Get Access / Verified pill */}
-              <button
-                onClick={onGetAccess}
-                className={`hidden sm:inline-flex items-center gap-1.5 font-mono rounded-full px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors ${
-                  isVerified
-                    ? 'bg-sakura-sage-soft text-sakura-sage'
-                    : 'bg-sakura-ink text-white hover:bg-sakura-deep'
-                }`}
-              >
-                {isVerified ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                {isVerified ? 'Member' : 'Get access'}
-              </button>
+              {onGetAccess && (
+                <button
+                  onClick={onGetAccess}
+                  className={`hidden sm:inline-flex items-center gap-1.5 font-mono rounded-full px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.04em] transition-colors ${
+                    isVerified
+                      ? 'bg-sakura-sage-soft text-sakura-sage'
+                      : 'bg-sakura-ink text-white hover:bg-sakura-deep'
+                  }`}
+                >
+                  {isVerified ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                  {isVerified ? 'Member' : 'Get access'}
+                </button>
+              )}
 
               {/* Mobile Menu Button */}
               {!hideMobileStorefrontActions && (

@@ -82,6 +82,7 @@ const PeptideCalculator: React.FC = () => {
                 cartItemsCount={cart.getTotalItems()}
                 onCartClick={() => window.location.href = '/'}
                 onMenuClick={() => window.location.href = '/'}
+                hideMobileStorefrontActions
             />
 
             <main className="flex-grow container mx-auto px-4 py-8 md:py-12">

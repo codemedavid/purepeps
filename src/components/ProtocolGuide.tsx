@@ -38,6 +38,7 @@ const ProtocolGuide: React.FC = () => {
                 cartItemsCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
                 onCartClick={() => { }}
                 onMenuClick={handleBackToHome}
+                hideMobileStorefrontActions
             />
 
             <main className="container mx-auto px-4 py-8 max-w-4xl">
