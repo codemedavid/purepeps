@@ -43,12 +43,14 @@ import { useMenu } from './hooks/useMenu';
 function MainApp() {
     const { menuItems, loading: menuLoading } = useMenu();
     const access = useAccessContext();
+    // Read before useCart: the cart uses it to open a line at the product
+    // minimum, so it has to exist by then.
+    const { universal: universalMinimum } = useUniversalMinimum();
     // Verified members get a server-backed cart (survives localStorage eviction
     // and follows them across devices); the catalog rehydrates its references.
-    const cart = useCart({ email: access.email, products: menuItems });
+    const cart = useCart({ email: access.email, products: menuItems, universalMinimum });
     const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
-    const { universal: universalMinimum } = useUniversalMinimum();
     // The Lab Reports entry only belongs in the bottom nav while the page it
     // points at is switched on. Read through the same flags that guard the
     // route, so the nav can never offer a destination FeatureRoute redirects.

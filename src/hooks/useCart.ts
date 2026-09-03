@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { resolveMinOrder } from '../constants/order';
+import { resolveMinimumOrder, type UniversalMinimumOrder } from '../utils/minimumOrder';
 import { cartSubtotal, mergeCarts, rehydrateCart, serializeCart } from '../utils/cart';
 import { fetchMemberCart, persistMemberCart } from '../utils/memberCartApi';
 import type { CartItem, Product, ProductVariation } from '../types';
@@ -14,6 +15,11 @@ export interface UseCartOptions {
   email?: string | null;
   /** Live catalog, used to rebuild the server cart's references into cart lines. */
   products?: Product[];
+  /**
+   * Site-wide minimum order. OMITTED MEANS NO PRODUCT-LEVEL MINIMUM, leaving
+   * only the older per-line rule in constants/order.
+   */
+  universalMinimum?: UniversalMinimumOrder;
 }
 
 // Read the persisted cart synchronously so it is available on the first render.
@@ -35,6 +41,20 @@ function loadCartFromStorage(): CartItem[] {
 }
 
 export function useCart(options?: UseCartOptions) {
+  const universalMinimum = options?.universalMinimum;
+
+  /**
+   * The product-level minimum a single line must reach on its own, or 0 when
+   * the combined total is what counts.
+   */
+  const productFloor = (product: Product, variation?: ProductVariation): number => {
+    if (!universalMinimum) return 0;
+    const rule = resolveMinimumOrder(product, universalMinimum);
+    if (!rule.enforced) return 0;
+    const judgedAlone = !variation || !rule.combineVariations;
+    return judgedAlone ? rule.quantity : 0;
+  };
+
   const email = options?.email ?? null;
   const products = options?.products;
 
@@ -123,8 +143,15 @@ export function useCart(options?: UseCartOptions) {
       updatedItems[existingItemIndex].quantity += quantity;
       setCartItems(updatedItems);
     } else {
-      // Add new item - enforce the per-product minimum order, then check stock
-      quantity = Math.max(quantity, resolveMinOrder(product, variation));
+      // Add new item - enforce the minimum, then check stock.
+      //
+      // The product-level rule only clamps a line it can legitimately judge on
+      // its own: a product with no variation (where the line IS the combined
+      // quantity), or one enforcing per variation. Clamping a combining
+      // variation line would force the minimum onto the first strength chosen
+      // and make a split like 4+3+3 impossible to enter; the cart validates the
+      // combined total instead.
+      quantity = Math.max(quantity, resolveMinOrder(product, variation), productFloor(product, variation));
 
       if (quantity > availableStock) {
         alert(`Only ${availableStock} item(s) available in stock. Added ${availableStock} to your cart.`);
@@ -148,7 +175,10 @@ export function useCart(options?: UseCartOptions) {
 
     // Keep the line at or above its resolved minimum order
     const item = cartItems[index];
-    const minOrder = resolveMinOrder(item.product, item.variation);
+    const minOrder = Math.max(
+      resolveMinOrder(item.product, item.variation),
+      productFloor(item.product, item.variation),
+    );
     if (quantity < minOrder) {
       quantity = minOrder;
     }
