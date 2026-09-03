@@ -188,3 +188,27 @@ describe('MenuItemCard combined variation caps (no product cap)', () => {
     expect(screen.getByText(/6 reserved/i)).toBeInTheDocument();
   });
 });
+
+describe('MenuItemCard — minimum order', () => {
+  const UNIVERSAL_ON = { enabled: true, quantity: 5, unit: 'vial' as const };
+
+  it('states the minimum on the card, before the shopper commits', () => {
+    // The client asked for this on the card, not only at the cart. Discovering
+    // it after adding is the frustrating version of the same rule.
+    renderCard({ universalMinimum: UNIVERSAL_ON });
+
+    expect(screen.getByText('Minimum order: 5 vials for this product.')).toBeInTheDocument();
+  });
+
+  it('says nothing when no minimum applies', () => {
+    renderCard({ universalMinimum: { enabled: false, quantity: 5, unit: 'vial' as const } });
+
+    expect(screen.queryByText(/minimum order/i)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when no setting was supplied at all', () => {
+    renderCard();
+
+    expect(screen.queryByText(/minimum order/i)).not.toBeInTheDocument();
+  });
+});

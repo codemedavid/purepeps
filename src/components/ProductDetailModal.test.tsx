@@ -183,3 +183,36 @@ describe('ProductDetailModal variation cap', () => {
     expect(onAddToCart).not.toHaveBeenCalled();
   });
 });
+
+describe('ProductDetailModal — minimum order', () => {
+  const UNIVERSAL_ON = { enabled: true, quantity: 5, unit: 'vial' as const };
+
+  it('states the minimum in the product details', () => {
+    renderModal({ universalMinimum: UNIVERSAL_ON });
+
+    expect(screen.getByText('Minimum order: 5 vials for this product.')).toBeInTheDocument();
+  });
+
+  it('starts the quantity selector at the minimum', () => {
+    // The client asked for this explicitly. Opening at 1 under a minimum of 5
+    // invites the shopper to set a quantity that will be rejected.
+    renderModal({ universalMinimum: UNIVERSAL_ON });
+
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('shows an admin’s own wording instead of the generated notice', () => {
+    renderModal({
+      product: { ...mockProduct, minimum_order_message: 'Sold in packs of five only.' },
+      universalMinimum: UNIVERSAL_ON,
+    });
+
+    expect(screen.getByText('Sold in packs of five only.')).toBeInTheDocument();
+  });
+
+  it('says nothing when no minimum applies', () => {
+    renderModal({ universalMinimum: { enabled: false, quantity: 5, unit: 'vial' as const } });
+
+    expect(screen.queryByText(/minimum order/i)).not.toBeInTheDocument();
+  });
+});
