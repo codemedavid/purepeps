@@ -2,15 +2,16 @@
 
 **Source plan**: produced inline via `/ecc:plan` (no `*.plan.md` artifact was written).
 **Branch**: `feat/pay-now-cod-payment-options`
-**Status**: data layer complete (Part 1). Public **read** surface complete
-(Part 2). Admin **moderation queue** complete (Part 3). The customer-facing
-**submission form** is the only piece outstanding — see "Known gaps".
+**Status**: feature complete for all six journeys — data layer (Part 1), public
+read surface (Part 2), admin moderation queue (Part 3), customer submission
+form (Part 4). Not yet applied to a live database — see "Known gaps".
 
 | Part | Scope | Checkpoints |
 |---|---|---|
 | 1 | Table, RLS, three RPCs, pure client logic | `09f0fa4` RED, `5ecca26` GREEN, `092ef68` RED, `d4d3c14` GREEN |
 | 2 | Feature flag, presentation, read hook, page, route + nav | `db3efe9` RED, `5674477` GREEN, `a574d17` RED, `291c2c7` GREEN, `4beea67` RED, `d3973ad` GREEN, `0241e62` RED, `4bfae96` GREEN, `fb65f51` RED, `f0a2956` GREEN |
 | 3 | Admin moderation hook, queue screen, dashboard wiring | `57016fb` RED, `432ff38` GREEN, `bba0e6f` RED, `9a79e23` GREEN |
+| 4 | Submission hook, review form, page wiring | `1c30472` RED, `bc87d38` GREEN, `fcb2d12` RED, `477239a` GREEN, `d9e6db7` GREEN |
 
 ---
 
@@ -402,3 +403,123 @@ timeouts that read convincingly like regressions.
 1–2), and approved reviews surfaced on `ProductDetailModal`. The moderation
 queue now exists, so the form is safe to build next: submissions will land in
 Pending and have somewhere to be approved from.
+
+
+---
+
+# Part 4 — Customer submission form
+
+Delivers journeys **1** (prove a purchase, review only what was bought) and
+**2** (choose any display name, stay private). With these, all six journeys
+have a working surface.
+
+## Task report
+
+### Task 1 — `useReviewSubmission` (`1c30472` RED → `bc87d38` GREEN)
+
+- **RED**: `npx vitest run src/hooks/useReviewSubmission.test.ts` →
+  `Failed to resolve import "./useReviewSubmission"`.
+- **GREEN**: same command → `Tests 12 passed (12)`.
+
+The hook holds the proven order number and email and replays them on submit.
+`submit_product_review` accepts **no order id** — it re-derives the order from
+those raw values every time — so caching an id would produce something the
+server will not take.
+
+**One generic message covers every failed verification.**
+`get_reviewable_order` returns zero rows for a wrong email, an unknown order and
+an undelivered order alike. A message naming which half was wrong would rebuild
+the "has this address ever ordered here" oracle the SQL was written to deny, so
+the test asserts one message and forbids the words that would leak the
+distinction. A lookup that merely *failed* gets different wording — telling
+someone their order does not exist when the network dropped sends them away for
+good.
+
+### Task 2 — `ReviewForm` (`fcb2d12` RED → `477239a` GREEN)
+
+- **RED**: `npx vitest run src/components/reviews/ReviewForm.test.tsx` →
+  `Failed to resolve import "./ReviewForm"`.
+- **GREEN**: same command → `Tests 15 passed (15)`, passing on the first run.
+
+Two steps: the rating and body do not render until an order is proven, because
+showing them first invites a customer to write a full review and only then
+discover they cannot post it. The confirmation says the review was sent **for
+approval** — every review is born `pending`, so "your review is up" would send
+the customer looking for something that is not on the page.
+
+### Task 3 — Page wiring (`d9e6db7` GREEN)
+
+- **RED**: `npx vitest run src/components/reviews/ReviewsPage.test.tsx` →
+  `Tests 3 failed | 10 passed (13)`.
+- **GREEN**: `npx vitest run src/components/reviews` → `Tests 65 passed (65)`.
+
+## Test specification
+
+| # | What is guaranteed | Test | Type | Result | Evidence |
+|---|--------------------|------|------|--------|----------|
+| 53 | Verification normalises order number and email the way the SQL does | `src/hooks/useReviewSubmission.test.ts` — "sends the order number and email to the verification RPC" | unit | PASS | `npx vitest run src/hooks/useReviewSubmission.test.ts` |
+| 54 | **A wrong email and an unknown order produce one identical message** | same — "treats a wrong email and an unknown order identically" | unit | PASS | same |
+| 55 | A failed lookup is worded differently from "no such order" | same — "surfaces a lookup failure without claiming the order is unknown" | unit | PASS | same |
+| 56 | No review can be submitted before an order is proven | same — "never sends a review before an order has been proven" | unit | PASS | same |
+| 57 | Photos are dropped client-side when the admin switch is off, and the switch fails open | same — "drops photos when the admin has the photo switch off", "leaves photos enabled when the setting row is missing" | unit | PASS | same |
+| 58 | A rejection surfaces the database's own wording | same — "surfaces the database message when submission is rejected" | unit | PASS | same |
+| 59 | **The rating and body are not shown until the order is proven** | `src/components/reviews/ReviewForm.test.tsx` — "asks only for the order number and email up front" | unit | PASS | `npx vitest run src/components/reviews/ReviewForm.test.tsx` |
+| 60 | **The confirmation says "awaiting approval", never that the review is live** | same — "says the review is awaiting approval" | unit | PASS | same |
+| 61 | A product this order already reviewed is offered but disabled | same — "blocks a product this order already reviewed" | unit | PASS | same |
+| 62 | The anonymity promise sits beside the display-name field | same — "promises anonymity next to the display name field" | unit | PASS | same |
+| 63 | The photo control disappears entirely when photos are switched off | same — "hides the photo control" | unit | PASS | same |
+| 64 | The form is opt-in, and offered even with no reviews yet | `src/components/reviews/ReviewsPage.test.tsx` — "keeps the form behind a button", "still offers the form when there are no reviews yet" | unit | PASS | `npx vitest run src/components/reviews` |
+
+## Coverage and known gaps
+
+**Reviews subsystem**: `npx vitest run src/components/reviews` →
+`Tests 65 passed (65)`, plus 12 (`useReviewSubmission`), 10 (`useAdminReviews`)
+and 6 (`useProductReviews`) at the hook level. Every review test passes on
+every run.
+
+**Typecheck**: `npx tsc --noEmit -p tsconfig.app.json` → 58 errors, unchanged
+from the pre-change baseline; none in any review file.
+
+### ⚠ The suite is now load-sensitive — read this before trusting a red run
+
+Full-suite runs no longer come back clean, and **the failing set differs every
+time**:
+
+| Run | Result |
+|---|---|
+| Before Part 4 | `1525 passed (1525)` — clean |
+| After Part 4, run 1 | `1 failed \| 1554 passed` — `Checkout` "bills items only online…" |
+| After Part 4, run 2 | `4 failed \| 1551 passed` — three other `Checkout` cases + `useCart.server` |
+
+Every failure is `Error: Test timed out in 5000ms`, and every named file passes
+in isolation: `Checkout.test.tsx` + `useCart.server.test.ts` together give
+`42 passed (42)`.
+
+**Diagnosis — not caused by the review code, but exposed by it.** Those two
+files were already close to the 5 s default: 42 tests take **7.77 s** with the
+machine otherwise idle. `Checkout.test.tsx` also logs
+`supabase.from(...).select(...).order is not a function` and
+`...maybeSingle is not a function` from `useStickers` and `useCodAvailability`,
+so its mocks are incomplete and parts of the component run their error paths on
+every render. Part 4 added 30 tests, and the extra parallel load is enough to
+push the slowest of them past the timeout. No review file is involved in any
+failure, and no review test has ever failed.
+
+**Two honest options, neither taken here** because both change shared config or
+unrelated tests, which is the user's call:
+
+1. Raise `testTimeout` in `vite.config.ts` (currently the 5 s default). One
+   line, but it masks genuinely slow tests rather than fixing them.
+2. Complete the supabase mocks in `Checkout.test.tsx` so `useStickers` and
+   `useCodAvailability` resolve instead of throwing. Slower to do, and fixes
+   the actual cause.
+
+**Still not applied to a live database.** Every SQL guarantee in Part 1 is
+asserted against the migration *text*. Neither
+`20260826000000_customer_reviews.sql` nor
+`20260826000100_review_feature_flags.sql` has been run against Postgres, so the
+RPCs are not proven to execute. Until they are, `/reviews` renders empty and the
+admin queue stays blank. The Part 1 checklist of live checks still stands.
+
+**Still not built.** Approved reviews on `ProductDetailModal` — the review page
+carries them, individual product pages do not.
