@@ -3,6 +3,11 @@ import { X, Package, Beaker, ShoppingCart, Plus, Minus, Sparkles, ArrowLeft, Loc
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
 import { remainingAfterCart, remainingForVariationAfterCart, findVariationProgress } from '../utils/groupBuy';
 import { resolveMinOrder } from '../constants/order';
+import {
+  minimumOrderNotice,
+  resolveMinimumOrder,
+  type UniversalMinimumOrder,
+} from '../utils/minimumOrder';
 
 interface ProductDetailModalProps {
   product: Product;
@@ -17,6 +22,8 @@ interface ProductDetailModalProps {
   isBatchOpen?: boolean;
   /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
   isViewOnly?: boolean;
+  /** Site-wide minimum. OMITTED MEANS NO MINIMUM, as in Cart. */
+  universalMinimum?: UniversalMinimumOrder;
 }
 
 const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -30,6 +37,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   cartQuantity = 0,
   isBatchOpen = true,
   isViewOnly = false,
+  universalMinimum,
 }) => {
   // Select first available variation, or first variation if all are out of stock
   const getFirstAvailableVariation = () => {
@@ -42,9 +50,19 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | undefined>(
     getFirstAvailableVariation()
   );
-  const minOrder = resolveMinOrder(product, selectedVariation);
+  // The product-level rule (utils/minimumOrder) and the older per-line one
+  // (constants/order) coexist while the per-product admin fields are still
+  // being built. Taking the LARGER never lowers a minimum an admin already
+  // relies on, and honours the new rule where it is stricter.
+  const minimumRule = universalMinimum
+    ? resolveMinimumOrder(product, universalMinimum)
+    : null;
+  const ruleFloor = minimumRule?.enforced ? minimumRule.quantity : 0;
+  const minimumNotice = minimumRule ? minimumOrderNotice(minimumRule) : null;
+
+  const minOrder = Math.max(resolveMinOrder(product, selectedVariation), ruleFloor);
   const [quantity, setQuantity] = useState(() =>
-    resolveMinOrder(product, getFirstAvailableVariation())
+    Math.max(resolveMinOrder(product, getFirstAvailableVariation()), ruleFloor)
   );
 
   const hasDiscount = product.discount_active && product.discount_price;
@@ -249,6 +267,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   )}
                 </div>
 
+                {minimumNotice && (
+                  <div className="mb-3 rounded-lg border border-sakura-edge bg-sakura-blush-soft px-3 py-2 text-xs font-semibold text-sakura-deep">
+                    {minimumNotice}
+                  </div>
+                )}
+
                 {/* Size Selection */}
                 {product.variations && product.variations.length > 0 && (
                   <div className="mb-3 sm:mb-4">
@@ -266,7 +290,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                               if (variation.stock_quantity > 0) {
                                 setSelectedVariation(variation);
                                 // Keep the quantity at or above the new format's minimum.
-                                const nextMin = resolveMinOrder(product, variation);
+                                const nextMin = Math.max(resolveMinOrder(product, variation), ruleFloor);
                                 setQuantity(prev => Math.max(prev, nextMin));
                               }
                             }}

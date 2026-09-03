@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { Lock, ShoppingBag } from 'lucide-react';
 import type { Product, ProductVariation, GroupBuyProgressItem } from '../types';
+import {
+  minimumOrderNotice,
+  resolveMinimumOrder,
+  type UniversalMinimumOrder,
+} from '../utils/minimumOrder';
 import { formatPrice } from '../utils/currency';
 import { isSoldOut as isCapSoldOut, isVariationSoldOut, combinedVariationCaps } from '../utils/groupBuy';
 
@@ -18,10 +23,13 @@ interface MenuItemCardProps {
   isBatchOpen?: boolean;
   /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
   isViewOnly?: boolean;
+  /** Site-wide minimum. OMITTED MEANS NO MINIMUM, as in Cart. */
+  universalMinimum?: UniversalMinimumOrder;
 }
 
 const MenuItemCard: React.FC<MenuItemCardProps> = ({
   product,
+  universalMinimum,
   onAddToCart,
   cartQuantity = 0,
   onProductClick,
@@ -53,6 +61,10 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
     product.variations && product.variations.length > 0
       ? product.variations.some((v) => v.stock_quantity > 0)
       : product.stock_quantity > 0;
+
+  const minimumNotice = universalMinimum
+    ? minimumOrderNotice(resolveMinimumOrder(product, universalMinimum))
+    : null;
   const soldOut = !product.available || !hasAnyStock;
 
   // Group-buy cap. The product-level cap drives the progress bar; the add button
@@ -120,6 +132,12 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           {product.name}
         </div>
         <div className="text-[13px] text-sakura-faint mt-0.5 line-clamp-1">{product.description}</div>
+
+        {/* Stated here, not only at the cart: a shopper who learns the minimum
+            after choosing a quantity has to redo the choice. */}
+        {minimumNotice && (
+          <div className="mt-2 text-[11px] font-semibold text-sakura-deep">{minimumNotice}</div>
+        )}
 
         <div className="flex flex-wrap gap-1.5 mt-3.5">
           {selectedVariation && (

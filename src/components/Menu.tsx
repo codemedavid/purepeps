@@ -3,6 +3,7 @@ import MenuItemCard from './MenuItemCard';
 import Hero from './Hero';
 import ProductDetailModal from './ProductDetailModal';
 import type { Product, ProductVariation, CartItem, GroupBuyProgressItem } from '../types';
+import type { UniversalMinimumOrder } from '../utils/minimumOrder';
 import { Search, Lock, ShieldCheck } from 'lucide-react';
 import { findProgressItem } from '../utils/groupBuy';
 import { groupProductsIntoSections } from '../utils/catalogSections';
@@ -21,13 +22,15 @@ interface MenuProps {
   tierName?: string | null;
   onGetAccess: () => void;
   /**
-   * Sends the shopper to the catalog from the hero CTA. Owned by the storefront
-   * shell so the bottom navigation can switch its highlight to Shop alongside the
-   * scroll. Falls back to a local scroll when the parent does not supply one.
+   * Tells the storefront shell the shopper browsed into the catalog, so the bottom
+   * navigation can highlight Shop. The scroll itself stays here: the shell's own
+   * catalog anchor sits above the hero, so scrolling to it would move the page up.
    */
-  onShopAll?: () => void;
+  onBrowseCatalog?: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
+  /** Site-wide minimum order, passed through to the card and detail view. */
+  universalMinimum?: UniversalMinimumOrder;
   /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
   isViewOnly?: boolean;
   batchNumber?: number | null;
@@ -36,6 +39,7 @@ interface MenuProps {
 }
 
 const Menu: React.FC<MenuProps> = ({
+  universalMinimum,
   menuItems,
   isLoading = false,
   addToCart,
@@ -43,7 +47,7 @@ const Menu: React.FC<MenuProps> = ({
   isVerified,
   canAccessCategory,
   onGetAccess,
-  onShopAll,
+  onBrowseCatalog,
   groupBuyItems = [],
   isBatchOpen = true,
   isViewOnly = false,
@@ -83,6 +87,7 @@ const Menu: React.FC<MenuProps> = ({
       isVerified={isVerified}
       canCheckout={canAccessCategory ? canAccessCategory(product.category) : isVerified}
       onGetAccess={onGetAccess}
+      universalMinimum={universalMinimum}
       groupBuyItem={findProgressItem(groupBuyItems, product.id)}
       isBatchOpen={isBatchOpen}
       isViewOnly={isViewOnly}
@@ -91,6 +96,13 @@ const Menu: React.FC<MenuProps> = ({
 
   const scrollToProducts = () =>
     productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Browsing the catalog moves the shopper down to the products and moves the
+  // bottom navigation's highlight to Shop — the destination is the shell's to own.
+  const handleBrowseCatalog = () => {
+    onBrowseCatalog?.();
+    scrollToProducts();
+  };
 
   return (
     <>
@@ -104,6 +116,7 @@ const Menu: React.FC<MenuProps> = ({
             canAccessCategory ? canAccessCategory(selectedProduct.category) : isVerified
           }
           onGetAccess={onGetAccess}
+          universalMinimum={universalMinimum}
           groupBuyItem={findProgressItem(groupBuyItems, selectedProduct.id)}
           cartQuantity={getCartQuantity(selectedProduct.id)}
           isBatchOpen={isBatchOpen}
@@ -113,7 +126,7 @@ const Menu: React.FC<MenuProps> = ({
 
       <div className="min-h-screen bg-sakura-canvas font-display">
         <Hero
-          onShopAll={onShopAll ?? scrollToProducts}
+          onShopAll={handleBrowseCatalog}
           onGetAccess={onGetAccess}
           batchNumber={batchNumber}
           startsAt={batchStartsAt}

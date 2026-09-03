@@ -225,6 +225,7 @@ function MainApp() {
             <main className="flex-grow">
                 {currentView === 'menu' && (
                     <Menu
+                        universalMinimum={universalMinimum}
                         menuItems={visibleProducts}
                         isLoading={menuLoading}
                         addToCart={cart.addToCart}
