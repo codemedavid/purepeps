@@ -23,9 +23,22 @@ export interface Product {
   available: boolean;
   featured: boolean;
 
-  // Minimum vials a shopper must order for this product (default 2). A selected
-  // variation's own minimum overrides this — see resolveMinOrder().
+  // Minimum order. Resolution lives in utils/minimumOrder.ts, not here.
+  //
+  // A minimum belongs to the PRODUCT and is met by the COMBINED quantity across
+  // its variations (4x10mg + 3x20mg + 3x30mg satisfies a minimum of 10), unless
+  // enforce_minimum_per_variation opts into judging each variation alone.
   minimum_order_quantity?: number;
+  /** Follows the universal setting unless explicitly false. */
+  use_universal_minimum?: boolean;
+  /** 'vial' | 'piece' | 'box' | 'kit'. Only read when this product overrides. */
+  minimum_order_unit?: string | null;
+  /** False opts this product out of minimums entirely. */
+  minimum_order_enabled?: boolean;
+  /** Replaces the generated customer-facing notice when set. */
+  minimum_order_message?: string | null;
+  /** True judges each variation separately instead of combining them. */
+  enforce_minimum_per_variation?: boolean;
 
   // Vials that make one COMPLETE kit for this product. NULL/absent means inherit
   // DEFAULT_VIALS_PER_KIT — see resolveKitSize(). Drives the Ligwak allocation.
@@ -283,6 +296,8 @@ export interface GroupBuyRemaining {
 }
 
 // A line item inside orders.order_items (JSONB).
+// Checkout copies product_name, variation_name, price, quantity AND quantity_mg
+// at purchase time so later catalog edits cannot rewrite what was bought.
 export interface OrderLineItem {
   product_id: string;
   product_name: string;
@@ -292,15 +307,13 @@ export interface OrderLineItem {
   price: number;
   total: number;
   purity_percentage?: number;
-}
-
-// A line item enriched for the customer-facing Order History: the same stored
-// item plus its exact strength in mg. quantity_mg lives on product_variations
-// and was not copied into order_items historically, so the history RPC recovers
-// it by join (a value stored on the item itself wins — see the RPC's comment).
-export interface OrderHistoryLineItem extends OrderLineItem {
+  /** Exact strength snapshotted at purchase. Absent on orders placed before that write. */
   quantity_mg?: number | null;
 }
+
+// History rows are the same stored item; the RPC may fill quantity_mg by join
+// when the JSON itself does not have it (legacy orders).
+export type OrderHistoryLineItem = OrderLineItem;
 
 // One recorded change of state, from public.order_status_events, plus the batch's
 // shared international leg merged in under 'fulfillment_stage'.
