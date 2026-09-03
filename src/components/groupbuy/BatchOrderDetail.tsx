@@ -18,6 +18,7 @@ import type { OrderSequenceContext } from '../../utils/batchOrderGroups';
 import type { BatchOrder, OrderLineItem, Product } from '../../types';
 import type { RequestConfirm } from './ConfirmDialog';
 import { OrderItemsEditor } from './OrderItemsEditor';
+import { useUniversalMinimum } from '../../hooks/useUniversalMinimum';
 import { batchStatusColor, peso, formatDateTime } from './orderStatusStyles';
 import { buildGroupWaybillData, canPrintWaybill } from '../../utils/waybill';
 import { WaybillModal } from '../waybill/WaybillModal';
@@ -87,6 +88,7 @@ export function BatchOrderDetail({
   onVerifyBalance,
   onAttachProof,
 }: BatchOrderDetailProps) {
+  const { universal: universalMinimum } = useUniversalMinimum();
   const { couriers } = useCouriers();
   const { uploadImage, uploading: uploadingProof } = useImageUpload('payment-proofs');
   const [proofError, setProofError] = useState<string | null>(null);
@@ -468,6 +470,7 @@ export function BatchOrderDetail({
             products={products}
             busy={busy}
             canAddProducts={canAddOrder}
+            universalMinimum={universalMinimum}
             onSave={(keptItems, addedItems) => onSaveItems(order.id, keptItems, addedItems)}
           />
         </div>

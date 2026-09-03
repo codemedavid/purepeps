@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2, Save, X } from 'lucide-react';
 import { splitEditedItems } from '../../utils/orderItemEdits';
 import type { OrderLineItem, Product, ProductVariation } from '../../types';
+import {
+  validateOrderLineMinimums,
+  type UniversalMinimumOrder,
+} from '../../utils/minimumOrder';
 
 interface OrderItemsEditorProps {
   /**
@@ -16,6 +20,11 @@ interface OrderItemsEditorProps {
   busy?: boolean;
   /** Whether adding a NEW product is allowed (only while the batch is open). */
   canAddProducts?: boolean;
+  /**
+   * Site-wide minimum order. OMITTED MEANS NO CHECK — this editor opens from
+   * screens that never read site settings.
+   */
+  universalMinimum?: UniversalMinimumOrder;
   /**
    * Persist the edit. keptItems stay on this order (corrections applied in
    * place); addedItems are brand-new products that should become a new linked
@@ -60,6 +69,7 @@ export function OrderItemsEditor({
   products,
   busy = false,
   canAddProducts = true,
+  universalMinimum,
   onSave,
 }: OrderItemsEditorProps) {
   const [draft, setDraft] = useState<OrderLineItem[]>(items);
@@ -138,6 +148,7 @@ export function OrderItemsEditor({
       price,
       total: lineTotal(price, quantity),
       purity_percentage: product.purity_percentage,
+      quantity_mg: variation?.quantity_mg ?? null,
     };
     setDraft((prev) => [...prev, newLine]);
     setAddProductId('');
@@ -162,8 +173,33 @@ export function OrderItemsEditor({
     }
   };
 
+  // Judged on the DRAFT, so the warning tracks what the admin is about to save
+  // rather than what the order held when the screen opened.
+  const minimumViolations = universalMinimum
+    ? validateOrderLineMinimums(draft, products, universalMinimum)
+    : [];
+
   return (
     <div className="space-y-3">
+      {/* A WARNING, not a block. The client asked admin orders to follow the
+          minimum, but an admin editing an order DOWN — cancelling ligwak vials,
+          correcting an overcount — has a legitimate reason to land under it.
+          Refusing the save would trap them mid-correction with no way out. */}
+      {minimumViolations.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"
+        >
+          <ul className="space-y-1">
+            {minimumViolations.map((violation) => (
+              <li key={`${violation.productId}-${violation.variationId ?? 'all'}`}>
+                <span className="font-semibold">{violation.productName}</span> {violation.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="space-y-2">
         {draft.length === 0 ? (
           <p className="text-xs text-gray-400 italic py-2">No line items. Add a product below.</p>
