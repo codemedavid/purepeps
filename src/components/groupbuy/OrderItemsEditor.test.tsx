@@ -90,6 +90,7 @@ describe('OrderItemsEditor — adding with variations', () => {
           product_id: 'p1',
           variation_id: 'v1',
           variation_name: '10mg',
+          quantity_mg: 10,
           price: 1500,
           quantity: 1,
           total: 1500,
@@ -326,5 +327,52 @@ describe('OrderItemsEditor — switching between a customer\'s linked orders', (
 
     // The in-progress edit survives — the draft was NOT reseeded to 2.
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(29);
+  });
+});
+
+describe('OrderItemsEditor — minimum order', () => {
+  const UNIVERSAL_ON = { enabled: true, quantity: 5, unit: 'vial' as const };
+
+  function line(quantity: number): OrderLineItem {
+    return {
+      product_id: 'p1',
+      product_name: 'Retatrutide',
+      variation_id: null,
+      variation_name: null,
+      quantity,
+      price: 1000,
+      total: 1000 * quantity,
+    };
+  }
+
+  function renderWithMinimum(items: OrderLineItem[], universalMinimum?: typeof UNIVERSAL_ON) {
+    render(
+      <OrderItemsEditor
+        orderId="o1"
+        items={items}
+        products={[product()]}
+        onSave={vi.fn()}
+        universalMinimum={universalMinimum}
+      />,
+    );
+  }
+
+  it('warns when an admin-built order falls under the minimum', () => {
+    renderWithMinimum([line(2)], UNIVERSAL_ON);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/minimum order of 5 vials/i);
+  });
+
+  it('stays quiet once the order meets the minimum', () => {
+    renderWithMinimum([line(5)], UNIVERSAL_ON);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('says nothing when no minimum setting was supplied', () => {
+    // The editor is reachable from screens that never read site settings.
+    renderWithMinimum([line(1)]);
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

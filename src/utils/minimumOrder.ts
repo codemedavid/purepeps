@@ -1,4 +1,4 @@
-import type { CartItem, Product } from '../types';
+import type { CartItem, OrderLineItem, Product } from '../types';
 
 /**
  * Universal ("default") minimum order, and the per-product rules that may
@@ -276,4 +276,40 @@ export function validateCartMinimums(
   }
 
   return violations;
+}
+
+/**
+ * The same rule, applied to an admin-built order.
+ *
+ * Admin orders are `OrderLineItem` rows rather than `CartItem`s, so this is a
+ * second entry point onto one shared implementation — not a second rule. The
+ * client asked that admin-created orders follow the storefront's minimums, and
+ * two implementations would eventually disagree about what that means.
+ *
+ * A line whose product has left the catalogue is SKIPPED rather than flagged.
+ * Discontinued products still sit on historical orders, and refusing to
+ * validate the rest of an order because of one would trap the admin.
+ */
+export function validateOrderLineMinimums(
+  lines: readonly OrderLineItem[],
+  products: readonly Product[],
+  universal: UniversalMinimumOrder,
+): MinimumOrderViolation[] {
+  const byId = new Map(products.map((product) => [product.id, product]));
+
+  // Project onto cart lines so there is exactly one implementation of the rule.
+  const asCartItems: CartItem[] = [];
+  for (const line of lines) {
+    const product = byId.get(line.product_id);
+    if (!product) continue;
+    asCartItems.push({
+      product,
+      variation: line.variation_id
+        ? ({ id: line.variation_id, name: line.variation_name ?? '' } as CartItem['variation'])
+        : undefined,
+      quantity: Number(line.quantity ?? 0),
+    });
+  }
+
+  return validateCartMinimums(asCartItems, universal);
 }
