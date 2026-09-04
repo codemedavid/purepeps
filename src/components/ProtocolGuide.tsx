@@ -3,7 +3,8 @@ import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, AlertTriangle, Ch
 import Header from './Header';
 import Footer from './Footer';
 import { useCart } from '../hooks/useCart';
-import { useProtocols } from '../hooks/useProtocols';
+import { useProtocols, type Protocol } from '../hooks/useProtocols';
+import ProtocolFileViewer from './ProtocolFileViewer';
 import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
 import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
@@ -12,6 +13,7 @@ const ProtocolGuide: React.FC = () => {
     const { protocols, loading } = useProtocols();
     const { flags } = useFeatureFlagsContext();
     const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null);
+    const [viewingProtocol, setViewingProtocol] = useState<Protocol | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
     const toggleProtocol = (id: string) => {
@@ -180,14 +182,14 @@ const ProtocolGuide: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {/* File content */}
+                                        {/* File content — opens in-site rather than
+                                            handing the customer off to the file host. */}
                                         {protocol.content_type === 'file' && protocol.file_url && (
                                             <div className="mt-4">
-                                                <a
-                                                    href={protocol.file_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-3 p-4 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setViewingProtocol(protocol)}
+                                                    className="w-full text-left flex items-center gap-3 p-4 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
                                                 >
                                                     <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm">
                                                         <FileText className="w-6 h-6 text-rose-500" />
@@ -197,7 +199,7 @@ const ProtocolGuide: React.FC = () => {
                                                         <p className="text-xs text-charcoal-500">Click to view or download</p>
                                                     </div>
                                                     <Download className="w-5 h-5 text-charcoal-400 group-hover:text-rose-500 transition-colors" />
-                                                </a>
+                                                </button>
                                             </div>
                                         )}
 
@@ -268,6 +270,14 @@ const ProtocolGuide: React.FC = () => {
             </main>
 
             <Footer />
+
+            {viewingProtocol?.file_url && (
+                <ProtocolFileViewer
+                    name={viewingProtocol.name}
+                    fileUrl={viewingProtocol.file_url}
+                    onClose={() => setViewingProtocol(null)}
+                />
+            )}
         </div>
     );
 };
