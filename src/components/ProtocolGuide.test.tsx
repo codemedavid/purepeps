@@ -224,15 +224,28 @@ describe('ProtocolGuide', () => {
   // --- Mobile Navigation ---
 
   /**
-   * Mobile navigation on this page belongs to the bottom bar that its route
-   * wrapper renders (see `PublicNoticePage` in App.tsx). The header must not add
-   * a second one, or a phone gets two competing navigations on one screen.
+   * Mobile navigation on this page comes from BOTH the bottom bar its route
+   * wrapper renders (see `PublicNoticePage` in App.tsx) and the header's burger
+   * drawer.
+   *
+   * An earlier revision removed the burger here to avoid "two competing
+   * navigations". That reasoning does not survive the numbers: the bottom bar
+   * caps at six columns — Home, Shop and Cart plus at most Lab Reports, Orders
+   * and Guides — so it can never reach FAQ or Customer Reviews. Without the
+   * burger those pages are simply unreachable from here on a phone. The two are
+   * not duplicates: the bar is the shortcut, the drawer is the full index.
    */
   describe('mobile navigation', () => {
-    it('leaves mobile navigation to the bottom bar instead of a burger drawer', () => {
+    it('offers the burger drawer, the only route to FAQ and Reviews on a phone', () => {
       render(<ProtocolGuide />);
 
-      expect(screen.queryByRole('button', { name: 'Toggle menu' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
+    });
+
+    it('keeps that burger to small screens, where the desktop bar is hidden', () => {
+      render(<ProtocolGuide />);
+
+      expect(screen.getByRole('button', { name: 'Toggle menu' })).toHaveClass('md:hidden');
     });
 
     it('keeps the header cart to desktop widths', () => {

@@ -131,27 +131,31 @@ const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* Mobile Menu Button */}
-              {!hideMobileStorefrontActions && (
-                <button
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="md:hidden p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"
-                  aria-label="Toggle menu"
-                >
-                  {mobileMenuOpen ? (
-                    <X className="w-6 h-6" />
-                  ) : (
-                    <Menu className="w-6 h-6" />
-                  )}
-                </button>
-              )}
+              {/* Mobile Menu Button — always present below md.
+                  Deliberately NOT gated on hideMobileStorefrontActions: that
+                  prop suppresses the CART, and the drawer behind this button
+                  holds navigation only. Gating it here left Calculator,
+                  Protocols and the non-storefront views with no way to reach
+                  any other page on a phone. */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"
+                aria-label="Toggle menu"
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Mobile Navigation Menu */}
-      {!hideMobileStorefrontActions && mobileMenuOpen && (
+      {/* Mobile Navigation Menu — opens from the button above, on every page. */}
+      {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-[60]">
           {/* Backdrop */}
           <div
