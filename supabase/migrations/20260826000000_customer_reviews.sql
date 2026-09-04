@@ -198,6 +198,7 @@ DECLARE
   v_order_number  TEXT;
   v_email         TEXT;
   v_root_id       UUID;
+  v_order_id      UUID;
   v_order         public.orders%ROWTYPE;
   v_item          JSONB;
   v_display_name  TEXT;
@@ -231,8 +232,13 @@ BEGIN
 
   -- Find the bundle order that actually contains this product. Reviews attach
   -- to that specific order so the admin sees the right reference.
-  SELECT o.*, item
-    INTO v_order, v_item
+  --
+  -- Two statements, not one: Postgres rejects a %ROWTYPE variable in a
+  -- multiple-item INTO list ("record variable cannot be part of multiple-item
+  -- INTO list"), so the id and the item are selected as scalars first and the
+  -- order row is loaded on its own.
+  SELECT o.id, item
+    INTO v_order_id, v_item
   FROM public.orders o
   CROSS JOIN LATERAL jsonb_array_elements(o.order_items) AS item
   WHERE (o.id = v_root_id OR o.parent_order_id = v_root_id)
@@ -243,6 +249,8 @@ BEGIN
   IF v_item IS NULL THEN
     RAISE EXCEPTION 'That product is not part of the order you verified.';
   END IF;
+
+  SELECT * INTO v_order FROM public.orders WHERE id = v_order_id;
 
   -- Media is dropped entirely when the admin has the switch off, regardless of
   -- what the caller sent. Fail-open on a missing row, matching featureFlags.ts:
