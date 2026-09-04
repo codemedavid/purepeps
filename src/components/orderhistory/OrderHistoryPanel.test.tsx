@@ -136,6 +136,7 @@ describe('OrderHistoryPanel', () => {
     expect(screen.getByText(/12 Mabini St/)).toBeInTheDocument();
     expect(screen.getByText(/Poblacion/)).toBeInTheDocument();
     expect(screen.getByText('Gold Foil')).toBeInTheDocument();
+    expect(screen.getAllByText(/Batch 7/).length).toBeGreaterThan(0);
   });
 
   it('lists each product with its exact strength, quantity and unit price', async () => {

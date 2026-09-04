@@ -3,6 +3,7 @@ import { Calculator, RotateCcw, Syringe, Droplets, FlaskConical, AlertTriangle, 
 import Header from './Header';
 import Footer from './Footer';
 import { useCart } from '../hooks/useCart';
+import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 interface SyringeOption {
     id: string;
@@ -77,7 +78,7 @@ const PeptideCalculator: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-theme-bg font-inter flex flex-col">
+        <div className={`min-h-screen bg-theme-bg font-inter flex flex-col ${BOTTOM_NAV_CLEARANCE}`}>
             <Header
                 cartItemsCount={cart.getTotalItems()}
                 onCartClick={() => window.location.href = '/'}

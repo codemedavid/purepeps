@@ -41,6 +41,11 @@ const iconClassName = 'h-5 w-5 shrink-0';
 // Home, Shop and Cart are always present; the other three are switchable.
 const BASE_COLUMN_COUNT = 3;
 
+// z-40 keeps the bar UNDER full-screen overlays (the COA lightbox and
+// ProductDetailModal are both fixed z-50). At an equal z-index the later DOM
+// node wins, which put the bar on top of the lightbox with its tabs tappable
+// through it — dismissing the image navigated away instead.
+
 // Every column count is written out in full so Tailwind's scanner emits them.
 const GRID_COLUMN_CLASS: Record<number, string> = {
   3: 'grid-cols-3',
@@ -50,7 +55,7 @@ const GRID_COLUMN_CLASS: Record<number, string> = {
 };
 
 const navClassName = (optionalTabCount: number) => [
-  'fixed inset-x-0 bottom-0 z-50 grid border-t border-sakura-edge bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(23,16,13,0.08)] backdrop-blur-md md:hidden',
+  'fixed inset-x-0 bottom-0 z-40 grid border-t border-sakura-edge bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(23,16,13,0.08)] backdrop-blur-md md:hidden',
   GRID_COLUMN_CLASS[BASE_COLUMN_COUNT + optionalTabCount],
 ].join(' ');
 

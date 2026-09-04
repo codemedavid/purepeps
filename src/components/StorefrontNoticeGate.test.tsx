@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import StorefrontNoticeGate from './StorefrontNoticeGate';
-import { DEFAULT_STOREFRONT_NOTICE } from '../utils/storefrontNotice';
+import { clearVisitAcknowledgements, DEFAULT_STOREFRONT_NOTICE } from '../utils/storefrontNotice';
 
 const mockRecordEvent = vi.fn().mockResolvedValue(undefined);
 const mockUseStorefrontNotice = vi.fn();
@@ -27,6 +27,7 @@ describe('StorefrontNoticeGate', () => {
     vi.clearAllMocks();
     localStorage.clear();
     sessionStorage.clear();
+    clearVisitAcknowledgements();
     mockUseStorefrontNotice.mockReturnValue(loaded());
   });
 
@@ -43,13 +44,21 @@ describe('StorefrontNoticeGate', () => {
     await waitFor(() => expect(mockRecordEvent).toHaveBeenCalledWith('impression'));
   });
 
-  it('renders nothing while loading or after a successful empty result', () => {
-    mockUseStorefrontNotice.mockReturnValue({ ...loaded(), notice: null, loading: true });
-    const { rerender } = render(<StorefrontNoticeGate pageId="faq" shopperType="visitor" />);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  it('keeps the legal notice visible while a published row is still loading', () => {
+    mockUseStorefrontNotice.mockReturnValue({
+      ...loaded(),
+      notice: DEFAULT_STOREFRONT_NOTICE,
+      loading: true,
+    });
+    render(<StorefrontNoticeGate pageId="storefront.menu" shopperType="visitor" />);
 
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Important Notice')).toBeInTheDocument();
+  });
+
+  it('renders nothing when no notice is available', () => {
     mockUseStorefrontNotice.mockReturnValue({ ...loaded(), notice: null, loading: false });
-    rerender(<StorefrontNoticeGate pageId="faq" shopperType="visitor" />);
+    render(<StorefrontNoticeGate pageId="faq" shopperType="visitor" />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -85,13 +94,14 @@ describe('StorefrontNoticeGate', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
-  it('does not persist every-visit acknowledgements across a fresh mount', async () => {
+  it('does not re-show an every-visit notice after switching pages this visit', async () => {
     const { unmount } = render(<StorefrontNoticeGate pageId="storefront.menu" shopperType="visitor" />);
     await userEvent.click(await screen.findByRole('button', { name: /I Understand/ }));
     unmount();
 
-    render(<StorefrontNoticeGate pageId="storefront.menu" shopperType="visitor" />);
+    mockUseStorefrontNotice.mockReturnValue(loaded({ id: 'other-page-notice', frequency: 'every_visit' }));
+    render(<StorefrontNoticeGate pageId="coa" shopperType="visitor" />);
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

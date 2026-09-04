@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Award, CheckCircle, X, ExternalLink, Download, Sparkles, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCOAPageSetting } from '../hooks/useCOAPageSetting';
+import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 interface COAReport {
   id: string;
@@ -58,7 +59,7 @@ const COA: React.FC = () => {
   // ... (after loading check)
   if (settingLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center">
+      <div className={`min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center ${BOTTOM_NAV_CLEARANCE}`}>
         <div className="spinner"></div>
       </div>
     );
@@ -66,7 +67,7 @@ const COA: React.FC = () => {
 
   if (!coaPageEnabled) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center">
+      <div className={`min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 flex items-center justify-center ${BOTTOM_NAV_CLEARANCE}`}>
         <div className="text-center p-8">
           <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Lab Reports Unavailable</h1>
@@ -80,7 +81,7 @@ const COA: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50">
+    <div className={`min-h-screen bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50 ${BOTTOM_NAV_CLEARANCE}`}>
       {/* Hero Section - Mobile Optimized */}
       <div className="relative overflow-hidden bg-gradient-to-r from-sky-100 to-blue-100 py-6 md:py-12">
         <div className="absolute top-0 left-0 w-48 h-48 md:w-64 md:h-64 bg-sky-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>

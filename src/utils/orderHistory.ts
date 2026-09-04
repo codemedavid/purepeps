@@ -6,7 +6,30 @@ import {
   type PaymentType,
 } from '../constants/payment';
 import { fulfillmentStageLabel, orderStatusLabel } from './orderTracking';
-import type { OrderHistoryLineItem, OrderHistoryRow } from '../types';
+import type { OrderLineItem, OrderHistoryRow } from '../types';
+
+/** Order date + time, in the reader's own locale. */
+export function formatMoment(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+export interface OrderChargesSource {
+  readonly order_items: readonly OrderLineItem[];
+  readonly total_price: number | null | undefined;
+  readonly shipping_fee: number | null | undefined;
+  readonly discount_applied?: number | null;
+  readonly payment_type?: string | null;
+  readonly balance_due?: number | null;
+  readonly refunded_total?: number | null;
+}
 
 /**
  * Pure derivations behind the customer-facing Order History. Side-effect free
@@ -57,7 +80,7 @@ export interface OrderCharges {
  * of the line items), so a caller can show the two and spot a stored total that
  * has drifted from the items an admin later edited.
  */
-export function deriveCharges(row: OrderHistoryRow): OrderCharges {
+export function deriveCharges(row: OrderChargesSource): OrderCharges {
   const discount = Number(row.discount_applied ?? 0);
   const storedItems = Number(row.total_price ?? 0);
   const shippingFee = Number(row.shipping_fee ?? 0);
@@ -77,7 +100,7 @@ export function deriveCharges(row: OrderHistoryRow): OrderCharges {
 }
 
 /** The exact strength of a line item, e.g. "10 mg" — null when unrecoverable. */
-export function strengthLabel(item: OrderHistoryLineItem): string | null {
+export function strengthLabel(item: OrderLineItem): string | null {
   const mg = item.quantity_mg;
   if (mg == null || Number.isNaN(Number(mg))) return null;
   // Number() drops a trailing .0 so 10 reads "10 mg" while 2.5 stays exact.
@@ -91,7 +114,7 @@ export function strengthLabel(item: OrderHistoryLineItem): string | null {
  * naively appending the recovered milligrams would print "10mg · 10 mg". When the
  * name already states the same number followed by mg, the name stands alone.
  */
-export function describeVariation(item: OrderHistoryLineItem): string | null {
+export function describeVariation(item: OrderLineItem): string | null {
   const name = item.variation_name?.trim() || null;
   const strength = strengthLabel(item);
 

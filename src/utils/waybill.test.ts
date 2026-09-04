@@ -223,11 +223,18 @@ describe('waybill — cash on delivery', () => {
     expect(data.isCashOnDelivery).toBe(true);
   });
 
-  it('states the exact cash to collect: items plus shipping', () => {
-    // 3345.60 items + 100 shipping, no COD surcharge.
+  it('states the exact cash to collect: the shipping fee alone', () => {
+    // 3345.60 of items was paid online at checkout; only the ₱100 fee is owed.
     const data = buildWaybillData(codOrder());
 
-    expect(data.codAmountDue).toBeCloseTo(3445.6, 2);
+    expect(data.codAmountDue).toBeCloseTo(100, 2);
+  });
+
+  it('never asks the courier to collect the goods a second time', () => {
+    const data = buildWaybillData(codOrder());
+
+    expect(data.codAmountDue).toBeLessThan(data.grandTotal);
+    expect(data.codAmountDue).not.toBeCloseTo(3445.6, 2);
   });
 
   it('never reads as paid while the cash is still uncollected', () => {
@@ -258,15 +265,15 @@ describe('waybill — cash on delivery', () => {
     expect(data.isCashOnDelivery).toBe(false);
   });
 
-  it('sums the cash to collect across a consolidated COD waybill', () => {
-    // Two COD orders on one sheet: the courier must collect BOTH totals.
+  it('sums the shipping fees across a consolidated COD waybill', () => {
+    // Two COD orders on one sheet: both fees, neither order total.
     const data = buildGroupWaybillData([
       codOrder({ id: 'aaa', order_number: 'PP-0001' }),
       codOrder({ id: 'bbb', order_number: 'PP-0002', shipping_fee: 0 }),
     ]);
 
     expect(data.isCashOnDelivery).toBe(true);
-    expect(data.codAmountDue).toBeCloseTo(3445.6 + 3345.6, 2);
+    expect(data.codAmountDue).toBeCloseTo(100 + 0, 2);
   });
 
   it('collects only the unpaid orders when a consolidated sheet is mixed', () => {
@@ -275,15 +282,17 @@ describe('waybill — cash on delivery', () => {
       codOrder({ id: 'bbb', order_number: 'PP-0002', shipping_fee: 0, payment_status: 'paid' }),
     ]);
 
-    expect(data.codAmountDue).toBeCloseTo(3445.6, 2);
+    expect(data.codAmountDue).toBeCloseTo(100, 2);
   });
 });
 
-// --- One sheet, one number ---
-// The courier acts on this paper. If COLLECT ON DELIVERY and Grand total
-// disagree, one of them is wrong and money moves incorrectly either way.
+// --- One sheet, two numbers that must not be confused ---
+// The courier acts on this paper. COLLECT ON DELIVERY and Grand total are
+// DIFFERENT figures now — the goods were paid online — so the risk has flipped:
+// the danger is no longer that they disagree, it is that someone reads the
+// grand total as the amount to collect.
 
-describe('waybill — COD figure reconciles with the printed total', () => {
+describe('waybill — COD figure stays clear of the printed total', () => {
   const discounted = (overrides: Partial<WaybillOrderInput> = {}) =>
     order({
       payment_type: 'cod',
@@ -307,18 +316,23 @@ describe('waybill — COD figure reconciles with the printed total', () => {
     expect(data.grandTotal).toBeCloseTo(2945.6, 2);
   });
 
-  it('collects exactly the grand total on a fully COD sheet', () => {
-    // The invariant that matters: the two printed figures agree.
+  it('collects only the shipping fee on a fully COD sheet, never the grand total', () => {
+    // The invariant that matters now: the collect figure is the FEE, and the
+    // discount the shopper won belongs to the online payment, not the courier.
     const data = buildWaybillData(discounted());
 
-    expect(data.codAmountDue).toBeCloseTo(data.grandTotal, 2);
+    expect(data.codAmountDue).toBeCloseTo(100, 2);
+    expect(data.grandTotal).toBeCloseTo(2945.6, 2);
+    expect(data.codAmountDue).toBeLessThan(data.grandTotal);
   });
 
-  it('still agrees when a batch access fee is charged', () => {
+  it('excludes the batch access fee, which is settled before ordering', () => {
+    // The access fee is paid through the access flow to unlock checkout at all,
+    // so it is not money the courier is owed on the doorstep.
     const data = buildWaybillData(discounted(), { adminFee: 250 });
 
     expect(data.grandTotal).toBeCloseTo(3195.6, 2);
-    expect(data.codAmountDue).toBeCloseTo(data.grandTotal, 2);
+    expect(data.codAmountDue).toBeCloseTo(100, 2);
   });
 
   it('reports no discount when none was applied', () => {
@@ -334,7 +348,8 @@ describe('waybill — COD figure reconciles with the printed total', () => {
       discounted({ id: 'bbb', order_number: 'PP-0002', payment_status: 'paid' }),
     ]);
 
-    expect(data.codAmountDue).toBeCloseTo(2945.6, 2);
+    // One outstanding fee out of two orders on the sheet.
+    expect(data.codAmountDue).toBeCloseTo(100, 2);
     expect(data.codAmountDue).toBeLessThan(data.grandTotal);
   });
 });

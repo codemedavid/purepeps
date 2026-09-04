@@ -3,8 +3,8 @@ import { User, MapPin, Package, Receipt, CreditCard, StickyNote, Clock } from 'l
 import { formatPriceWithDecimals } from '../../utils/currency';
 import { paymentStatusColor, paymentStatusLabel, paymentTypeLabel } from '../../constants/payment';
 import { orderStatusLabel } from '../../utils/orderTracking';
-import { deriveCharges, describeVariation } from '../../utils/orderHistory';
-import OrderStatusTimeline, { formatMoment } from './OrderStatusTimeline';
+import { batchLabel, deriveCharges, describeVariation, formatMoment } from '../../utils/orderHistory';
+import OrderStatusTimeline from './OrderStatusTimeline';
 import LigwakNotice from './LigwakNotice';
 import type { OrderHistoryRow } from '../../types';
 
@@ -87,6 +87,7 @@ const OrderHistoryDetail: React.FC<Props> = ({ order }) => {
 
             <Block icon={<MapPin className="w-4 h-4" />} title="Delivery & checkout details">
                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                    <Field label="Group buy" value={batchLabel(order)} />
                     <Field label="Shipping address" value={addressLine || null} />
                     <Field label="Shipping area" value={order.shipping_location} />
                     <Field label="Courier" value={order.shipping_provider} />

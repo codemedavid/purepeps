@@ -70,7 +70,10 @@ export const PAY_NOW_STATUS_OPTIONS: readonly { value: PaymentStatus; label: str
   { value: 'partially_refunded', label: 'Partially Refunded' },
 ];
 
-/** COD never passes through proof review, so it skips `submitted` entirely. */
+/**
+ * COD statuses. `pending` reads as "Collect on Delivery" because what is
+ * outstanding is the shipping fee the courier will take, not the order.
+ */
 export const COD_STATUS_OPTIONS: readonly { value: PaymentStatus; label: string }[] = [
   { value: 'pending', label: 'Collect on Delivery' },
   { value: 'paid', label: 'Paid' },
@@ -104,9 +107,17 @@ export function paymentStatusColor(status: string | null | undefined): string {
   return PAYMENT_STATUS_COLORS[status] ?? NEUTRAL_STATUS_COLOR;
 }
 
-/** Pay Now requires a receipt at checkout; COD has nothing to prove yet. */
+/**
+ * Whether checkout must collect a receipt.
+ *
+ * TRUE for both options. The payment choice governs the SHIPPING FEE only —
+ * the items themselves are bought online either way — so every storefront
+ * order arrives with a receipt to review. Kept as a named rule rather than a
+ * bare `true` so the reason survives, and so a future third option (invoice,
+ * on-account) has one place to say otherwise.
+ */
 export function isProofRequired(type: string | null | undefined): boolean {
-  return type === 'pay_now';
+  return type === 'pay_now' || type === 'cod';
 }
 
 export interface OrderMoney {
@@ -115,13 +126,44 @@ export interface OrderMoney {
 }
 
 /**
- * Cash the courier collects for a COD order.
+ * Cash the courier collects for a COD order: the SHIPPING FEE, and nothing else.
  *
- * There is no COD surcharge (product decision): the customer pays exactly what
- * a Pay Now customer would. total_price already carries the promo discount and
- * excludes shipping, so shipping is added back here.
+ * Cash on Delivery here means "pay the shipping fee on delivery", NOT "pay for
+ * the order on delivery". A COD shopper still buys the items online at checkout
+ * and uploads a receipt for them, exactly like a Pay Now shopper — the only
+ * difference is that the fee travels with the parcel instead of the payment.
+ *
+ * So this must never reach for total_price. Adding it back would tell a courier
+ * to collect the item price a SECOND time, from someone who has already paid it.
+ *
+ * There is no COD surcharge (product decision): the fee is the same either way.
  */
 export function codAmountDue(order: OrderMoney): number {
+  return Number(order.shipping_fee ?? 0);
+}
+
+/**
+ * What the shopper pays ONLINE at checkout, given the option they picked.
+ *
+ * Pay Now settles the shipping fee up front, so it bills items + shipping in a
+ * single transfer. COD bills the items alone and leaves the fee for the courier.
+ * Together with codAmountDue these two always sum to the same grand total — the
+ * option moves the fee between them, it never changes what is owed.
+ */
+export function onlinePaymentDue(order: OrderMoney, type: PaymentType): number {
+  const items = Number(order.total_price ?? 0);
+  return type === 'pay_now' ? items + Number(order.shipping_fee ?? 0) : items;
+}
+
+/**
+ * Everything the order is worth, however it was split across the two moments.
+ *
+ * This — not codAmountDue — is the figure a refund is measured against. The two
+ * were the same number under the old "COD pays for everything" model, and a
+ * refund path that still reaches for codAmountDue would now quietly offer to
+ * return the shipping fee instead of the order.
+ */
+export function orderGrandTotal(order: OrderMoney): number {
   return Number(order.total_price ?? 0) + Number(order.shipping_fee ?? 0);
 }
 

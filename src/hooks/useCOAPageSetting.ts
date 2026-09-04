@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { parseFeatureFlagValue } from '../utils/featureFlags';
 
 export const useCOAPageSetting = () => {
   const [coaPageEnabled, setCoaPageEnabled] = useState<boolean>(true);
@@ -20,8 +21,7 @@ export const useCOAPageSetting = () => {
           filter: `id=eq.coa_page_enabled`
         },
         (payload) => {
-          const value = payload.new?.value;
-          setCoaPageEnabled(value === 'true' || value === true);
+          setCoaPageEnabled(parseFeatureFlagValue(payload.new?.value));
         }
       )
       .subscribe();
@@ -47,8 +47,12 @@ export const useCOAPageSetting = () => {
         return;
       }
       
-      // Default to enabled if setting doesn't exist
-      setCoaPageEnabled(data?.value === 'true' || data?.value === true || !data);
+      // Read through the SAME predicate as the Lab Reports feature flag. Both
+      // read this one row: parseFeatureFlagValue fails open (only the literal
+      // 'false' disables), this used to fail closed (only 'true' enabled). Any
+      // other value — a hand-edited '1', or 't' — made FeatureRoute and the
+      // bottom nav offer /coa while this rendered "Lab Reports Unavailable".
+      setCoaPageEnabled(!data || parseFeatureFlagValue(data.value));
     } catch (error) {
       console.error('Error fetching COA page setting:', error);
       // Default to enabled on error

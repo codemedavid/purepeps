@@ -5,6 +5,8 @@ import {
   codAmountDue,
   countsAsConfirmedOrder,
   isCodCollectible,
+  onlinePaymentDue,
+  orderGrandTotal,
   isProofRequired,
   paymentStatusColor,
   paymentStatusLabel,
@@ -103,24 +105,73 @@ describe('status options by payment type', () => {
 });
 
 describe('isProofRequired', () => {
+  // The payment option governs the SHIPPING FEE only. Items are bought online
+  // in both flows, so both flows produce a receipt to upload.
   it('requires proof of payment for a Pay Now order', () => {
     expect(isProofRequired('pay_now')).toBe(true);
   });
 
-  it('does not require proof for a COD order', () => {
-    expect(isProofRequired('cod')).toBe(false);
+  it('still requires proof for a COD order, which pays for its items online', () => {
+    expect(isProofRequired('cod')).toBe(true);
   });
 });
 
 describe('codAmountDue', () => {
-  it('is the order total plus shipping, with no COD surcharge', () => {
-    // Product decision: COD costs the customer exactly what Pay Now costs.
-    expect(codAmountDue({ total_price: 2000, shipping_fee: 150 })).toBe(2150);
+  it('is the shipping fee alone — the items were already paid online', () => {
+    expect(codAmountDue({ total_price: 2000, shipping_fee: 150 })).toBe(150);
+  });
+
+  it('ignores the order total entirely', () => {
+    // The costliest mistake here is telling a courier to collect the item price
+    // a second time. Same fee, wildly different totals, one answer.
+    expect(codAmountDue({ total_price: 50_000, shipping_fee: 150 })).toBe(150);
   });
 
   it('treats missing money fields as zero rather than NaN', () => {
-    expect(codAmountDue({ total_price: 2000, shipping_fee: null })).toBe(2000);
+    expect(codAmountDue({ total_price: 2000, shipping_fee: null })).toBe(0);
     expect(codAmountDue({ total_price: null, shipping_fee: null })).toBe(0);
+  });
+});
+
+describe('onlinePaymentDue', () => {
+  const money = { total_price: 2000, shipping_fee: 150 };
+
+  it('bills items plus shipping when the shopper settles the fee up front', () => {
+    expect(onlinePaymentDue(money, 'pay_now')).toBe(2150);
+  });
+
+  it('bills items only when the courier will collect the shipping fee', () => {
+    expect(onlinePaymentDue(money, 'cod')).toBe(2000);
+  });
+
+  it('splits the full amount between online and on-arrival with nothing lost', () => {
+    expect(onlinePaymentDue(money, 'cod') + codAmountDue(money)).toBe(
+      onlinePaymentDue(money, 'pay_now'),
+    );
+  });
+
+  it('treats missing money fields as zero rather than NaN', () => {
+    expect(onlinePaymentDue({ total_price: null, shipping_fee: null }, 'pay_now')).toBe(0);
+    expect(onlinePaymentDue({ total_price: null, shipping_fee: 150 }, 'cod')).toBe(0);
+  });
+});
+
+describe('orderGrandTotal', () => {
+  it('is items plus shipping regardless of how the fee is settled', () => {
+    expect(orderGrandTotal({ total_price: 2000, shipping_fee: 150 })).toBe(2150);
+  });
+
+  it('is what a refund is measured against, not the COD cash figure', () => {
+    // Guards the regression this helper exists for: refunding codAmountDue
+    // would hand back the shipping fee and call the order settled.
+    const money = { total_price: 2000, shipping_fee: 150 };
+    expect(orderGrandTotal(money)).not.toBe(codAmountDue(money));
+    expect(resolveRefundStatus(orderGrandTotal(money), 2150)).toBe('refunded');
+    expect(resolveRefundStatus(orderGrandTotal(money), 150)).toBe('partially_refunded');
+  });
+
+  it('treats missing money fields as zero rather than NaN', () => {
+    expect(orderGrandTotal({ total_price: null, shipping_fee: null })).toBe(0);
   });
 });
 

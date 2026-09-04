@@ -278,12 +278,16 @@ export function buildGroupWaybillData(
   );
   const isCashOnDelivery = codOrders.length > 0;
 
-  // Built from the same components as grandTotal, so a sheet where every order
-  // is unpaid COD collects EXACTLY the printed total — no second, conflicting
-  // instruction to the courier. The batch access fee is charged once per batch,
-  // so it is only collected when the whole sheet is unpaid; on a mixed sheet the
-  // prepaid order already carried it, and collecting it twice would overcharge.
-  const isEntirelyCashOnDelivery = isCashOnDelivery && codOrders.length === orders.length;
+  // The SHIPPING FEES on this sheet, and nothing else.
+  //
+  // This is deliberately NOT grandTotal. A COD order here has already paid for
+  // its items online; the courier is collecting the shipping fee only, so the
+  // figure is far smaller than the printed total and that is correct. Reaching
+  // for grandTotal would have the courier collect the goods a second time.
+  //
+  // The batch access fee is excluded for the same reason: it is settled through
+  // the access flow before the shopper can order at all, so it is not money the
+  // courier is owed.
   const codAmountDue = isCashOnDelivery
     ? codOrders.reduce(
       (sum, order) => sum + codAmountDueFor({
@@ -291,7 +295,7 @@ export function buildGroupWaybillData(
         shipping_fee: toNumber(order.shipping_fee),
       }),
       0,
-    ) + (isEntirelyCashOnDelivery ? adminFee ?? 0 : 0)
+    )
     : 0;
 
   return {

@@ -4,10 +4,13 @@ import Header from './Header';
 import Footer from './Footer';
 import { useCart } from '../hooks/useCart';
 import { useProtocols } from '../hooks/useProtocols';
+import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
+import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 const ProtocolGuide: React.FC = () => {
     const { cartItems } = useCart();
     const { protocols, loading } = useProtocols();
+    const { flags } = useFeatureFlagsContext();
     const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -33,7 +36,7 @@ const ProtocolGuide: React.FC = () => {
         : activeProtocols.filter(p => p.category === selectedCategory);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-[#FADADD] via-[#FDF5F7] to-white">
+        <div className={`min-h-screen bg-gradient-to-br from-[#FADADD] via-[#FDF5F7] to-white ${BOTTOM_NAV_CLEARANCE}`}>
             <Header
                 cartItemsCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
                 onCartClick={() => { }}
@@ -249,16 +252,19 @@ const ProtocolGuide: React.FC = () => {
                     </div>
                 )}
 
-                {/* CTA */}
-                <div className="text-center mt-10">
-                    <a
-                        href="/calculator"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white font-semibold rounded-2xl shadow-lg transition-all"
-                    >
-                        <FlaskConical className="w-4 h-4" />
-                        Use Peptide Calculator
-                    </a>
-                </div>
+                {/* CTA — hidden when the calculator is switched off, so it
+                    never sends a customer to a page that redirects home. */}
+                {flags.calculator && (
+                    <div className="text-center mt-10">
+                        <a
+                            href="/calculator"
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-rose-500 hover:bg-rose-600 text-white font-semibold rounded-2xl shadow-lg transition-all"
+                        >
+                            <FlaskConical className="w-4 h-4" />
+                            Use Peptide Calculator
+                        </a>
+                    </div>
+                )}
             </main>
 
             <Footer />

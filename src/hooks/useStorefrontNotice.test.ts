@@ -46,38 +46,55 @@ describe('useStorefrontNotice', () => {
     });
   });
 
+  it('shows the legal notice immediately before the public query resolves', () => {
+    mockRpc.mockReturnValue(new Promise(() => undefined));
+
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
+
+    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
+    expect(result.current.loading).toBe(false);
+  });
+
   it('maps the public RPC payload to the notice model', async () => {
     mockRpc.mockResolvedValueOnce({ data: [row], error: null });
 
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.notice).toEqual(expect.objectContaining({
+    await waitFor(() => expect(result.current.notice).toEqual(expect.objectContaining({
       id: row.id,
       title: 'Heads Up',
       frequency: 'once',
       style: 'critical',
       pageIds: ['storefront.menu'],
       policyTitle: 'Delivery',
-    }));
+    })));
     expect(result.current.error).toBeNull();
   });
 
-  it('returns no modal after a successful empty query', async () => {
-    const { result } = renderHook(() => useStorefrontNotice('faq', 'visitor'));
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.notice).toBeNull();
-  });
-
-  it('uses the legal fallback when retrieval fails', async () => {
-    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'network down' } });
-
-    const { result } = renderHook(() => useStorefrontNotice('faq', 'visitor'));
+  it('uses the legal fallback when no published notice matches the storefront', async () => {
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
-    expect(result.current.error).toBe('network down');
+    expect(result.current.notice?.title).toBe('Important Notice');
+    expect(result.current.notice?.frequency).toBe('every_visit');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does not force the legal notice onto a standalone public page', async () => {
+    const { result } = renderHook(() => useStorefrontNotice('faq', 'visitor'));
+
+    await waitFor(() => expect(mockRpc).toHaveBeenCalled());
+    expect(result.current.notice).toBeNull();
+  });
+
+  it('uses the legal fallback when storefront retrieval fails', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'network down' } });
+
+    const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
+
+    await waitFor(() => expect(result.current.error).toBe('network down'));
+    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
   });
 
   it('records anonymous events for a persisted notice version', async () => {
@@ -99,7 +116,7 @@ describe('useStorefrontNotice', () => {
   it('does not send analytics for the hard-coded fallback', async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'offline' } });
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.error).toBe('offline'));
 
     await act(() => result.current.recordEvent('impression'));
 

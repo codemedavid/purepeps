@@ -58,6 +58,10 @@ describe('StorefrontBottomNav', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Storefront' });
     expect(nav).toHaveClass('md:hidden', 'fixed', 'grid-cols-6');
+    // Below full-screen overlays (COA lightbox / ProductDetailModal are z-50),
+    // or the bar paints over them and stays tappable through the backdrop.
+    expect(nav).toHaveClass('z-40');
+    expect(nav).not.toHaveClass('z-50');
     expect(nav.className).toContain('env(safe-area-inset-bottom)');
     expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Shop' })).toBeInTheDocument();

@@ -16,7 +16,7 @@ interface StorefrontNoticeGateProps {
 
 /** Displays and tracks the highest eligible notice for one public page/view. */
 export default function StorefrontNoticeGate({ pageId, shopperType }: StorefrontNoticeGateProps) {
-  const { notice, loading, recordEvent } = useStorefrontNotice(pageId, shopperType);
+  const { notice, recordEvent } = useStorefrontNotice(pageId, shopperType);
   const [memoryAcknowledgement, setMemoryAcknowledgement] = useState<string | null>(null);
   const countedImpression = useRef<string | null>(null);
 
@@ -25,7 +25,7 @@ export default function StorefrontNoticeGate({ pageId, shopperType }: Storefront
     ? hasAcknowledgedNotice(notice, window.localStorage, window.sessionStorage)
     : false;
   const isAcknowledged = storedAcknowledgement || memoryAcknowledgement === acknowledgementKey;
-  const shouldShow = !loading && notice !== null && !isAcknowledged;
+  const shouldShow = notice !== null && !isAcknowledged;
 
   useEffect(() => {
     if (!shouldShow || !acknowledgementKey || countedImpression.current === acknowledgementKey) return;

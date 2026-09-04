@@ -10,6 +10,7 @@ import {
   COD_STATUS_OPTIONS,
   PAY_NOW_STATUS_OPTIONS,
   codAmountDue,
+  orderGrandTotal,
   paymentStatusColor,
   paymentStatusLabel,
   paymentTypeLabel,
@@ -328,7 +329,10 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     };
 
     if (newStatus === 'refunded' || newStatus === 'partially_refunded') {
-      const due = codAmountDue(order);
+      // The ORDER's worth, not the courier's cash. codAmountDue is the shipping
+      // fee alone now, and offering that as a full refund would settle a ₱7,750
+      // order by handing back ₱150.
+      const due = orderGrandTotal(order);
       const suggested = newStatus === 'refunded' ? String(due) : '';
       const entered = prompt(
         `How much was refunded? (order total ₱${due.toLocaleString('en-PH')})`,
@@ -831,7 +835,7 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, batch, onView, onPrintWayb
               : 'bg-gray-50 text-gray-600 border-gray-200'
               }`}>
               {order.payment_type === 'cod'
-                ? `COD ₱${codAmountDue(order).toLocaleString('en-PH')}`
+                ? `SF on delivery ₱${codAmountDue(order).toLocaleString('en-PH')}`
                 : paymentTypeLabel(order.payment_type)}
             </span>
             {order.manually_confirmed_at && (
@@ -1210,13 +1214,14 @@ const OrderDetailsView: React.FC<OrderDetailsViewProps> = ({
             <h3 className="font-bold text-gray-900 mb-2 md:mb-3 text-sm md:text-base">Payment Information</h3>
             <div className="bg-gray-50 rounded-lg p-3 md:p-4 space-y-1.5 md:space-y-2 text-xs md:text-sm text-gray-900">
               <p><span className="font-semibold">Option:</span> {paymentTypeLabel(order.payment_type)}</p>
-              {order.payment_type === 'cod' ? (
+              {/* Items are bought online under both options, so the method is
+                  always meaningful. COD adds the fee the courier still collects. */}
+              <p><span className="font-semibold">Method:</span> {order.payment_method_name || 'N/A'}</p>
+              {order.payment_type === 'cod' && (
                 <p>
-                  <span className="font-semibold">To collect on delivery:</span>{' '}
+                  <span className="font-semibold">Shipping fee to collect on delivery:</span>{' '}
                   ₱{codAmountDue(order).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </p>
-              ) : (
-                <p><span className="font-semibold">Method:</span> {order.payment_method_name || 'N/A'}</p>
               )}
               <p className="flex items-center gap-2 flex-wrap"><span className="font-semibold">Status:</span>
                 <span className={`px-2 py-1 rounded-full text-[10px] md:text-xs font-semibold border ${paymentStatusColor(order.payment_status)}`}>

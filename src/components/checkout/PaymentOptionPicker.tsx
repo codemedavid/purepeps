@@ -5,11 +5,16 @@ import type { PaymentType } from '../../constants/payment';
 interface PaymentOptionPickerProps {
     value: PaymentType;
     onChange: (next: PaymentType) => void;
-    /** Cash the courier will collect, shown on the COD card so the choice is informed. */
-    codAmount: number;
+    /** Items after discount, excluding shipping. Paid online under BOTH options. */
+    itemsTotal: number;
+    /** The shipping fee — the only figure this choice actually moves. */
+    shippingFee: number;
     /** When false, COD is switched off shop-wide and the card is disabled. */
     codAvailable?: boolean;
 }
+
+const peso = (amount: number): string =>
+    `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
 const OPTIONS: readonly {
     value: PaymentType;
@@ -20,26 +25,33 @@ const OPTIONS: readonly {
         {
             value: 'pay_now',
             title: 'Pay Now',
-            blurb: 'Pay online via GCash or bank transfer, then upload your receipt.',
+            blurb: 'Settle the shipping fee together with your items in one transfer.',
             Icon: CreditCard,
         },
         {
             value: 'cod',
-            title: 'Cash on Delivery',
-            blurb: 'Pay the courier in cash when your order arrives. Nothing to pay today.',
+            title: 'Shipping Fee on Delivery',
+            blurb: 'Pay for your items now and hand the shipping fee to the courier in cash.',
             Icon: Banknote,
         },
     ];
 
 /**
- * How the customer wants to pay. Rendered as a radio group so the choice is
- * keyboard reachable and announced as a single "Payment option" group, rather
- * than as two unrelated buttons.
+ * How the customer wants to handle the SHIPPING FEE.
+ *
+ * The items are bought online in both flows — this choice only decides whether
+ * the fee rides along with that transfer or is handed to the courier in cash.
+ * Each card therefore states what is paid online NOW, because the difference
+ * between the two is otherwise invisible until the parcel arrives.
+ *
+ * Rendered as a radio group so the choice is keyboard reachable and announced
+ * as a single group rather than as two unrelated buttons.
  */
 const PaymentOptionPicker: React.FC<PaymentOptionPickerProps> = ({
     value,
     onChange,
-    codAmount,
+    itemsTotal,
+    shippingFee,
     codAvailable = true,
 }) => (
     <fieldset className="bg-white rounded shadow-clinical p-6 border border-gray-100">
@@ -81,13 +93,25 @@ const PaymentOptionPicker: React.FC<PaymentOptionPickerProps> = ({
 
                         <p className="text-xs text-gray-500 leading-relaxed pl-8">
                             {isDisabled
-                                ? 'Cash on delivery is unavailable right now.'
+                                ? 'Paying the shipping fee on delivery is unavailable right now.'
                                 : blurb}
                         </p>
 
-                        {optionValue === 'cod' && !isDisabled && (
-                            <p className="text-sm font-semibold text-charcoal-900 pl-8">
-                                ₱{codAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} on arrival
+                        {!isDisabled && (
+                            <p className="text-sm pl-8 leading-relaxed">
+                                <span className="font-semibold text-charcoal-900">
+                                    {peso(
+                                        optionValue === 'pay_now'
+                                            ? itemsTotal + shippingFee
+                                            : itemsTotal,
+                                    )}{' '}
+                                    online now
+                                </span>
+                                {optionValue === 'cod' && (
+                                    <span className="block text-charcoal-900">
+                                        + {peso(shippingFee)} cash on arrival
+                                    </span>
+                                )}
                             </p>
                         )}
                     </label>

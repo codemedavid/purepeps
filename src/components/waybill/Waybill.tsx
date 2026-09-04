@@ -135,10 +135,14 @@ export function Waybill({ data }: Props) {
             </p>
             {data.isCashOnDelivery && (
               /* The courier reads this to know money is owed. Deliberately the
-                 loudest thing on the sheet — a missed COD is lost cash. */
+                 loudest thing on the sheet — a missed collection is lost cash.
+                 Named as the SHIPPING FEE so nobody reads the (much larger)
+                 order total below it as the amount to collect. */
               <p className="wb-cod">
-                <strong>COLLECT ON DELIVERY:</strong>{' '}
+                <strong>COLLECT ON DELIVERY — SHIPPING FEE ONLY:</strong>{' '}
                 ₱{data.codAmountDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                <br />
+                <span className="wb-cod-note">Goods already paid online. Do not collect the order total.</span>
               </p>
             )}
           </div>

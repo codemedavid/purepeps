@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { paymentStatusColor, paymentStatusLabel, paymentTypeLabel } from '../constants/payment';
+import { orderGrandTotal, paymentStatusColor, paymentStatusLabel, paymentTypeLabel } from '../constants/payment';
+import { formatPriceWithDecimals } from '../utils/currency';
 import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, ArrowRight, ExternalLink, ArrowLeft, Gift, Upload, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useOrderHistory } from '../hooks/useOrderHistory';
@@ -9,7 +10,9 @@ import { computeTrackingStep, TRACKING_STEPS, orderStatusLabel, sequenceBundleOr
 import type { OrderBundleRow } from '../types';
 import LeftoverClaimPanel from './groupbuy/LeftoverClaimPanel';
 import OrderHistorySection from './orderhistory/OrderHistorySection';
+import TrackedOrderRecord from './tracking/TrackedOrderRecord';
 import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
+import { describeVariation } from '../utils/orderHistory';
 
 type TrackingOrder = OrderBundleRow;
 
@@ -597,40 +600,25 @@ const OrderTracking: React.FC = () => {
                                         )}
                                     </div>
 
-                                    <div className="space-y-4">
-                                        {order.shipping_note && (
-                                            <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                                                <h3 className="font-bold text-navy-900 mb-2 flex items-center gap-2">
-                                                    <Package className="w-4 h-4 text-blue-600" />
-                                                    Shipping Update
-                                                </h3>
-                                                <p className="text-gray-700 text-sm leading-relaxed">{order.shipping_note}</p>
-                                            </div>
-                                        )}
-
-                                        <div className="bg-white rounded-xl p-5 border-2 border-gray-100">
-                                            <h3 className="font-bold text-navy-900 mb-3 text-sm uppercase tracking-wider border-b pb-2">Order Summary</h3>
-                                            <div className="space-y-2 mb-4">
-                                                {order.order_items.map((item) => (
-                                                    <div key={`${item.product_id}-${item.variation_id ?? 'base'}`} className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">{item.quantity}x {item.product_name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            <div className="flex justify-between items-center pt-2 border-t border-gray-100 font-bold text-lg text-navy-900">
-                                                <span>Total</span>
-                                                <span>₱{(order.total_price + (order.shipping_fee || 0)).toLocaleString()}</span>
-                                            </div>
-                                            {order.discount_applied && order.discount_applied > 0 && (
-                                                <div className="flex justify-between items-center pt-2 text-sm text-green-600 font-medium">
-                                                    <span>Discount ({order.promo_code || 'Promo'}):</span>
-                                                    <span>-₱{order.discount_applied.toLocaleString()}</span>
-                                                </div>
-                                            )}
+                                    {order.shipping_note && (
+                                        <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                                            <h3 className="font-bold text-navy-900 mb-2 flex items-center gap-2">
+                                                <Package className="w-4 h-4 text-blue-600" />
+                                                Shipping Update
+                                            </h3>
+                                            <p className="text-gray-700 text-sm leading-relaxed">{order.shipping_note}</p>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
+                                <div className="mt-6">
+                                    <TrackedOrderRecord
+                                        verifiedEmail={searchMode === 'email' ? email : null}
+                                        orderNumber={order.order_number}
+                                        selectedOrderId={order.id}
+                                        fallbackOrder={order}
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -670,11 +658,20 @@ const OrderTracking: React.FC = () => {
                                                 </span>
                                             </div>
                                             <div className="space-y-1 mb-3">
-                                                {seqOrder.order_items.map((item) => (
-                                                    <div key={`${item.product_name}`} className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">{item.quantity}x {item.product_name}</span>
-                                                    </div>
-                                                ))}
+                                                {seqOrder.order_items.map((item, index) => {
+                                                    const variation = describeVariation(item);
+                                                    return (
+                                                        <div
+                                                            key={`${item.product_id ?? item.product_name}-${item.variation_id ?? 'base'}-${index}`}
+                                                            className="flex justify-between text-sm"
+                                                        >
+                                                            <span className="text-gray-600">
+                                                                {item.quantity}x {item.product_name}
+                                                                {variation ? ` — ${variation}` : ''}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                             <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-200 text-sm">
                                                 <span className="text-gray-500">
@@ -689,7 +686,7 @@ const OrderTracking: React.FC = () => {
                                                     </span>
                                                 </span>
                                                 <span className="font-bold text-navy-900">
-                                                    ₱{(seqOrder.total_price + (seqOrder.shipping_fee || 0)).toLocaleString()}
+                                                    {formatPriceWithDecimals(orderGrandTotal(seqOrder))}
                                                 </span>
                                             </div>
                                         </button>
@@ -726,15 +723,24 @@ const OrderTracking: React.FC = () => {
                                                 </span>
                                             </div>
                                             <div className="space-y-1 mb-3">
-                                                {claim.order_items.map((item) => (
-                                                    <div key={`${item.product_id}-${item.variation_id ?? 'base'}`} className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">{item.quantity}x {item.product_name}</span>
-                                                    </div>
-                                                ))}
+                                                {claim.order_items.map((item, index) => {
+                                                    const variation = describeVariation(item);
+                                                    return (
+                                                        <div
+                                                            key={`${item.product_id ?? item.product_name}-${item.variation_id ?? 'base'}-${index}`}
+                                                            className="flex justify-between text-sm"
+                                                        >
+                                                            <span className="text-gray-600">
+                                                                {item.quantity}x {item.product_name}
+                                                                {variation ? ` — ${variation}` : ''}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                             <div className="flex justify-between items-center pt-2 border-t border-gray-200 font-bold text-navy-900">
                                                 <span>Total</span>
-                                                <span>₱{(claim.total_price + (claim.shipping_fee || 0)).toLocaleString()}</span>
+                                                <span>{formatPriceWithDecimals(orderGrandTotal(claim))}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -751,14 +757,15 @@ const OrderTracking: React.FC = () => {
                             />
                         )}
 
-                        {/* Full order history. An email lookup already proved the
-                            address, so it loads straight away; an order-number
-                            lookup is asked to confirm the email first, because an
-                            order number alone must not unlock a home address. */}
-                        <OrderHistorySection
-                            verifiedEmail={searchMode === 'email' ? email : null}
-                            orderNumber={order.order_number}
-                        />
+                        {/* Every order under this email, as a filterable list.
+                            The tracked card above already shows the selected
+                            order in full; this is for switching between them. */}
+                        {searchMode === 'email' && (
+                            <OrderHistorySection
+                                verifiedEmail={email}
+                                orderNumber={null}
+                            />
+                        )}
                     </div>
                 )}
             </div>

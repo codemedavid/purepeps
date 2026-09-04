@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   DEFAULT_STOREFRONT_NOTICE,
+  isStorefrontPageId,
   type NoticeAudience,
   type NoticeFrequency,
   type NoticePageId,
@@ -67,32 +68,44 @@ const fromPublicRow = (row: PublicNoticeRow): StorefrontNotice => ({
   footerNote: row.footer_note,
 });
 
-/** Loads the single highest-priority notice eligible for this public page. */
+const fallbackNoticeFor = (pageId: NoticePageId): StorefrontNotice | null =>
+  isStorefrontPageId(pageId) ? DEFAULT_STOREFRONT_NOTICE : null;
+
+/**
+ * Loads the single highest-priority notice eligible for this public page.
+ * On the storefront, a published row wins and the hard-coded research-use
+ * notice fills in when none matches. Standalone pages stay quiet unless a
+ * published notice targets them, so switching Labs/Orders/Guides does not
+ * re-open the legal popup.
+ */
 export const useStorefrontNotice = (
   pageId: NoticePageId,
   shopperType: Exclude<NoticeAudience, 'everyone'>,
 ): UseStorefrontNoticeResult => {
-  const [notice, setNotice] = useState<StorefrontNotice | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<StorefrontNotice | null>(() => fallbackNoticeFor(pageId));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchGeneration = useRef(0);
 
   const fetchNotice = useCallback(async () => {
+    const generation = ++fetchGeneration.current;
     try {
-      setLoading(true);
       setError(null);
       const { data, error: queryError } = await supabase.rpc('get_active_storefront_notice', {
         p_page_id: pageId,
         p_audience: shopperType,
       });
+      if (generation !== fetchGeneration.current) return;
       if (queryError) throw new Error(queryError.message);
       const first = ((data ?? []) as PublicNoticeRow[])[0];
-      setNotice(first ? fromPublicRow(first) : null);
+      setNotice(first ? fromPublicRow(first) : fallbackNoticeFor(pageId));
     } catch (err) {
+      if (generation !== fetchGeneration.current) return;
       console.error('Error fetching storefront notice:', err);
       setError(getActionErrorMessage(err, 'Failed to load the storefront notice'));
-      setNotice(DEFAULT_STOREFRONT_NOTICE);
+      setNotice(fallbackNoticeFor(pageId));
     } finally {
-      setLoading(false);
+      if (generation === fetchGeneration.current) setLoading(false);
     }
   }, [pageId, shopperType]);
 

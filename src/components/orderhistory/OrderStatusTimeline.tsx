@@ -1,20 +1,9 @@
 import React from 'react';
 import { CheckCircle, Circle, AlertCircle } from 'lucide-react';
-import { buildStatusTimeline, isTimelinePartial } from '../../utils/orderHistory';
+import { buildStatusTimeline, formatMoment, isTimelinePartial } from '../../utils/orderHistory';
 import type { OrderHistoryRow } from '../../types';
 
-/** Order date + time, in the reader's own locale. */
-export function formatMoment(iso: string): string {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    });
-}
+export { formatMoment };
 
 interface Props {
     readonly order: OrderHistoryRow;

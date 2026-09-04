@@ -44,8 +44,26 @@ const mockRoot = {
   total_price: 5000,
   shipping_fee: 200,
   order_items: [
-    { product_name: 'BPC-157 5mg', quantity: 2 },
-    { product_name: 'GHK-Cu 10mg', quantity: 1 },
+    {
+      product_id: 'p1',
+      product_name: 'BPC-157',
+      variation_id: 'v5',
+      variation_name: '5mg',
+      quantity: 2,
+      price: 2000,
+      total: 4000,
+      quantity_mg: 5,
+    },
+    {
+      product_id: 'p2',
+      product_name: 'GHK-Cu',
+      variation_id: 'v10',
+      variation_name: '10mg',
+      quantity: 1,
+      price: 1000,
+      total: 1000,
+      quantity_mg: 10,
+    },
   ],
   created_at: '2025-01-15T10:00:00Z',
   promo_code: 'SAVE10',
@@ -204,9 +222,14 @@ describe('OrderTracking', () => {
       await userEvent.click(screen.getByText('Track Order'));
 
       await waitFor(() => {
-        expect(screen.getByText(/2x BPC-157 5mg/)).toBeInTheDocument();
+        expect(screen.getByText('BPC-157')).toBeInTheDocument();
       });
-      expect(screen.getByText(/1x GHK-Cu 10mg/)).toBeInTheDocument();
+      expect(screen.getByText('GHK-Cu')).toBeInTheDocument();
+      const items = screen.getByRole('table', { name: /tracked order items/i });
+      expect(items).toHaveTextContent('5mg');
+      expect(items).toHaveTextContent('10mg');
+      expect(items).toHaveTextContent('₱2,000.00');
+      expect(items).toHaveTextContent('₱1,000.00');
     });
 
     it('shows total price (including shipping)', async () => {
@@ -217,7 +240,7 @@ describe('OrderTracking', () => {
 
       await waitFor(() => {
         // total_price(5000) + shipping_fee(200) = 5,200
-        expect(screen.getByText('₱5,200')).toBeInTheDocument();
+        expect(screen.getByText('₱5,200.00')).toBeInTheDocument();
       });
     });
 
@@ -276,7 +299,7 @@ describe('OrderTracking', () => {
       expect(screen.getByText('TBS-9999')).toBeInTheDocument();
       expect(screen.getByText(/1x Retatrutide 10mg/)).toBeInTheDocument();
       // Add-on total = total_price(1200) + shipping(0)
-      expect(screen.getByText('₱1,200')).toBeInTheDocument();
+      expect(screen.getByText('₱1,200.00')).toBeInTheDocument();
     });
 
     it('does not render the add-ons section when there are no claim rows', async () => {
@@ -341,9 +364,9 @@ describe('OrderTracking', () => {
       await userEvent.click(screen.getByText('Track Order'));
 
       await waitFor(() => {
-        expect(screen.getByText(/GCash/)).toBeInTheDocument();
+        expect(screen.getAllByText(/GCash/).length).toBeGreaterThan(0);
       });
-      expect(screen.getByText(/Maya/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Maya/).length).toBeGreaterThan(0);
     });
 
     it('does not render the numbered-orders section for a single order', async () => {

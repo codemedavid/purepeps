@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, FlaskConical, Package, CreditCard, Truck, ArrowLeft, HelpCircle } from 'lucide-react';
 import { useFAQs } from '../hooks/useFAQs';
+import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
 
 const categoryIcons: { [key: string]: React.ReactElement } = {
     'PRODUCT & USAGE': <FlaskConical className="w-5 h-5" />,
@@ -39,14 +40,14 @@ const FAQ: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className={`min-h-screen bg-gray-50 flex items-center justify-center ${BOTTOM_NAV_CLEARANCE}`}>
                 <div className="animate-spin w-8 h-8 border-2 border-navy-900 border-t-transparent rounded-full" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className={`min-h-screen bg-gray-50 ${BOTTOM_NAV_CLEARANCE}`}>
             {/* Header */}
             <div className="bg-white border-b-4 border-navy-900 sticky top-0 z-10 shadow-sm">
                 <div className="container mx-auto px-4 py-4">
