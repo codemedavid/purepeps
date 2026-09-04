@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProtocolGuide from './ProtocolGuide';
-import { allMockProtocols } from '../test/mocks';
+import { allMockProtocols, mockFileProtocol } from '../test/mocks';
 
 // Mock useProtocols
 vi.mock('../hooks/useProtocols', () => ({
@@ -23,6 +23,12 @@ vi.mock('../hooks/useCart', () => ({
 // the page's mobile-navigation contract is exercised rather than mocked away.
 vi.mock('./Footer', () => ({
   default: () => <div data-testid="footer">Footer</div>,
+}));
+
+// pdf.js is stubbed: jsdom cannot rasterise a PDF, and what matters here is
+// that the file opens inside the page at all.
+vi.mock('../lib/pdf', () => ({
+  loadPdf: vi.fn().mockResolvedValue({ pageCount: 1, renderPage: vi.fn() }),
 }));
 
 describe('ProtocolGuide', () => {
@@ -123,7 +129,7 @@ describe('ProtocolGuide', () => {
   // --- File Protocol Expanded ---
 
   describe('file protocol content', () => {
-    it('shows download link when file protocol is expanded', async () => {
+    it('shows the file card when a file protocol is expanded', async () => {
       render(<ProtocolGuide />);
 
       const protocolButtons = screen.getAllByRole('button');
@@ -134,17 +140,46 @@ describe('ProtocolGuide', () => {
       expect(screen.getByText('Click to view or download')).toBeInTheDocument();
     });
 
-    it('file link opens in new tab with correct href', async () => {
+    it('keeps the customer on Pure Peps instead of linking out to the file host', async () => {
       render(<ProtocolGuide />);
 
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
       await userEvent.click(bpcButton!);
 
-      const link = screen.getByText('Click to view or download').closest('a');
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-      expect(link).toHaveAttribute('href', 'https://test.supabase.co/storage/v1/object/public/protocol-files/bpc-protocol.pdf');
+      const card = screen.getByText('Click to view or download').closest('a');
+      expect(card).toBeNull();
+      expect(
+        document.querySelector(`a[href="${mockFileProtocol.file_url}"]`),
+      ).toBeNull();
+    });
+
+    it('opens the file in an in-site viewer when the card is clicked', async () => {
+      render(<ProtocolGuide />);
+
+      const protocolButtons = screen.getAllByRole('button');
+      const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
+      await userEvent.click(bpcButton!);
+
+      await userEvent.click(screen.getByRole('button', { name: /click to view or download/i }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent('BPC-157 Protocol');
+    });
+
+    it('returns to the protocol list when the viewer is closed', async () => {
+      render(<ProtocolGuide />);
+
+      const protocolButtons = screen.getAllByRole('button');
+      const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
+      await userEvent.click(bpcButton!);
+      await userEvent.click(screen.getByRole('button', { name: /click to view or download/i }));
+      await screen.findByRole('dialog');
+
+      await userEvent.click(screen.getByRole('button', { name: /close/i }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('Click to view or download')).toBeInTheDocument();
     });
   });
 
