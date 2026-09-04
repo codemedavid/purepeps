@@ -32,11 +32,41 @@ describe('Header', () => {
   it('suppresses mobile storefront actions while retaining a desktop cart', () => {
     renderHeader({ hideMobileStorefrontActions: true });
 
-    expect(screen.queryByRole('button', { name: 'Toggle menu' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Track Order')).not.toBeInTheDocument();
-
+    // The cart IS a storefront action, so it stays desktop-only here.
     const cartButton = screen.getByRole('button', { name: 'View cart' });
     expect(cartButton).toHaveClass('hidden', 'md:block');
+
+    // The drawer stays CLOSED until asked for. Track Order is asserted by its
+    // full label, which only the drawer renders — the desktop bar shows the
+    // shortLabel "Track".
+    expect(screen.queryByText('Track Order')).not.toBeInTheDocument();
+  });
+
+  it('KEEPS the burger menu even when mobile storefront actions are suppressed', () => {
+    // The drawer holds navigation and nothing else — no cart, no checkout. On
+    // Calculator, Protocols and the non-storefront App views, hiding the burger
+    // left small screens with NO way to reach any other page.
+    renderHeader({ hideMobileStorefrontActions: true });
+
+    expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
+  });
+
+  it('shows the burger only on small screens', () => {
+    renderHeader();
+
+    // md:hidden is what makes it a small-device control; the desktop bar
+    // already lists the same destinations.
+    expect(screen.getByRole('button', { name: 'Toggle menu' })).toHaveClass('md:hidden');
+  });
+
+  it('opens the side nav from the burger on a page with storefront actions suppressed', async () => {
+    const user = userEvent.setup();
+    renderHeader({ hideMobileStorefrontActions: true });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle menu' }));
+
+    expect(screen.getByText('Track Order')).toBeInTheDocument();
+    expect(screen.getByText('Customer Reviews')).toBeInTheDocument();
   });
 });
 
