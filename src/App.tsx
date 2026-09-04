@@ -124,9 +124,9 @@ function MainApp() {
         setShopScrollRequest((request) => request + 1);
     };
 
-    // The hero's catalog CTA scrolls to the products itself, so this only moves the
-    // bottom navigation to Shop. It deliberately skips shopScrollRequest, whose
-    // anchor sits above the hero and would pull the page back up.
+    // The hero's catalog CTA scrolls to the products itself (Menu.scrollToProducts),
+    // so this only moves the bottom navigation to Shop. Firing shopScrollRequest as
+    // well would scroll the same element twice in one interaction.
     const handleBrowseCatalog = () => {
         setMenuDestination('shop');
     };
@@ -213,8 +213,9 @@ function MainApp() {
 
             {currentView === 'menu' && (
                 <>
-                    {/* Keep the anchor outside SubNav so its sticky containing block is unchanged. */}
-                    <div id="storefront-catalog" className="scroll-mt-20" aria-hidden="true" />
+                    {/* The catalog anchor lives on the products grid in Menu, not here.
+                        An anchor at this position sits above the hero, so scrolling to
+                        it means scrolling to the top of the storefront. */}
                     <SubNav
                         selectedCategory={selectedCategory}
                         onCategoryClick={handleCategoryClick}

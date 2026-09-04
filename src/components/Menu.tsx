@@ -134,7 +134,17 @@ const Menu: React.FC<MenuProps> = ({
           isBatchOpen={isBatchOpen}
         />
 
-        <div className="max-w-[1180px] mx-auto px-6 pb-10" ref={productsRef}>
+        {/* THE catalog anchor. Both routes to "show me the products" —
+            the hero CTA via productsRef and the Shop tab via
+            #storefront-catalog — must land on this one element. The id
+            previously sat above SubNav in App, i.e. above the hero, so the
+            Shop tab scrolled to the top of the storefront instead.
+            scroll-mt clears the sticky header and SubNav. */}
+        <div
+          id="storefront-catalog"
+          className="max-w-[1180px] mx-auto px-6 pb-10 scroll-mt-28 md:scroll-mt-24"
+          ref={productsRef}
+        >
           {/* Access bar — shown until the member is verified */}
           {!isVerified && (
             <div className="flex items-center justify-between gap-6 px-6 py-[18px] bg-sakura-ink rounded-[18px] mb-8 flex-wrap">
