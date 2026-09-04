@@ -149,4 +149,39 @@ describe('Storefront bottom navigation', () => {
       heroHeading.compareDocumentPosition(scrollTargets[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('scrolls down into the catalog from the Shop tab, not back up to the hero', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const heroHeading = screen.getByRole('heading', { level: 1 });
+
+    await user.click(bottomNavTab('Shop'));
+    await waitFor(() => expect(scrollTargets.length).toBeGreaterThan(0));
+
+    // The SAME guarantee the hero CTA already has, which the Shop tab lacked:
+    // its anchor sat ABOVE the hero, so tapping Shop scrolled to the top of the
+    // storefront and left the products exactly as far away as before.
+    const landed = scrollTargets[scrollTargets.length - 1];
+    expect(
+      heroHeading.compareDocumentPosition(landed) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('scrolls the Shop tab to the same place the hero CTA does', async () => {
+    // Two routes to "show me the products" that land in different places is the
+    // shape of the original bug; pinning them together stops it returning.
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /browse the catalog/i }));
+    await waitFor(() => expect(scrollTargets.length).toBeGreaterThan(0));
+    const fromHero = scrollTargets[scrollTargets.length - 1];
+
+    await user.click(bottomNavTab('Shop'));
+    await waitFor(() => expect(scrollTargets[scrollTargets.length - 1]).not.toBe(undefined));
+    const fromShopTab = scrollTargets[scrollTargets.length - 1];
+
+    expect(fromShopTab).toBe(fromHero);
+  });
 });
