@@ -1,7 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStorefrontNotice } from './useStorefrontNotice';
-import { DEFAULT_STOREFRONT_NOTICE } from '../utils/storefrontNotice';
 
 const mockRpc = vi.fn();
 
@@ -46,13 +45,14 @@ describe('useStorefrontNotice', () => {
     });
   });
 
-  it('shows the legal notice immediately before the public query resolves', () => {
+  it('shows nothing while the public query is still in flight', () => {
     mockRpc.mockReturnValue(new Promise(() => undefined));
 
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
-    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
-    expect(result.current.loading).toBe(false);
+    // A pop-up that appears before we know whether one is published would
+    // flash on every visit — which is exactly the behaviour being removed.
+    expect(result.current.notice).toBeNull();
   });
 
   it('maps the public RPC payload to the notice model', async () => {
@@ -71,14 +71,27 @@ describe('useStorefrontNotice', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('uses the legal fallback when no published notice matches the storefront', async () => {
+  // The pop-up is OFF unless an admin publishes one. The Notice Manager is the
+  // single source of truth: a hard-coded fallback here used to re-open the
+  // legal modal on every visit even with nothing published and the toggle off,
+  // which meant the admin's own switch could not turn it off.
+  it.each(['storefront.landing', 'storefront.menu', 'storefront.cart'] as const)(
+    'shows no notice on %s when nothing is published',
+    async (pageId) => {
+      const { result } = renderHook(() => useStorefrontNotice(pageId, 'visitor'));
+
+      await waitFor(() => expect(mockRpc).toHaveBeenCalled());
+      expect(result.current.notice).toBeNull();
+      expect(result.current.error).toBeNull();
+    },
+  );
+
+  it('still shows a notice the admin HAS published', async () => {
+    mockRpc.mockResolvedValueOnce({ data: [row], error: null });
+
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
-    expect(result.current.notice?.title).toBe('Important Notice');
-    expect(result.current.notice?.frequency).toBe('every_visit');
-    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.notice?.title).toBe('Heads Up'));
   });
 
   it('does not force the legal notice onto a standalone public page', async () => {
@@ -88,13 +101,13 @@ describe('useStorefrontNotice', () => {
     expect(result.current.notice).toBeNull();
   });
 
-  it('uses the legal fallback when storefront retrieval fails', async () => {
+  it('shows no notice when retrieval fails, rather than blocking the page', async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'network down' } });
 
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
 
     await waitFor(() => expect(result.current.error).toBe('network down'));
-    expect(result.current.notice).toEqual(DEFAULT_STOREFRONT_NOTICE);
+    expect(result.current.notice).toBeNull();
   });
 
   it('records anonymous events for a persisted notice version', async () => {
@@ -113,7 +126,7 @@ describe('useStorefrontNotice', () => {
     });
   });
 
-  it('does not send analytics for the hard-coded fallback', async () => {
+  it('sends no analytics when there is no notice on screen', async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'offline' } });
     const { result } = renderHook(() => useStorefrontNotice('storefront.menu', 'visitor'));
     await waitFor(() => expect(result.current.error).toBe('offline'));

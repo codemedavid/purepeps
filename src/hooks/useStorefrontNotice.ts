@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  DEFAULT_STOREFRONT_NOTICE,
-  isStorefrontPageId,
   type NoticeAudience,
   type NoticeFrequency,
   type NoticePageId,
@@ -68,21 +66,22 @@ const fromPublicRow = (row: PublicNoticeRow): StorefrontNotice => ({
   footerNote: row.footer_note,
 });
 
-const fallbackNoticeFor = (pageId: NoticePageId): StorefrontNotice | null =>
-  isStorefrontPageId(pageId) ? DEFAULT_STOREFRONT_NOTICE : null;
-
 /**
  * Loads the single highest-priority notice eligible for this public page.
- * On the storefront, a published row wins and the hard-coded research-use
- * notice fills in when none matches. Standalone pages stay quiet unless a
- * published notice targets them, so switching Labs/Orders/Guides does not
- * re-open the legal popup.
+ *
+ * A published row is the ONLY thing that opens the modal. There is deliberately
+ * no hard-coded fallback: one used to re-open the research-use notice on every
+ * storefront visit even with nothing published and
+ * `storefront_notice_enabled = 'false'`, which meant the admin's own switch
+ * could not actually turn the pop-up off. The Notice Manager is now the single
+ * source of truth, and the archived legal notice is one click from being
+ * republished. The research-use line itself still ships in the footer.
  */
 export const useStorefrontNotice = (
   pageId: NoticePageId,
   shopperType: Exclude<NoticeAudience, 'everyone'>,
 ): UseStorefrontNoticeResult => {
-  const [notice, setNotice] = useState<StorefrontNotice | null>(() => fallbackNoticeFor(pageId));
+  const [notice, setNotice] = useState<StorefrontNotice | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchGeneration = useRef(0);
@@ -98,12 +97,14 @@ export const useStorefrontNotice = (
       if (generation !== fetchGeneration.current) return;
       if (queryError) throw new Error(queryError.message);
       const first = ((data ?? []) as PublicNoticeRow[])[0];
-      setNotice(first ? fromPublicRow(first) : fallbackNoticeFor(pageId));
+      setNotice(first ? fromPublicRow(first) : null);
     } catch (err) {
       if (generation !== fetchGeneration.current) return;
       console.error('Error fetching storefront notice:', err);
       setError(getActionErrorMessage(err, 'Failed to load the storefront notice'));
-      setNotice(fallbackNoticeFor(pageId));
+      // Fail closed: a settings outage must not put a blocking modal in front
+      // of the storefront.
+      setNotice(null);
     } finally {
       if (generation === fetchGeneration.current) setLoading(false);
     }
@@ -114,7 +115,7 @@ export const useStorefrontNotice = (
   }, [fetchNotice]);
 
   const recordEvent = useCallback(async (event: StorefrontNoticeEvent) => {
-    if (!notice || notice.id === DEFAULT_STOREFRONT_NOTICE.id) return;
+    if (!notice) return;
     const { error: eventError } = await supabase.rpc('record_storefront_notice_event', {
       p_notice_id: notice.id,
       p_version: notice.version,
