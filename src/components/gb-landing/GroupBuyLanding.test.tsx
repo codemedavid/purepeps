@@ -145,6 +145,62 @@ describe('GroupBuyLanding — timeline', () => {
   });
 });
 
+// Between buys the stage dates describe a schedule that is over, so the whole
+// card is swapped for a panel saying when the next buy starts. Every word of it
+// is admin-written.
+describe('GroupBuyLanding — closed state', () => {
+  const closed = { statusMode: 'closed' as const };
+
+  it('replaces the timeline with the closed panel', () => {
+    renderLanding(closed);
+
+    expect(screen.getByTestId('gb-closed-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+    expect(screen.queryByText('GB Open')).not.toBeInTheDocument();
+  });
+
+  it('renders the admin closed heading, date and message', () => {
+    renderLanding({
+      ...closed,
+      closedTitle: 'Next Group Buy',
+      closedDate: 'October 15',
+      closedMessage: 'Batch 13 opens after the long weekend.',
+    });
+
+    expect(screen.getByText('Next Group Buy')).toBeInTheDocument();
+    expect(screen.getByTestId('gb-closed-date')).toHaveTextContent('October 15');
+    expect(screen.getByText('Batch 13 opens after the long weekend.')).toBeInTheDocument();
+  });
+
+  it('omits the date line when the admin has not set one', () => {
+    renderLanding({ ...closed, closedDate: '' });
+
+    expect(screen.queryByTestId('gb-closed-date')).not.toBeInTheDocument();
+    // The panel itself still renders its heading and message.
+    expect(screen.getByTestId('gb-closed-panel')).toBeInTheDocument();
+  });
+
+  it('follows the live batch when the admin leaves the status on auto', () => {
+    renderLanding({ statusMode: 'auto' }, { isBatchOpen: false });
+
+    expect(screen.getByTestId('gb-closed-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+  });
+
+  it('shows the timeline, not the closed panel, while the buy is open', () => {
+    renderLanding({ statusMode: 'open' }, { isBatchOpen: false });
+
+    expect(screen.queryByTestId('gb-closed-panel')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+  });
+
+  it('keeps the calls to action available while closed', () => {
+    renderLanding(closed);
+
+    expect(screen.getByTestId('gb-cta-primary')).toBeInTheDocument();
+  });
+});
+
 describe('GroupBuyLanding — calls to action', () => {
   it('invokes the primary CTA action', async () => {
     const user = userEvent.setup();

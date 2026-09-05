@@ -79,6 +79,37 @@ describe('gbLandingFromRows', () => {
   });
 });
 
+describe('gbLandingFromRows — closed-state copy', () => {
+  it('reads the closed-state title, date and message', () => {
+    const content = gbLandingFromRows(
+      rows({
+        gb_landing_closed_title: 'Next Group Buy',
+        gb_landing_closed_date: 'October 15',
+        gb_landing_closed_message: 'Batch 13 opens after the long weekend.',
+      }),
+    );
+
+    expect(content.closedTitle).toBe('Next Group Buy');
+    expect(content.closedDate).toBe('October 15');
+    expect(content.closedMessage).toBe('Batch 13 opens after the long weekend.');
+  });
+
+  it('falls back to the defaults so the closed panel is never empty', () => {
+    const content = gbLandingFromRows([]);
+
+    expect(content.closedTitle).toBe(DEFAULT_GB_LANDING.closedTitle);
+    expect(content.closedMessage).toBe(DEFAULT_GB_LANDING.closedMessage);
+    // The date is batch-specific, so it starts blank for the admin to fill in.
+    expect(content.closedDate).toBe('');
+  });
+
+  it('lets the admin blank the closed date', () => {
+    const content = gbLandingFromRows(rows({ gb_landing_closed_date: '' }));
+
+    expect(content.closedDate).toBe('');
+  });
+});
+
 describe('parseCtaAction', () => {
   it.each(['catalog', 'access', 'cart', 'track_order', 'faq', 'reviews', 'none'] as const)(
     'accepts the whitelisted action %s',
@@ -138,6 +169,9 @@ describe('gbLandingToRows', () => {
       statusMode: 'closed' as const,
       headline: 'Edited headline',
       headlineHighlight: '',
+      closedTitle: 'Next drop',
+      closedDate: 'Nov 02',
+      closedMessage: '',
       primaryCtaAction: 'reviews' as const,
       stages: DEFAULT_GB_LANDING.stages.map((stage, index) => ({
         ...stage,
@@ -165,13 +199,14 @@ describe('gbLandingToRows', () => {
 });
 
 describe('GB_LANDING_KEYS', () => {
-  // 11 section-level fields + 4 stages x 5 fields (icon, title, description,
+  // 14 section-level fields + 4 stages x 5 fields (icon, title, description,
   // date, time). The brief lists 27 explicitly and omits the stage icons, but
   // it also says each stage has an icon and that nothing in the timeline may be
-  // hardcoded — so the icons are admin-editable too.
-  it('covers the 31 admin-editable fields with no duplicates', () => {
-    expect(GB_LANDING_KEYS).toHaveLength(31);
-    expect(new Set(GB_LANDING_KEYS).size).toBe(31);
+  // hardcoded — so the icons are admin-editable too. The last three are the
+  // closed-state panel shown in place of the timeline between buys.
+  it('covers the 34 admin-editable fields with no duplicates', () => {
+    expect(GB_LANDING_KEYS).toHaveLength(34);
+    expect(new Set(GB_LANDING_KEYS).size).toBe(34);
   });
 
   it('namespaces every key so it cannot collide with another setting', () => {

@@ -84,6 +84,15 @@ export interface GbLandingContent {
   description: string;
   timelineTitle: string;
   stages: GbStages;
+  /**
+   * Shown INSTEAD of the timeline while the buy is closed. The stage dates
+   * describe a buy that is running; between buys the useful thing to say is
+   * when the next one starts, so the panel is swapped rather than stacked.
+   */
+  closedTitle: string;
+  /** The "next GB is on ..." value. Free text; blank omits the line. */
+  closedDate: string;
+  closedMessage: string;
   primaryCtaLabel: string;
   primaryCtaAction: GbCtaAction;
   /** Blank label hides the secondary CTA entirely. */
@@ -110,6 +119,9 @@ const KEY_BY_FIELD = {
   headlineHighlight: `${KEY_PREFIX}headline_highlight`,
   description: `${KEY_PREFIX}description`,
   timelineTitle: `${KEY_PREFIX}timeline_title`,
+  closedTitle: `${KEY_PREFIX}closed_title`,
+  closedDate: `${KEY_PREFIX}closed_date`,
+  closedMessage: `${KEY_PREFIX}closed_message`,
   primaryCtaLabel: `${KEY_PREFIX}cta_primary_label`,
   primaryCtaAction: `${KEY_PREFIX}cta_primary_action`,
   secondaryCtaLabel: `${KEY_PREFIX}cta_secondary_label`,
@@ -126,6 +138,9 @@ const TEXT_FIELDS = [
   'headlineHighlight',
   'description',
   'timelineTitle',
+  'closedTitle',
+  'closedDate',
+  'closedMessage',
   'primaryCtaLabel',
   'secondaryCtaLabel',
   'bottomNote',
@@ -166,6 +181,11 @@ export const DEFAULT_GB_LANDING: GbLandingContent = {
   description:
     'Third-party tested vials, at least 99% HPLC verified. Pool your order with the group and every vial gets cheaper as members commit.',
   timelineTitle: 'GB Timeline',
+  closedTitle: 'Next Group Buy',
+  // Batch-specific, so it starts blank rather than announcing an invented date.
+  closedDate: '',
+  closedMessage:
+    'This group buy has closed. The next one opens soon — check back for the schedule.',
   stages: [
     defaultStage('unlock', 'GB Open', 'Ordering is live. Browse the catalog and reserve your vials.'),
     defaultStage('timer', 'Order Cut-off', 'Last call. Carts close and no new orders are accepted.'),
@@ -265,6 +285,9 @@ const FIELD_LABEL: Record<GbLandingField, string> = {
   headlineHighlight: 'highlighted headline text (blank hides it)',
   description: 'supporting description',
   timelineTitle: 'timeline section title',
+  closedTitle: 'closed-state heading, shown instead of the timeline between buys',
+  closedDate: 'closed-state date, e.g. the next buy\'s start. Blank hides the line',
+  closedMessage: 'closed-state supporting text',
   primaryCtaLabel: 'primary CTA label',
   primaryCtaAction: 'primary CTA action',
   secondaryCtaLabel: 'secondary CTA label (blank hides the button)',

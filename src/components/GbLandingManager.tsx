@@ -284,6 +284,53 @@ function GbLandingManager() {
           })}
         </div>
 
+        {/* Closed state — replaces the timeline between buys */}
+        <fieldset className="rounded-xl border border-gray-200 p-4">
+          <legend className="px-2 text-sm font-bold text-gray-900">
+            Between buys (shown instead of the timeline)
+          </legend>
+          <p className="mb-4 text-xs text-gray-500">
+            When the status resolves to Closed, the four timeline stages are replaced by this
+            panel — so the homepage announces the next buy instead of showing a schedule that has
+            already finished.
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Closed heading">
+              <input
+                aria-label="Closed heading"
+                value={draft.closedTitle}
+                onChange={(event) => setField('closedTitle', event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Closed date"
+              hint='Free text, e.g. "October 15" or "announcing soon". Blank hides the line.'
+            >
+              <input
+                aria-label="Closed date"
+                value={draft.closedDate}
+                onChange={(event) => setField('closedDate', event.target.value)}
+                className={inputClass}
+              />
+            </Field>
+
+            <div className="md:col-span-2">
+              <Field label="Closed message">
+                <textarea
+                  aria-label="Closed message"
+                  value={draft.closedMessage}
+                  onChange={(event) => setField('closedMessage', event.target.value)}
+                  rows={2}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          </div>
+        </fieldset>
+
         {/* Calls to action */}
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Primary CTA text" hint="Blank hides the button.">

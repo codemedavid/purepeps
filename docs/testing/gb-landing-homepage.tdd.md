@@ -1,6 +1,9 @@
 # TDD evidence — Group Buy landing homepage, cart/nav move, popup off
 
 **Branch:** `feat/gb-landing-homepage`
+**Scope note:** the closed-state panel (shown instead of the timeline between
+buys) was added after the first pass, on a follow-up request; its RED/GREEN
+evidence is folded into the tables below.
 **Source plan:** none on disk — the plan was produced inline by `/ecc:plan` in the
 same session and is restated below. The reference image named in the request was
 **not attached to the session**, so the composition was built from the written
@@ -45,6 +48,7 @@ reversed cheaply:
 | Homepage restructure | `App.tsx` `landing` view; `Menu.tsx` de-hero'd; `Hero.tsx` deleted | `npx vitest run src/App.test.tsx` | 9 failed \| 1 passed (10) | 10 passed (10) |
 | Popup off | `useStorefrontNotice.ts` fallback removed + archive migration | `npx vitest run src/hooks/useStorefrontNotice.test.ts` | 5 failed \| 6 passed (11) | 11 passed (11) |
 | Admin panel | `GbLandingManager.tsx`, mounted in `SiteSettingsManager` | `npx vitest run src/components/GbLandingManager.test.tsx` | unresolved import `./GbLandingManager` | 7 passed (7) |
+| Closed-state panel | 3 more keys; `gb-landing/GbClosedNotice.tsx`; swapped for the timeline when closed | `gbLanding.test.ts`, `GroupBuyLanding.test.tsx`, `GbLandingManager.test.tsx` | 5 failed (32), 4 failed (24), 1 failed (8) | 32, 24, 8 passed |
 
 **Note on running tests in this repo:** passing several test files to one
 `vitest run` produces spurious 5s timeouts (three suites that pass individually
@@ -78,13 +82,17 @@ authoritative. A single full-suite `vitest run` is fine.
 | 21 | A notice the admin HAS published still appears | `useStorefrontNotice.test.ts` | unit | PASS |
 | 22 | The admin panel loads current values, edits all 31 fields, saves, and surfaces read/write errors | `GbLandingManager.test.tsx` | component | PASS |
 | 23 | CTA destinations are a `<select>` over a fixed list, not a free-text URL | `GbLandingManager.test.tsx` | component | PASS |
+| 24 | While the buy is closed the timeline is REPLACED by the closed panel — no stage list remains | `GroupBuyLanding.test.tsx` | component | PASS |
+| 25 | The closed panel renders the admin's heading, date and message; a blank date omits the line | `GroupBuyLanding.test.tsx` | component | PASS |
+| 26 | The swap follows `auto` (live batch) and both explicit status modes; the CTAs stay available while closed | `GroupBuyLanding.test.tsx` | component | PASS |
+| 27 | The closed heading, date and message are editable and saved from the admin panel | `GbLandingManager.test.tsx` | component | PASS |
 
 ## Whole-project validation
 
 ```
 npx vitest run --testTimeout=30000
-      Tests  1750 passed (1750)
- Test Files  2 failed | 135 passed (137)
+      Tests  1763 passed (1763)
+ Test Files  2 failed | 136 passed (138)
  FAIL  src/hooks/useReturningCustomer.test.ts
  FAIL  src/utils/checkoutPrefill.test.ts
 ```
@@ -96,10 +104,10 @@ failing tests.**
 ```
 npx tsc --noEmit -p tsconfig.app.json
   -> no errors in any file touched by this branch
-  -> repo-wide pre-existing error lines: 104 before -> 101 after
+  -> repo-wide pre-existing error lines: 104 before -> 99 after
 
 npm run build
-  -> built in 6.02s
+  -> built in 4.79s
 ```
 
 `tsc` must be given `-p tsconfig.app.json`; a bare `tsc --noEmit` checks zero
@@ -116,15 +124,18 @@ files and exits 0.
 - Console: no errors or warnings.
 - Accessibility tree: one `region` labelled by the `h1`, an `h2` for the timeline,
   `h3` per stage, decorative connector hidden.
+- Closed state, verified against the real live batch (which is closed): the
+  timeline card is replaced by the "NEXT GROUP BUY" panel. Setting
+  `gb_landing_closed_date` to `October 15` made the date appear **without a page
+  reload**, confirming the Realtime path from an admin edit to the public page;
+  the test value was then reverted to blank so no invented date remains live.
 
 ## Known gaps and follow-ups
 
-1. **The two migrations have NOT been applied to the Supabase project.** Verified
-   live: `storefront_notices` still holds one published row
-   (`Research-use legal notice`, targeting `storefront.menu/cart/checkout/access`),
-   so the pop-up still appears on the **catalog** view even though the homepage is
-   clean. `20260905000100_disable_storefront_popup.sql` archives exactly that row.
-   Applying it is a live-data change and was left for the user to authorise.
+1. **All three migrations were applied on the user's approval.** Verified after:
+   the one notice row is now `archived` (recoverable from Notice Manager),
+   `storefront_notice_enabled = 'false'`, and 34 `gb_landing_*` rows exist. The
+   pop-up no longer appears on the homepage or the catalog.
 2. **COA, FAQ, Track Order and Reviews render no `Header`**, so moving the cart
    there removes their cart entry; it is reached via Shop → header cart. Adding a
    header to those four pages was out of the requested scope.

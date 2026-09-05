@@ -94,6 +94,23 @@ describe('GbLandingManager', () => {
     expect(savedContent().stages[3].date).toBe('Oct 10 - 18');
   });
 
+  it('edits the closed-state panel shown between buys', async () => {
+    const user = userEvent.setup();
+    render(<GbLandingManager />);
+
+    await user.clear(screen.getByLabelText(/closed heading/i));
+    await user.type(screen.getByLabelText(/closed heading/i), 'Next Group Buy');
+    await user.type(screen.getByLabelText(/closed date/i), 'October 15');
+    await user.clear(screen.getByLabelText(/closed message/i));
+    await user.type(screen.getByLabelText(/closed message/i), 'Batch 13 opens after the weekend.');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(savedContent().closedTitle).toBe('Next Group Buy');
+    expect(savedContent().closedDate).toBe('October 15');
+    expect(savedContent().closedMessage).toBe('Batch 13 opens after the weekend.');
+  });
+
   it('offers CTA destinations as a fixed list rather than a free-text URL', async () => {
     const user = userEvent.setup();
     render(<GbLandingManager />);

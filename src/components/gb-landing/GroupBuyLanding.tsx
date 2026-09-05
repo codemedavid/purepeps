@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import BlossomLogo from '../BlossomLogo';
 import GbTimeline from './GbTimeline';
+import GbClosedNotice from './GbClosedNotice';
 import { resolveGbStatus, type GbCtaAction, type GbLandingContent } from '../../utils/gbLanding';
 
 interface GroupBuyLandingProps {
@@ -134,9 +135,19 @@ function GroupBuyLanding({ content, isBatchOpen, onAction }: GroupBuyLandingProp
           </div>
         )}
 
-        {/* Timeline */}
+        {/* Timeline while the buy is running; between buys the stage dates
+            describe a finished schedule, so the card is swapped for the
+            admin-written "next group buy" panel rather than left stale. */}
         <div className="mt-14 w-full sm:mt-16">
-          <GbTimeline title={content.timelineTitle} stages={content.stages} />
+          {isOpen ? (
+            <GbTimeline title={content.timelineTitle} stages={content.stages} />
+          ) : (
+            <GbClosedNotice
+              title={content.closedTitle}
+              date={content.closedDate}
+              message={content.closedMessage}
+            />
+          )}
         </div>
 
         {/* Closing note */}
