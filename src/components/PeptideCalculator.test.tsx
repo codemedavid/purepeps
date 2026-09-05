@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import PeptideCalculator from './PeptideCalculator';
 
@@ -14,22 +15,31 @@ import PeptideCalculator from './PeptideCalculator';
  * burger those pages are simply unreachable from here on a phone. The two are
  * not duplicates: the bar is the shortcut, the drawer is the full index.
  */
+// PeptideCalculator navigates with the router (its header cart opens the
+// storefront cart), and the app always renders it inside one.
+const renderCalculator = () => render(<PeptideCalculator />, { wrapper: MemoryRouter });
+
 describe('PeptideCalculator — mobile navigation', () => {
   it('offers the burger drawer, the only route to FAQ and Reviews on a phone', () => {
-    render(<PeptideCalculator />);
+    renderCalculator();
 
     expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
   });
 
   it('keeps that burger to small screens, where the desktop bar is hidden', () => {
-    render(<PeptideCalculator />);
+    renderCalculator();
 
     expect(screen.getByRole('button', { name: 'Toggle menu' })).toHaveClass('md:hidden');
   });
 
-  it('keeps the header cart to desktop widths', () => {
-    render(<PeptideCalculator />);
+  // The cart moved into the header beside the burger and is no longer hidden
+  // on phones: the bottom navigation carries Reviews now, so this is the only
+  // cart entry on a small screen.
+  it('shows the header cart at every width', () => {
+    renderCalculator();
 
-    expect(screen.getByRole('button', { name: 'View cart' })).toHaveClass('hidden', 'md:block');
+    const cart = screen.getByRole('button', { name: 'View cart' });
+    expect(cart).not.toHaveClass('hidden');
+    expect(cart.className).not.toContain('md:block');
   });
 });

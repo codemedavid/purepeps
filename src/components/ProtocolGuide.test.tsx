@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import ProtocolGuide from './ProtocolGuide';
 import { allMockProtocols, mockFileProtocol } from '../test/mocks';
@@ -31,6 +32,10 @@ vi.mock('../lib/pdf', () => ({
   loadPdf: vi.fn().mockResolvedValue({ pageCount: 1, renderPage: vi.fn() }),
 }));
 
+// ProtocolGuide navigates with the router (its header cart opens the storefront
+// cart), and the app always renders it inside one.
+const renderGuide = () => render(<ProtocolGuide />, { wrapper: MemoryRouter });
+
 describe('ProtocolGuide', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,13 +45,13 @@ describe('ProtocolGuide', () => {
 
   describe('rendering', () => {
     it('renders the protocol guide page', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       expect(screen.getByText('Peptide Protocol Guide')).toBeInTheDocument();
     });
 
     it('only shows active protocols', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       expect(screen.getByText('Tirzepatide')).toBeInTheDocument();
       expect(screen.getByText('GHK-Cu Protocol')).toBeInTheDocument();
@@ -57,7 +62,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('shows protocol count', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       expect(screen.getByText('3 protocol(s) found')).toBeInTheDocument();
     });
@@ -67,7 +72,7 @@ describe('ProtocolGuide', () => {
 
   describe('text protocol content', () => {
     it('shows dosage, frequency, duration when expanded', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       await userEvent.click(screen.getByText('Tirzepatide'));
 
@@ -77,7 +82,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('shows protocol notes when expanded', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       await userEvent.click(screen.getByText('Tirzepatide'));
 
@@ -86,7 +91,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('shows storage info when expanded', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       await userEvent.click(screen.getByText('Tirzepatide'));
 
@@ -100,7 +105,7 @@ describe('ProtocolGuide', () => {
 
   describe('image protocol content', () => {
     it('shows image when image protocol is expanded', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       // Click the protocol name button to expand
       const protocolButtons = screen.getAllByRole('button');
@@ -114,7 +119,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('does NOT show text dosage fields for image protocol', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const protocolButtons = screen.getAllByRole('button');
       const ghkButton = protocolButtons.find(btn => btn.textContent?.includes('GHK-Cu Protocol'));
@@ -130,7 +135,7 @@ describe('ProtocolGuide', () => {
 
   describe('file protocol content', () => {
     it('shows the file card when a file protocol is expanded', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
@@ -141,7 +146,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('keeps the customer on Pure Peps instead of linking out to the file host', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
@@ -155,7 +160,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('opens the file in an in-site viewer when the card is clicked', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
@@ -168,7 +173,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('returns to the protocol list when the viewer is closed', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
@@ -187,7 +192,7 @@ describe('ProtocolGuide', () => {
 
   describe('expand and collapse', () => {
     it('collapses an expanded protocol when clicked again', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       await userEvent.click(screen.getByText('Tirzepatide'));
       expect(screen.getByText('2.5mg - 15mg')).toBeInTheDocument();
@@ -197,7 +202,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('only one protocol is expanded at a time', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       // Expand Tirzepatide
       await userEvent.click(screen.getByText('Tirzepatide'));
@@ -219,7 +224,7 @@ describe('ProtocolGuide', () => {
 
   describe('category filtering', () => {
     it('shows all categories in the filter dropdown', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const select = screen.getByRole('combobox');
       expect(select).toBeInTheDocument();
@@ -233,7 +238,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('filters protocols by category', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const select = screen.getByRole('combobox');
       await userEvent.selectOptions(select, 'Weight Management');
@@ -245,7 +250,7 @@ describe('ProtocolGuide', () => {
     });
 
     it('shows all protocols when "all" is selected', async () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       const select = screen.getByRole('combobox');
       await userEvent.selectOptions(select, 'Weight Management');
@@ -272,21 +277,26 @@ describe('ProtocolGuide', () => {
    */
   describe('mobile navigation', () => {
     it('offers the burger drawer, the only route to FAQ and Reviews on a phone', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
     });
 
     it('keeps that burger to small screens, where the desktop bar is hidden', () => {
-      render(<ProtocolGuide />);
+      renderGuide();
 
       expect(screen.getByRole('button', { name: 'Toggle menu' })).toHaveClass('md:hidden');
     });
 
-    it('keeps the header cart to desktop widths', () => {
-      render(<ProtocolGuide />);
+    // The cart moved into the header beside the burger and is no longer hidden
+    // on phones: the bottom navigation carries Reviews now, so this is the only
+    // cart entry on a small screen.
+    it('shows the header cart at every width', () => {
+      renderGuide();
 
-      expect(screen.getByRole('button', { name: 'View cart' })).toHaveClass('hidden', 'md:block');
+      const cart = screen.getByRole('button', { name: 'View cart' });
+      expect(cart).not.toHaveClass('hidden');
+      expect(cart.className).not.toContain('md:block');
     });
   });
 });
