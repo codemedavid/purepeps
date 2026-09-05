@@ -143,7 +143,7 @@ describe('gbLandingToRows', () => {
         ...stage,
         title: `Stage ${index + 1}`,
         date: `Day ${index + 1}`,
-      })) as typeof DEFAULT_GB_LANDING.stages,
+      })) as unknown as typeof DEFAULT_GB_LANDING.stages,
     };
 
     expect(gbLandingFromRows(gbLandingToRows(edited))).toEqual(edited);

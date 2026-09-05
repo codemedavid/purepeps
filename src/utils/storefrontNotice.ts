@@ -22,6 +22,7 @@ export const NOTICE_STYLES = ['info', 'warning', 'success', 'critical'] as const
 export type NoticeStyle = (typeof NOTICE_STYLES)[number];
 
 export const NOTICE_PAGE_IDS = [
+  'storefront.landing',
   'storefront.menu',
   'storefront.cart',
   'storefront.checkout',

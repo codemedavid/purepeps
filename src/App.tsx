@@ -13,7 +13,8 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import StorefrontNoticeGate from './components/StorefrontNoticeGate';
-import StorefrontBottomNav, { type MenuDestination, type StorefrontView } from './components/StorefrontBottomNav';
+import StorefrontBottomNav, { type StorefrontView } from './components/StorefrontBottomNav';
+import GroupBuyLanding from './components/gb-landing/GroupBuyLanding';
 import PublicPageBottomNav from './components/PublicPageBottomNav';
 import { AccessProvider, useAccessContext } from './contexts/AccessContext';
 import { FeatureFlagsProvider, useFeatureFlagsContext } from './contexts/FeatureFlagsContext';
@@ -21,10 +22,19 @@ import FeatureRoute from './components/FeatureRoute';
 import type { NoticePageId } from './utils/storefrontNotice';
 import { useCategories } from './hooks/useCategories';
 import { useGroupBuyProgress } from './hooks/useGroupBuyProgress';
+import { useGbLanding } from './hooks/useGbLanding';
+import type { GbCtaAction } from './utils/gbLanding';
 import { useUniversalMinimum } from './hooks/useUniversalMinimum';
 import { filterPasaloProducts, partitionCartAvailability } from './utils/groupBuy';
 import { isViewOnlyActive } from './utils/groupBuySchedule';
-import { BOTTOM_NAV_CLEARANCE, STOREFRONT_PATH, readStorefrontRequest } from './utils/storefrontNavigation';
+import {
+    BOTTOM_NAV_CLEARANCE,
+    FAQ_PATH,
+    ORDERS_PATH,
+    REVIEWS_PATH,
+    STOREFRONT_PATH,
+    readStorefrontRequest,
+} from './utils/storefrontNavigation';
 
 /** How often the storefront re-checks whether a pending view-only gate has lifted. */
 const VIEW_ONLY_TICK_MS = 30_000;
@@ -51,6 +61,9 @@ function MainApp() {
     const cart = useCart({ email: access.email, products: menuItems, universalMinimum });
     const { freeCategoryIds } = useCategories();
     const groupBuy = useGroupBuyProgress();
+    // Every string on the homepage. Fails open to the built-in copy, so a
+    // settings outage shows the default landing rather than an empty page.
+    const { content: gbLanding } = useGbLanding();
     // The Lab Reports entry only belongs in the bottom nav while the page it
     // points at is switched on. Read through the same flags that guard the
     // route, so the nav can never offer a destination FeatureRoute redirects.
@@ -85,13 +98,17 @@ function MainApp() {
     // the authoritative gate and the UI corrects once the RPC resolves.
     const isBatchOpen = groupBuy.loading || groupBuy.isBatchOpen;
     const [now, setNow] = useState(() => new Date());
-    const [currentView, setCurrentView] = useState<StorefrontView>(
-        storefrontRequest === 'cart' ? 'cart' : 'menu',
-    );
-    const [menuDestination, setMenuDestination] = useState<MenuDestination>(
-        storefrontRequest === 'shop' ? 'shop' : 'home',
-    );
+    // The homepage is the Group Buy landing; the catalog is a destination
+    // reached from it, so only an explicit request opens anything else.
+    const [currentView, setCurrentView] = useState<StorefrontView>(() => {
+        if (storefrontRequest === 'cart') return 'cart';
+        if (storefrontRequest === 'shop') return 'menu';
+        return 'landing';
+    });
     const [shopScrollRequest, setShopScrollRequest] = useState(storefrontRequest === 'shop' ? 1 : 0);
+    // Where "back" out of the access flow returns to, so arriving from the
+    // landing CTA does not dump the shopper into the catalog and vice versa.
+    const [accessReturnView, setAccessReturnView] = useState<StorefrontView>('landing');
     const completedShopScrollRequest = useRef(0);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -107,32 +124,54 @@ function MainApp() {
         // Checkout needs access — but a cart of only free items can check out
         // without paying. Route to Get Access only when something in the cart is gated.
         const target = view === 'checkout' && !canCheckoutNow ? 'access' : view;
+        // Remember where the access flow was entered from, but never record
+        // 'access' itself or Back would loop onto the same screen.
+        if (target === 'access' && currentView !== 'access') setAccessReturnView(currentView);
         setCurrentView(target);
         // Scroll to top when changing views
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleHome = () => {
-        setMenuDestination('home');
-        setCurrentView('menu');
+        setCurrentView('landing');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleShop = () => {
-        setMenuDestination('shop');
         setCurrentView('menu');
         setShopScrollRequest((request) => request + 1);
     };
 
-    // The hero's catalog CTA scrolls to the products itself (Menu.scrollToProducts),
-    // so this only moves the bottom navigation to Shop. Firing shopScrollRequest as
-    // well would scroll the same element twice in one interaction.
-    const handleBrowseCatalog = () => {
-        setMenuDestination('shop');
+    // The landing page's calls to action. Every destination is one of the
+    // whitelisted GbCtaAction values, so a settings row can only ever select a
+    // navigation the storefront already sanctions — never an arbitrary URL.
+    const handleLandingAction = (action: GbCtaAction) => {
+        switch (action) {
+            case 'catalog':
+                handleShop();
+                return;
+            case 'access':
+                handleViewChange('access');
+                return;
+            case 'cart':
+                handleViewChange('cart');
+                return;
+            case 'track_order':
+                navigate(ORDERS_PATH);
+                return;
+            case 'faq':
+                navigate(FAQ_PATH);
+                return;
+            case 'reviews':
+                navigate(REVIEWS_PATH);
+                return;
+            case 'none':
+                return;
+        }
     };
 
     const handleReturnToMenu = () => {
-        if (menuDestination === 'shop') {
+        if (accessReturnView === 'menu') {
             handleShop();
             return;
         }
@@ -225,6 +264,14 @@ function MainApp() {
             )}
 
             <main className="flex-grow">
+                {currentView === 'landing' && (
+                    <GroupBuyLanding
+                        content={gbLanding}
+                        isBatchOpen={isBatchOpen}
+                        onAction={handleLandingAction}
+                    />
+                )}
+
                 {currentView === 'menu' && (
                     <Menu
                         universalMinimum={universalMinimum}
@@ -237,13 +284,9 @@ function MainApp() {
                         canAccessCategory={canAccessCategory}
                         tierName={access.tierName}
                         onGetAccess={() => handleViewChange('access')}
-                        onBrowseCatalog={handleBrowseCatalog}
                         groupBuyItems={groupBuy.items}
                         isBatchOpen={isBatchOpen}
                         isViewOnly={viewOnly}
-                        batchNumber={groupBuy.batch?.batch_number ?? null}
-                        batchStartsAt={groupBuy.batch?.starts_at ?? null}
-                        batchEndsAt={groupBuy.batch?.ends_at ?? null}
                     />
                 )}
 
@@ -290,14 +333,15 @@ function MainApp() {
             </main>
 
             {currentView === 'menu' && (
-                <>
-                    <FloatingCartButton
-                        itemCount={cart.getTotalItems()}
-                        onCartClick={() => handleViewChange('cart')}
-                    />
-                    <Footer />
-                </>
+                <FloatingCartButton
+                    itemCount={cart.getTotalItems()}
+                    onCartClick={() => handleViewChange('cart')}
+                />
             )}
+
+            {/* Site chrome, not a homepage block: the footer carries the
+                research-use line that must stay reachable on the landing. */}
+            {(currentView === 'landing' || currentView === 'menu') && <Footer />}
 
             <StorefrontBottomNav
                 activeView={currentView}

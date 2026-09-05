@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import MenuItemCard from './MenuItemCard';
-import Hero from './Hero';
 import ProductDetailModal from './ProductDetailModal';
 import type { Product, ProductVariation, CartItem, GroupBuyProgressItem } from '../types';
 import type { UniversalMinimumOrder } from '../utils/minimumOrder';
@@ -21,21 +20,12 @@ interface MenuProps {
   canAccessCategory?: (categoryId: string | null | undefined) => boolean;
   tierName?: string | null;
   onGetAccess: () => void;
-  /**
-   * Tells the storefront shell the shopper browsed into the catalog, so the bottom
-   * navigation can highlight Shop. The scroll itself stays here: the shell's own
-   * catalog anchor sits above the hero, so scrolling to it would move the page up.
-   */
-  onBrowseCatalog?: () => void;
   groupBuyItems?: GroupBuyProgressItem[];
   isBatchOpen?: boolean;
   /** Site-wide minimum order, passed through to the card and detail view. */
   universalMinimum?: UniversalMinimumOrder;
   /** Pre-launch "view-only" phase: browse only, Add-to-Cart is disabled. */
   isViewOnly?: boolean;
-  batchNumber?: number | null;
-  batchStartsAt?: string | null;
-  batchEndsAt?: string | null;
 }
 
 const Menu: React.FC<MenuProps> = ({
@@ -47,18 +37,13 @@ const Menu: React.FC<MenuProps> = ({
   isVerified,
   canAccessCategory,
   onGetAccess,
-  onBrowseCatalog,
   groupBuyItems = [],
   isBatchOpen = true,
   isViewOnly = false,
-  batchNumber = null,
-  batchStartsAt = null,
-  batchEndsAt = null,
 }) => {
   const { categories } = useCategories();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const productsRef = useRef<HTMLDivElement | null>(null);
 
   const filteredProducts = menuItems.filter(
     (product) =>
@@ -94,16 +79,6 @@ const Menu: React.FC<MenuProps> = ({
     />
   );
 
-  const scrollToProducts = () =>
-    productsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  // Browsing the catalog moves the shopper down to the products and moves the
-  // bottom navigation's highlight to Shop — the destination is the shell's to own.
-  const handleBrowseCatalog = () => {
-    onBrowseCatalog?.();
-    scrollToProducts();
-  };
-
   return (
     <>
       {selectedProduct && (
@@ -124,26 +99,15 @@ const Menu: React.FC<MenuProps> = ({
         />
       )}
 
-      <div className="min-h-screen bg-sakura-canvas font-display">
-        <Hero
-          onShopAll={handleBrowseCatalog}
-          onGetAccess={onGetAccess}
-          batchNumber={batchNumber}
-          startsAt={batchStartsAt}
-          endsAt={batchEndsAt}
-          isBatchOpen={isBatchOpen}
-        />
-
-        {/* THE catalog anchor. Both routes to "show me the products" —
-            the hero CTA via productsRef and the Shop tab via
-            #storefront-catalog — must land on this one element. The id
-            previously sat above SubNav in App, i.e. above the hero, so the
-            Shop tab scrolled to the top of the storefront instead.
+      <div className="min-h-screen bg-sakura-canvas font-display pt-8">
+        {/* THE catalog anchor. Every route to "show me the products" — the
+            landing page's primary CTA and the Shop tab — lands on this one
+            element. The id previously sat above SubNav in App, i.e. above the
+            hero, so the Shop tab scrolled to the top of the storefront instead.
             scroll-mt clears the sticky header and SubNav. */}
         <div
           id="storefront-catalog"
           className="max-w-[1180px] mx-auto px-6 pb-10 scroll-mt-28 md:scroll-mt-24"
-          ref={productsRef}
         >
           {/* Access bar — shown until the member is verified */}
           {!isVerified && (

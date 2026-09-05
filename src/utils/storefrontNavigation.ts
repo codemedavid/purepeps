@@ -13,6 +13,7 @@ export const LAB_REPORTS_PATH = '/coa';
 export const ORDERS_PATH = '/track-order';
 export const GUIDES_PATH = '/protocols';
 export const REVIEWS_PATH = '/reviews';
+export const FAQ_PATH = '/faq';
 
 /** Which storefront view to open once the storefront route takes over. */
 export type StorefrontRequest = 'home' | 'shop' | 'cart';

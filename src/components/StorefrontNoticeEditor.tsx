@@ -24,6 +24,7 @@ interface StorefrontNoticeEditorProps {
 
 const PAGE_LABELS: Record<NoticePageId, string> = {
   reviews: 'Customer Reviews',
+  'storefront.landing': 'Home (Group Buy landing)',
   'storefront.menu': 'Menu',
   'storefront.cart': 'Cart',
   'storefront.checkout': 'Checkout',
