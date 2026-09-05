@@ -6,14 +6,9 @@ import PublicPageBottomNav from './PublicPageBottomNav';
 import { readStorefrontRequest } from '../utils/storefrontNavigation';
 
 const mockFlags = vi.fn();
-const mockGetTotalItems = vi.fn();
 
 vi.mock('../contexts/FeatureFlagsContext', () => ({
   useFeatureFlagsContext: () => mockFlags(),
-}));
-
-vi.mock('../hooks/useCart', () => ({
-  useCart: () => ({ getTotalItems: mockGetTotalItems }),
 }));
 
 const ALL_ON = {
@@ -23,6 +18,7 @@ const ALL_ON = {
   track_order: true,
   faq: true,
   lab_reports: true,
+  reviews: true,
 };
 
 // Stands in for the storefront route so we can read what the bar asked it to open.
@@ -45,7 +41,6 @@ describe('PublicPageBottomNav', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFlags.mockReturnValue({ flags: { ...ALL_ON } });
-    mockGetTotalItems.mockReturnValue(0);
   });
 
   it('highlights Lab Reports while the Lab Reports page is open', () => {
@@ -75,14 +70,24 @@ describe('PublicPageBottomNav', () => {
     expect(screen.getByTestId('storefront')).toHaveTextContent(request);
   });
 
-  it('routes Cart back to the storefront asking for the cart view', async () => {
-    const user = userEvent.setup();
-    mockGetTotalItems.mockReturnValue(3);
+  it('offers no cart tab, because the cart lives in the header', () => {
     renderAt('/coa');
 
-    await user.click(screen.getByRole('button', { name: 'Cart, 3 items' }));
+    expect(screen.queryByRole('button', { name: /^Cart/ })).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByTestId('storefront')).toHaveTextContent('cart');
+  it('highlights Reviews while the reviews page is open', () => {
+    renderAt('/reviews');
+
+    expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('hides Reviews when the customer reviews feature is off', () => {
+    mockFlags.mockReturnValue({ flags: { ...ALL_ON, reviews: false } });
+
+    renderAt('/coa');
+
+    expect(screen.queryByRole('link', { name: 'Reviews' })).not.toBeInTheDocument();
   });
 
   it.each([['Home'], ['Shop']])(
@@ -99,22 +104,4 @@ describe('PublicPageBottomNav', () => {
     },
   );
 
-  it('resets scroll when Cart routes back to the storefront', async () => {
-    const user = userEvent.setup();
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
-    renderAt('/coa');
-
-    await user.click(screen.getByRole('button', { name: 'Cart, 0 items' }));
-
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
-    scrollTo.mockRestore();
-  });
-
-  it('shows the locally persisted cart count', () => {
-    mockGetTotalItems.mockReturnValue(2);
-
-    renderAt('/coa');
-
-    expect(screen.getByTestId('bottom-nav-cart-badge')).toHaveTextContent('2');
-  });
 });

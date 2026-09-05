@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, AlertTriangle, ChevronDown, ChevronUp, BookOpen, FileText, Download } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
 import { useProtocols, type Protocol } from '../hooks/useProtocols';
 import ProtocolFileViewer from './ProtocolFileViewer';
 import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
-import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
+import {
+    BOTTOM_NAV_CLEARANCE,
+    STOREFRONT_PATH,
+    storefrontNavigationOptions,
+} from '../utils/storefrontNavigation';
 
 const ProtocolGuide: React.FC = () => {
     const { cartItems } = useCart();
@@ -20,8 +25,10 @@ const ProtocolGuide: React.FC = () => {
         setExpandedProtocol(expandedProtocol === id ? null : id);
     };
 
+    const navigate = useNavigate();
+
     const handleBackToHome = () => {
-        window.location.href = '/';
+        navigate(STOREFRONT_PATH, storefrontNavigationOptions('home'));
     };
 
     // Filter only active protocols, and hide placeholder rows with no real dosing data
@@ -41,9 +48,8 @@ const ProtocolGuide: React.FC = () => {
         <div className={`min-h-screen bg-gradient-to-br from-[#FADADD] via-[#FDF5F7] to-white ${BOTTOM_NAV_CLEARANCE}`}>
             <Header
                 cartItemsCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-                onCartClick={() => { }}
+                onCartClick={() => navigate(STOREFRONT_PATH, storefrontNavigationOptions('cart'))}
                 onMenuClick={handleBackToHome}
-                hideMobileStorefrontActions
             />
 
             <main className="container mx-auto px-4 py-8 max-w-4xl">

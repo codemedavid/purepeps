@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import StorefrontBottomNav from './StorefrontBottomNav';
-import { useCart } from '../hooks/useCart';
 import { useFeatureFlagsContext } from '../contexts/FeatureFlagsContext';
 import {
   STOREFRONT_PATH,
@@ -13,14 +12,12 @@ import {
  * The bottom navigation as it appears on a standalone public page (Lab Reports,
  * Orders, Guides, FAQ, Calculator).
  *
- * Home, Shop, and Cart are views owned by the storefront route, so here they
- * route back to the storefront carrying the view to open. The cart count comes
- * from the locally persisted cart: a member's server cart needs the live
- * catalog to rehydrate, which is not worth fetching on a content page.
+ * Home and Shop are views owned by the storefront route, so here they route
+ * back to the storefront carrying the view to open. The cart is not a tab: it
+ * lives in the header beside the burger menu.
  */
 const PublicPageBottomNav: React.FC = () => {
   const navigate = useNavigate();
-  const { getTotalItems } = useCart();
   const { flags } = useFeatureFlagsContext();
 
   const goToStorefront = (request: StorefrontRequest) => {
@@ -34,16 +31,14 @@ const PublicPageBottomNav: React.FC = () => {
   return (
     <StorefrontBottomNav
       // No storefront view is on screen here, so the bar takes its active state
-      // from the route; these two are inert placeholders.
-      activeView="menu"
-      menuDestination="home"
-      cartItemCount={getTotalItems()}
+      // from the route; this is an inert placeholder.
+      activeView="landing"
       showLabReports={flags.lab_reports}
       showOrders={flags.track_order}
       showGuides={flags.protocols}
+      showReviews={flags.reviews}
       onHome={() => goToStorefront('home')}
       onShop={() => goToStorefront('shop')}
-      onCart={() => goToStorefront('cart')}
     />
   );
 };

@@ -40,7 +40,6 @@ interface HeaderProps {
    */
   onGetAccess?: () => void;
   isVerified?: boolean;
-  hideMobileStorefrontActions?: boolean;
   /** Overrides the live flags. Only tests and previews need this. */
   features?: Partial<FeatureFlags>;
 }
@@ -51,7 +50,6 @@ const Header: React.FC<HeaderProps> = ({
   onMenuClick,
   onGetAccess,
   isVerified = false,
-  hideMobileStorefrontActions = false,
   features,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -102,20 +100,6 @@ const Header: React.FC<HeaderProps> = ({
                 })}
               </nav>
 
-              {/* Cart Button */}
-              <button
-                onClick={onCartClick}
-                aria-label="View cart"
-                className={`${hideMobileStorefrontActions ? 'hidden md:block ' : ''}relative p-2.5 text-sakura-ink hover:bg-sakura-blush-soft rounded-xl transition-colors`}
-              >
-                <ShoppingCart className="w-5 h-5" />
-                {cartItemsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-sakura-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                    {cartItemsCount > 99 ? '99+' : cartItemsCount}
-                  </span>
-                )}
-              </button>
-
               {/* Get Access / Verified pill */}
               {onGetAccess && (
                 <button
@@ -131,12 +115,25 @@ const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
+              {/* Cart Button — the ONLY cart entry on a phone now that the
+                  bottom navigation carries Reviews instead, so it is never
+                  hidden by breakpoint. Sits immediately before the burger. */}
+              <button
+                onClick={onCartClick}
+                aria-label="View cart"
+                className="relative p-2.5 text-sakura-ink hover:bg-sakura-blush-soft rounded-xl transition-colors"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                {cartItemsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-sakura-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {cartItemsCount > 99 ? '99+' : cartItemsCount}
+                  </span>
+                )}
+              </button>
+
               {/* Mobile Menu Button — always present below md.
-                  Deliberately NOT gated on hideMobileStorefrontActions: that
-                  prop suppresses the CART, and the drawer behind this button
-                  holds navigation only. Gating it here left Calculator,
-                  Protocols and the non-storefront views with no way to reach
-                  any other page on a phone. */}
+                  The drawer behind it holds navigation only; the cart sits
+                  beside it as its own control. */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-2.5 text-charcoal-700 hover:bg-brand-50 rounded-xl transition-colors"

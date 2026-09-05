@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Calculator, RotateCcw, Syringe, Droplets, FlaskConical, AlertTriangle, ArrowLeft } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../hooks/useCart';
-import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
+import {
+    BOTTOM_NAV_CLEARANCE,
+    STOREFRONT_PATH,
+    storefrontNavigationOptions,
+} from '../utils/storefrontNavigation';
 
 interface SyringeOption {
     id: string;
@@ -30,6 +35,7 @@ const PeptideCalculator: React.FC = () => {
     const [resultMgPerUnit, setResultMgPerUnit] = useState<number | null>(null);
 
     const cart = useCart();
+    const navigate = useNavigate();
 
     useEffect(() => {
         calculate();
@@ -81,9 +87,8 @@ const PeptideCalculator: React.FC = () => {
         <div className={`min-h-screen bg-theme-bg font-inter flex flex-col ${BOTTOM_NAV_CLEARANCE}`}>
             <Header
                 cartItemsCount={cart.getTotalItems()}
-                onCartClick={() => window.location.href = '/'}
-                onMenuClick={() => window.location.href = '/'}
-                hideMobileStorefrontActions
+                onCartClick={() => navigate(STOREFRONT_PATH, storefrontNavigationOptions('cart'))}
+                onMenuClick={() => navigate(STOREFRONT_PATH, storefrontNavigationOptions('home'))}
             />
 
             <main className="flex-grow container mx-auto px-4 py-8 md:py-12">

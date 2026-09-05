@@ -1,20 +1,22 @@
 import React from 'react';
-import { BookOpen, ClipboardList, Home, Shield, ShoppingCart, Store } from 'lucide-react';
+import { BookOpen, ClipboardList, Home, Shield, Star, Store } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   GUIDES_PATH,
   LAB_REPORTS_PATH,
   ORDERS_PATH,
+  REVIEWS_PATH,
   STOREFRONT_PATH,
 } from '../utils/storefrontNavigation';
 
-export type StorefrontView = 'menu' | 'cart' | 'checkout' | 'access';
-export type MenuDestination = 'home' | 'shop';
+/**
+ * `landing` is the Group Buy homepage; `menu` is the product catalog reached
+ * from its primary call to action.
+ */
+export type StorefrontView = 'landing' | 'menu' | 'cart' | 'checkout' | 'access';
 
 export interface StorefrontBottomNavProps {
   activeView: StorefrontView;
-  menuDestination: MenuDestination;
-  cartItemCount: number;
   /**
    * Whether each optional destination is switched on for the site. Owned by the
    * caller (see Admin -> Features) so this stays a presentational component: a
@@ -24,9 +26,9 @@ export interface StorefrontBottomNavProps {
   showLabReports: boolean;
   showOrders: boolean;
   showGuides: boolean;
+  showReviews: boolean;
   onHome: () => void;
   onShop: () => void;
-  onCart: () => void;
 }
 
 const itemClassName = (active: boolean) => [
@@ -38,8 +40,10 @@ const itemClassName = (active: boolean) => [
 
 const iconClassName = 'h-5 w-5 shrink-0';
 
-// Home, Shop and Cart are always present; the other three are switchable.
-const BASE_COLUMN_COUNT = 3;
+// Home and Shop are always present; the other four are switchable. The cart is
+// deliberately NOT here — it lives in the header beside the burger menu, and a
+// second entry would split one action across two places.
+const BASE_COLUMN_COUNT = 2;
 
 // z-40 keeps the bar UNDER full-screen overlays (the COA lightbox and
 // ProductDetailModal are both fixed z-50). At an equal z-index the later DOM
@@ -48,6 +52,7 @@ const BASE_COLUMN_COUNT = 3;
 
 // Every column count is written out in full so Tailwind's scanner emits them.
 const GRID_COLUMN_CLASS: Record<number, string> = {
+  2: 'grid-cols-2',
   3: 'grid-cols-3',
   4: 'grid-cols-4',
   5: 'grid-cols-5',
@@ -65,33 +70,31 @@ const handleRouteNavigation = () => {
 
 const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
   activeView,
-  menuDestination,
-  cartItemCount,
   showLabReports,
   showOrders,
   showGuides,
+  showReviews,
   onHome,
   onShop,
-  onCart,
 }) => {
   const { pathname } = useLocation();
 
-  // Home, Shop, and Cart are views inside the storefront route rather than
-  // routes of their own, so none of them is current while a standalone public
-  // page (Lab Reports, Orders, Guides, …) owns the screen.
+  // Home and Shop are views inside the storefront route rather than routes of
+  // their own, so neither is current while a standalone public page (Lab
+  // Reports, Orders, Guides, Reviews, …) owns the screen. Cart, checkout and
+  // access have no tab, so they mark nothing current.
   const onStorefront = pathname === STOREFRONT_PATH;
-  const homeIsCurrent = onStorefront && activeView === 'menu' && menuDestination === 'home';
-  const shopIsCurrent = onStorefront && activeView === 'menu' && menuDestination === 'shop';
-  const cartIsCurrent = onStorefront && (activeView === 'cart' || activeView === 'checkout');
+  const homeIsCurrent = onStorefront && activeView === 'landing';
+  const shopIsCurrent = onStorefront && activeView === 'menu';
   const ordersIsCurrent = pathname === ORDERS_PATH;
   const guidesIsCurrent = pathname === GUIDES_PATH;
   const labReportsIsCurrent = pathname === LAB_REPORTS_PATH;
+  const reviewsIsCurrent = pathname === REVIEWS_PATH;
 
   // Drives the column count so the remaining tabs stay evenly spaced.
-  const optionalTabCount = [showOrders, showGuides, showLabReports].filter(Boolean).length;
-
-  const cartLabel = `Cart, ${cartItemCount} item${cartItemCount === 1 ? '' : 's'}`;
-  const visibleCartCount = cartItemCount > 99 ? '99+' : cartItemCount;
+  const optionalTabCount = [showOrders, showGuides, showLabReports, showReviews].filter(
+    Boolean,
+  ).length;
 
   return (
     <nav aria-label="Storefront" className={navClassName(optionalTabCount)}>
@@ -113,25 +116,6 @@ const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
       >
         <Store aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
         <span>Shop</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={onCart}
-        aria-label={cartLabel}
-        aria-current={cartIsCurrent ? 'page' : undefined}
-        className={itemClassName(cartIsCurrent)}
-      >
-        <ShoppingCart aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
-        <span>Cart</span>
-        {cartItemCount > 0 && (
-          <span
-            data-testid="bottom-nav-cart-badge"
-            className="absolute left-1/2 top-1 ml-2 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-sakura-primary px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white"
-          >
-            {visibleCartCount}
-          </span>
-        )}
       </button>
 
       {showOrders && (
@@ -167,6 +151,18 @@ const StorefrontBottomNav: React.FC<StorefrontBottomNavProps> = ({
         >
           <Shield aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
           <span>Labs</span>
+        </Link>
+      )}
+
+      {showReviews && (
+        <Link
+          to={REVIEWS_PATH}
+          onClick={handleRouteNavigation}
+          aria-current={reviewsIsCurrent ? 'page' : undefined}
+          className={itemClassName(reviewsIsCurrent)}
+        >
+          <Star aria-hidden="true" className={iconClassName} strokeWidth={1.8} />
+          <span>Reviews</span>
         </Link>
       )}
     </nav>

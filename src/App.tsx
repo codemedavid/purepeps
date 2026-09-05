@@ -208,7 +208,6 @@ function MainApp() {
                 onMenuClick={handleHome}
                 onGetAccess={() => handleViewChange('access')}
                 isVerified={access.isVerified}
-                hideMobileStorefrontActions
             />
 
             {currentView === 'menu' && (
@@ -302,14 +301,12 @@ function MainApp() {
 
             <StorefrontBottomNav
                 activeView={currentView}
-                menuDestination={menuDestination}
-                cartItemCount={cart.getTotalItems()}
                 showLabReports={featureFlags.lab_reports}
                 showOrders={featureFlags.track_order}
                 showGuides={featureFlags.protocols}
+                showReviews={featureFlags.reviews}
                 onHome={handleHome}
                 onShop={handleShop}
-                onCart={() => handleViewChange('cart')}
             />
         </div>
     );
