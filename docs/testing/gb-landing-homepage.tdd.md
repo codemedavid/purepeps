@@ -41,7 +41,7 @@ reversed cheaply:
 
 | Plan task | Execution | Validation actually run | RED | GREEN |
 |---|---|---|---|---|
-| Settings module | `src/utils/gbLanding.ts` — 31 keys, absent-row defaults, whitelists | `npx vitest run src/utils/gbLanding.test.ts` | unresolved import `./gbLanding`, no tests ran | 29 passed (29) |
+| Settings module | `src/utils/gbLanding.ts` — 31 keys (34 after the closed-state panel), absent-row defaults, whitelists | `npx vitest run src/utils/gbLanding.test.ts` | unresolved import `./gbLanding`, no tests ran | 29 passed (29) |
 | Settings hook | `src/hooks/useGbLanding.ts` — one `.in()` read, fail-open, Realtime, upsert | `npx vitest run src/hooks/useGbLanding.test.ts` | unresolved import `./useGbLanding` | 5 passed (5) |
 | Public section | `gb-landing/GroupBuyLanding.tsx`, `gb-landing/GbTimeline.tsx` | `npx vitest run src/components/gb-landing/GroupBuyLanding.test.tsx` | unresolved import `./GroupBuyLanding` | 18 passed (18) |
 | Cart → header, Reviews → bottom nav | `Header.tsx`, `StorefrontBottomNav.tsx`, `PublicPageBottomNav.tsx` | per-file vitest (see note) | 13 failed \| 24 passed (37) | 25 + 12 + 9 passed |
@@ -63,7 +63,7 @@ authoritative. A single full-suite `vitest run` is fine.
 | 2 | A CTA action outside the whitelist (`javascript:`, an external URL, a data: URI) can never become a navigation | `src/utils/gbLanding.test.ts:parseCtaAction` | unit | PASS |
 | 3 | An unknown stage icon falls back instead of resolving an arbitrary identifier | `src/utils/gbLanding.test.ts:parseStageIcon` | unit | PASS |
 | 4 | `auto` status follows the live batch; explicit modes override it; a corrupt stored mode behaves as `auto` | `src/utils/gbLanding.test.ts:resolveGbStatus` | unit | PASS |
-| 5 | All 31 fields survive a `toRows` → `fromRows` round trip | `src/utils/gbLanding.test.ts:gbLandingToRows` | unit | PASS |
+| 5 | All 34 fields survive a `toRows` → `fromRows` round trip | `src/utils/gbLanding.test.ts:gbLandingToRows` | unit | PASS |
 | 6 | Every landing key is read in ONE round trip | `src/hooks/useGbLanding.test.ts` | unit | PASS |
 | 7 | A settings outage shows the default copy rather than an empty homepage | `src/hooks/useGbLanding.test.ts` | unit | PASS |
 | 8 | A failed save is surfaced, never silently dropped | `src/hooks/useGbLanding.test.ts` | unit | PASS |
@@ -80,7 +80,7 @@ authoritative. A single full-suite `vitest run` is fine.
 | 19 | The header cart is visible at every width on the two pages that render their own Header | `ProtocolGuide.test.tsx`, `PeptideCalculator.test.tsx` | component | PASS |
 | 20 | No notice appears unless an admin has published one — including while the query is in flight, and when the read fails | `useStorefrontNotice.test.ts` | unit | PASS |
 | 21 | A notice the admin HAS published still appears | `useStorefrontNotice.test.ts` | unit | PASS |
-| 22 | The admin panel loads current values, edits all 31 fields, saves, and surfaces read/write errors | `GbLandingManager.test.tsx` | component | PASS |
+| 22 | The admin panel loads current values, edits all 34 fields, saves, and surfaces read/write errors | `GbLandingManager.test.tsx` | component | PASS |
 | 23 | CTA destinations are a `<select>` over a fixed list, not a free-text URL | `GbLandingManager.test.tsx` | component | PASS |
 | 24 | While the buy is closed the timeline is REPLACED by the closed panel — no stage list remains | `GroupBuyLanding.test.tsx` | component | PASS |
 | 25 | The closed panel renders the admin's heading, date and message; a blank date omits the line | `GroupBuyLanding.test.tsx` | component | PASS |
