@@ -83,7 +83,6 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<GroupBuyTab>('overview');
-  const kitAllocation = useKitAllocation(selectedBatch?.id ?? null);
   const [openModal, setOpenModal] = useState<{ open: boolean; closesCurrent: boolean }>({
     open: false,
     closesCurrent: false,
@@ -108,6 +107,10 @@ function GroupBuyManager({ onBack }: GroupBuyManagerProps) {
     () => batches.find((b) => b.id === selectedBatchId) ?? activeBatch ?? batches[0] ?? null,
     [batches, selectedBatchId, activeBatch],
   );
+
+  // Must stay below selectedBatch: reading it any earlier hits the temporal
+  // dead zone and throws on every render of this screen.
+  const kitAllocation = useKitAllocation(selectedBatch?.id ?? null);
 
   const {
     orders,

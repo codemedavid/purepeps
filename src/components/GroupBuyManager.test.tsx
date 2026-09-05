@@ -24,13 +24,25 @@ const state = {
 };
 
 const noop = () => Promise.resolve();
+const emptyList = () => Promise.resolve([]);
+
+// The real hooks hold these in useState, so their identity is stable across
+// renders. Stubs must be stable too: a fresh array literal per render makes
+// every dependency array look changed and spins the effects forever.
+const NO_CAPS: never[] = [];
+const NO_ORDERS: never[] = [];
+const NO_MEMBERS: never[] = [];
+const NO_TIERS: never[] = [];
+const NO_REQUESTS: never[] = [];
+const NO_PRODUCTS: never[] = [];
+const EMPTY_PROGRESS = { batch: null, items: [] as never[] };
 
 vi.mock('../hooks/useGroupBuy', () => ({
   useGroupBuy: () => ({
     batches: state.batches,
     activeBatch: state.activeBatch,
-    caps: [],
-    progress: { batch: null, items: [] },
+    caps: NO_CAPS,
+    progress: EMPTY_PROGRESS,
     loading: false,
     error: null,
     refresh: noop,
@@ -38,25 +50,25 @@ vi.mock('../hooks/useGroupBuy', () => ({
     setSchedule: noop,
     setPasaloMode: noop,
     setViewOnlyMode: noop,
-    fetchOfferableTiers: () => Promise.resolve([]),
-    fetchBatchTierIds: () => Promise.resolve([]),
+    fetchOfferableTiers: emptyList,
+    fetchBatchTierIds: emptyList,
     updateBatchSettings: noop,
     closeBatch: noop,
     startFinalizing: noop,
     finalizeBatch: noop,
     reopenBatch: noop,
-    fetchBatchRemaining: () => Promise.resolve([]),
+    fetchBatchRemaining: emptyList,
     setCap: noop,
     removeCap: noop,
     setFulfillmentStage: noop,
     fetchProgress: noop,
-    fetchBatchOrders: () => Promise.resolve([]),
+    fetchBatchOrders: emptyList,
   }),
 }));
 
 vi.mock('../hooks/useBatchOrders', () => ({
   useBatchOrders: () => ({
-    orders: [],
+    orders: NO_ORDERS,
     loading: false,
     error: null,
     reload: noop,
@@ -73,16 +85,16 @@ vi.mock('../hooks/useBatchOrders', () => ({
 }));
 
 vi.mock('../hooks/useBatchMembers', () => ({
-  useBatchMembers: () => ({ members: [], loading: false, error: null, reload: noop }),
+  useBatchMembers: () => ({ members: NO_MEMBERS, loading: false, error: null, reload: noop }),
 }));
 
 vi.mock('../hooks/useTierCatalog', () => ({
-  useTierCatalog: () => ({ tiers: [], loading: false, error: null, refresh: noop }),
+  useTierCatalog: () => ({ tiers: NO_TIERS, loading: false, error: null, refresh: noop }),
 }));
 
 vi.mock('../hooks/useAccessRequests', () => ({
   useAccessRequests: () => ({
-    requests: [],
+    requests: NO_REQUESTS,
     loading: false,
     error: null,
     fetchAll: noop,
@@ -94,8 +106,8 @@ vi.mock('../hooks/useAccessRequests', () => ({
 
 vi.mock('../hooks/useMenu', () => ({
   useMenu: () => ({
-    menuItems: [],
-    products: [],
+    menuItems: NO_PRODUCTS,
+    products: NO_PRODUCTS,
     loading: false,
     error: null,
     refreshProducts: noop,
