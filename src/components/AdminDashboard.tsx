@@ -4,7 +4,7 @@ import AdminLogin from './AdminLogin';
 import FeatureVisibilityManager from './FeatureVisibilityManager';
 import BlossomLogo from './BlossomLogo';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight, PackageX, Star } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, ArrowLeft, TrendingUp, Package, Users, FolderOpen, CreditCard, Sparkles, Layers, Shield, RefreshCw, Warehouse, ShoppingCart, HelpCircle, MapPin, Tag, Truck, Boxes, Sticker as StickerIcon, ToggleRight, PackageX, Star, Settings as SettingsIcon } from 'lucide-react';
 import type { Product } from '../types';
 import { useMenu } from '../hooks/useMenu';
 import { useCategories } from '../hooks/useCategories';
@@ -1780,6 +1780,18 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <span className="block text-sm font-semibold text-gray-900 group-hover:text-rose-600 transition-colors">Protocols</span>
                     <span className="text-xs text-gray-500">Peptide guides</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setCurrentView('settings')}
+                  className="group flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <SettingsIcon className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-semibold text-gray-900 group-hover:text-slate-600 transition-colors">Settings</span>
+                    <span className="text-xs text-gray-500">Homepage &amp; site info</span>
                   </div>
                 </button>
               </div>
