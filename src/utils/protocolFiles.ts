@@ -1,9 +1,6 @@
 // Helpers for the protocol files an admin attaches to a protocol. Kept apart
 // from the viewer so the URL rules stay unit-testable.
 
-/** File types the in-site viewer can draw. Everything else gets a download. */
-const PREVIEWABLE_EXTENSIONS = ['pdf'];
-
 const IMAGEKIT_HOST = 'ik.imagekit.io';
 const ATTACHMENT_FLAG = 'ik-attachment=true';
 
@@ -14,8 +11,14 @@ function extensionOf(url: string): string {
   return fileName.split('.').pop()?.toLowerCase() ?? '';
 }
 
+/** True when the URL points at a PDF, ignoring any query string after it. */
+export function isPdfFile(url?: string | null): boolean {
+  return !!url && extensionOf(url) === 'pdf';
+}
+
+/** File types the in-site viewer can draw. Everything else gets a download. */
 export function isPreviewableFile(url: string): boolean {
-  return PREVIEWABLE_EXTENSIONS.includes(extensionOf(url));
+  return isPdfFile(url);
 }
 
 /**

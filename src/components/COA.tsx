@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Award, CheckCircle, X, ExternalLink, Download, Sparkles, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
+import { Shield, Award, CheckCircle, Eye, Sparkles, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCOAPageSetting } from '../hooks/useCOAPageSetting';
 import { BOTTOM_NAV_CLEARANCE } from '../utils/storefrontNavigation';
+import { isPdfFile } from '../utils/protocolFiles';
+import CoaReportViewer from './CoaReportViewer';
 
 interface COAReport {
   id: string;
@@ -17,9 +19,6 @@ interface COAReport {
   featured: boolean;
   laboratory: string;
 }
-
-const isPdf = (url?: string | null): boolean =>
-  !!url && url.split('?')[0].toLowerCase().endsWith('.pdf');
 
 const COA: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -151,7 +150,7 @@ const COA: React.FC = () => {
                   className="relative cursor-pointer group"
                   onClick={() => setSelectedImage(report.image_url)}
                 >
-                  {isPdf(report.image_url) ? (
+                  {isPdfFile(report.image_url) ? (
                     <div className="w-full h-48 sm:h-56 md:h-64 lg:h-80 bg-gradient-to-br from-sky-50 to-blue-50 flex flex-col items-center justify-center gap-2">
                       <FileText className="w-16 h-16 md:w-20 md:h-20 text-sky-400" />
                       <p className="text-sm md:text-base font-bold text-sky-600">PDF Lab Report</p>
@@ -171,7 +170,7 @@ const COA: React.FC = () => {
                   <div className="absolute inset-0 bg-sky-600/0 group-hover:bg-sky-600/10 transition-all duration-300 flex items-center justify-center">
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 backdrop-blur-sm px-3 py-1.5 md:px-4 md:py-2 rounded-xl md:rounded-2xl shadow-lg">
                       <p className="text-xs md:text-sm font-bold text-sky-600 flex items-center gap-1.5 md:gap-2">
-                        <ExternalLink className="w-3 h-3 md:w-4 md:h-4" />
+                        <Eye className="w-3 h-3 md:w-4 md:h-4" />
                         View full report
                       </p>
                     </div>
@@ -226,7 +225,7 @@ const COA: React.FC = () => {
                       onClick={() => setSelectedImage(report.image_url)}
                       className="w-full flex items-center justify-center gap-1.5 md:gap-2 bg-white text-sky-600 border-2 border-sky-400 hover:border-sky-500 hover:bg-sky-50 px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl text-sm md:text-base font-medium transition-all duration-300"
                     >
-                      <Download className="w-4 h-4 md:w-5 md:h-5" />
+                      <Eye className="w-4 h-4 md:w-5 md:h-5" />
                       View Full Report
                     </button>
                   </div>
@@ -257,46 +256,9 @@ const COA: React.FC = () => {
         </div>
       </div>
 
-      {/* Image Modal - Mobile Optimized */}
+      {/* Report Modal - the certificate is read here, never on the CDN */}
       {selectedImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-2 md:p-4"
-          onClick={() => setSelectedImage(null)}
-        >
-          <div className="relative w-full max-w-5xl">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute -top-10 md:-top-12 right-0 bg-white/95 hover:bg-white text-gray-800 rounded-full p-2 md:p-2.5 transition-all shadow-lg"
-            >
-              <X className="w-5 h-5 md:w-6 md:h-6" />
-            </button>
-            {isPdf(selectedImage) ? (
-              <div className="bg-white rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                <iframe
-                  src={selectedImage}
-                  title="Certificate of Analysis"
-                  className="w-full h-[70vh] md:h-[80vh]"
-                />
-                <a
-                  href={selectedImage}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-4 py-3 text-sm md:text-base font-medium text-sky-600 hover:text-sky-700 hover:bg-sky-50 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4 md:w-5 md:h-5" />
-                  Open PDF in new tab
-                </a>
-              </div>
-            ) : (
-              <img
-                src={selectedImage}
-                alt="Certificate of Analysis"
-                className="w-full h-auto rounded-2xl md:rounded-3xl shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              />
-            )}
-          </div>
-        </div>
+        <CoaReportViewer fileUrl={selectedImage} onClose={() => setSelectedImage(null)} />
       )}
     </div>
   );
