@@ -1,13 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect } from 'react';
 import { X, Download, FileText, AlertCircle, ExternalLink } from 'lucide-react';
-import { isPreviewableFile, toDownloadUrl } from '../utils/protocolFiles';
-import type { LoadedPdf } from '../lib/pdf';
-
-type ViewerStatus = 'loading' | 'ready' | 'error' | 'unsupported';
-
-// jsdom and very narrow phones both report a 0px container before layout
-// settles; never ask pdf.js to rasterise nothing.
-const MIN_RENDER_WIDTH = 320;
+import { toDownloadUrl } from '../utils/protocolFiles';
+import { usePdfPages } from '../hooks/usePdfPages';
 
 interface ProtocolFileViewerProps {
     /** Protocol name, used as the dialog title. */
@@ -22,11 +16,7 @@ interface ProtocolFileViewerProps {
  * a bare CDN page with no way back.
  */
 const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, onClose }) => {
-    const canPreview = isPreviewableFile(fileUrl);
-    const [status, setStatus] = useState<ViewerStatus>(canPreview ? 'loading' : 'unsupported');
-    const [pageCount, setPageCount] = useState(0);
-    const documentRef = useRef<LoadedPdf | null>(null);
-    const canvasRefs = useRef<Array<HTMLCanvasElement | null>>([]);
+    const { status, pageCount, registerCanvas } = usePdfPages(fileUrl);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -35,59 +25,6 @@ const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
-
-    // Fetch the document. pdf.js is imported lazily so the guides page keeps its
-    // current weight for everyone who never opens a file.
-    useEffect(() => {
-        if (!canPreview) return;
-
-        let cancelled = false;
-
-        (async () => {
-            try {
-                const { loadPdf } = await import('../lib/pdf');
-                const document = await loadPdf(fileUrl);
-                if (cancelled) return;
-
-                documentRef.current = document;
-                setPageCount(document.pageCount);
-                setStatus('ready');
-            } catch (error) {
-                console.error('Failed to load protocol file:', error);
-                if (!cancelled) setStatus('error');
-            }
-        })();
-
-        return () => { cancelled = true; };
-    }, [fileUrl, canPreview]);
-
-    // Draw the pages once the canvases exist.
-    useEffect(() => {
-        const document = documentRef.current;
-        if (status !== 'ready' || !document) return;
-
-        let cancelled = false;
-
-        (async () => {
-            for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-                if (cancelled) return;
-
-                const canvas = canvasRefs.current[pageNumber - 1];
-                if (!canvas) continue;
-
-                try {
-                    const width = Math.max(canvas.parentElement?.clientWidth ?? 0, MIN_RENDER_WIDTH);
-                    await document.renderPage(pageNumber, canvas, width);
-                } catch (error) {
-                    console.error(`Failed to render protocol page ${pageNumber}:`, error);
-                    if (!cancelled) setStatus('error');
-                    return;
-                }
-            }
-        })();
-
-        return () => { cancelled = true; };
-    }, [status, pageCount]);
 
     const downloadUrl = toDownloadUrl(fileUrl);
 
@@ -136,7 +73,7 @@ const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, 
                             {Array.from({ length: pageCount }, (_, index) => (
                                 <canvas
                                     key={index}
-                                    ref={(element) => { canvasRefs.current[index] = element; }}
+                                    ref={registerCanvas(index)}
                                     role="img"
                                     aria-label={`Page ${index + 1} of ${pageCount}`}
                                     className="w-full rounded-xl shadow-sm bg-white"
