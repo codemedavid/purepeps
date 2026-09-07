@@ -73,13 +73,28 @@ describe('ProtocolFileViewer', () => {
     await waitFor(() => expect(mockLoadPdf).toHaveBeenCalledWith(PDF_URL));
   });
 
-  // --- Saving a copy ---
+  // --- The guide has to stay on our own site ---
 
-  it('offers a download that ImageKit serves as an attachment', async () => {
+  it('offers no download and no route off to the file host', async () => {
     render(<ProtocolFileViewer name="BPC-157 Protocol" fileUrl={PDF_URL} onClose={vi.fn()} />);
+    await screen.findAllByRole('img', { name: /^Page \d+ of 2$/ });
 
-    const download = await screen.findByRole('link', { name: /download/i });
-    expect(download).toHaveAttribute('href', `${PDF_URL}?ik-attachment=true`);
+    expect(screen.queryByRole('link', { name: /download/i })).not.toBeInTheDocument();
+    expect(document.querySelector('a[download]')).toBeNull();
+    expect(screen.queryByText(/open .*new tab/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole('link').filter((link) =>
+        (link.getAttribute('href') ?? '').includes('ik.imagekit.io'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('never frames the file straight from the CDN', async () => {
+    render(<ProtocolFileViewer name="BPC-157 Protocol" fileUrl={PDF_URL} onClose={vi.fn()} />);
+    await screen.findAllByRole('img', { name: /^Page \d+ of 2$/ });
+
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(document.querySelector('embed, object')).toBeNull();
   });
 
   // --- Closing ---
@@ -123,13 +138,18 @@ describe('ProtocolFileViewer', () => {
 
   // --- Honest failure states ---
 
-  it('explains a failed render and still offers the download', async () => {
+  it('explains a failed render without bouncing the reader to the CDN', async () => {
     mockLoadPdf.mockRejectedValue(new Error('network down'));
 
     render(<ProtocolFileViewer name="BPC-157 Protocol" fileUrl={PDF_URL} onClose={vi.fn()} />);
 
     expect(await screen.findByText(/couldn't be displayed/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /download/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /download/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole('link').filter((link) =>
+        (link.getAttribute('href') ?? '').includes('ik.imagekit.io'),
+      ),
+    ).toEqual([]);
   });
 
   it('never leaves a blank box for a file type it cannot draw', async () => {
@@ -138,10 +158,7 @@ describe('ProtocolFileViewer', () => {
     render(<ProtocolFileViewer name="BPC-157 Protocol" fileUrl={docUrl} onClose={vi.fn()} />);
 
     expect(await screen.findByText(/preview isn't available/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
-      'href',
-      `${docUrl}?ik-attachment=true`,
-    );
+    expect(screen.queryByRole('link', { name: /download/i })).not.toBeInTheDocument();
     expect(mockLoadPdf).not.toHaveBeenCalled();
   });
 });
