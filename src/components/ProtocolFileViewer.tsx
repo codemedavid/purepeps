@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { X, Download, FileText, AlertCircle, ExternalLink } from 'lucide-react';
-import { toDownloadUrl } from '../utils/protocolFiles';
+import { X, FileText, AlertCircle } from 'lucide-react';
 import { usePdfPages } from '../hooks/usePdfPages';
 
 interface ProtocolFileViewerProps {
@@ -25,8 +24,6 @@ const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
-
-    const downloadUrl = toDownloadUrl(fileUrl);
 
     return (
         <div
@@ -88,7 +85,9 @@ const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, 
                             <p className="text-sm font-medium text-charcoal-800">
                                 This protocol couldn't be displayed here.
                             </p>
-                            <p className="text-xs text-charcoal-500">Download it below to read it on your device.</p>
+                            <p className="text-xs text-charcoal-500">
+                                Please try again in a moment, or message us and we'll walk you through it.
+                            </p>
                         </div>
                     )}
 
@@ -98,30 +97,13 @@ const ProtocolFileViewer: React.FC<ProtocolFileViewerProps> = ({ name, fileUrl, 
                             <p className="text-sm font-medium text-charcoal-800">
                                 Preview isn't available for this file type.
                             </p>
-                            <p className="text-xs text-charcoal-500">Download it below to open it on your device.</p>
+                            <p className="text-xs text-charcoal-500">
+                                Message us and we'll walk you through this protocol.
+                            </p>
                         </div>
                     )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-brand-100">
-                    <a
-                        href={fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-charcoal-500 hover:text-rose-500 transition-colors"
-                    >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Open in new tab
-                    </a>
-                    <a
-                        href={downloadUrl}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors"
-                    >
-                        <Download className="w-4 h-4" />
-                        Download
-                    </a>
-                </div>
             </div>
         </div>
     );

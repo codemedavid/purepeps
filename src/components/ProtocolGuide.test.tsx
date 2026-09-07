@@ -142,7 +142,7 @@ describe('ProtocolGuide', () => {
       expect(bpcButton).toBeDefined();
       await userEvent.click(bpcButton!);
 
-      expect(screen.getByText('Click to view or download')).toBeInTheDocument();
+      expect(screen.getByText('Click to view')).toBeInTheDocument();
     });
 
     it('keeps the customer on Pure Peps instead of linking out to the file host', async () => {
@@ -152,7 +152,7 @@ describe('ProtocolGuide', () => {
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
       await userEvent.click(bpcButton!);
 
-      const card = screen.getByText('Click to view or download').closest('a');
+      const card = screen.getByText('Click to view').closest('a');
       expect(card).toBeNull();
       expect(
         document.querySelector(`a[href="${mockFileProtocol.file_url}"]`),
@@ -166,7 +166,7 @@ describe('ProtocolGuide', () => {
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
       await userEvent.click(bpcButton!);
 
-      await userEvent.click(screen.getByRole('button', { name: /click to view or download/i }));
+      await userEvent.click(screen.getByRole('button', { name: /click to view/i }));
 
       const dialog = await screen.findByRole('dialog');
       expect(dialog).toHaveTextContent('BPC-157 Protocol');
@@ -178,13 +178,13 @@ describe('ProtocolGuide', () => {
       const protocolButtons = screen.getAllByRole('button');
       const bpcButton = protocolButtons.find(btn => btn.textContent?.includes('BPC-157 Protocol'));
       await userEvent.click(bpcButton!);
-      await userEvent.click(screen.getByRole('button', { name: /click to view or download/i }));
+      await userEvent.click(screen.getByRole('button', { name: /click to view/i }));
       await screen.findByRole('dialog');
 
       await userEvent.click(screen.getByRole('button', { name: /close/i }));
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByText('Click to view or download')).toBeInTheDocument();
+      expect(screen.getByText('Click to view')).toBeInTheDocument();
     });
   });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, AlertTriangle, ChevronDown, ChevronUp, BookOpen, FileText, Download } from 'lucide-react';
+import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, AlertTriangle, ChevronDown, ChevronUp, BookOpen, FileText, Eye } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import { useNavigate } from 'react-router-dom';
@@ -202,9 +202,9 @@ const ProtocolGuide: React.FC = () => {
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="text-sm font-semibold text-charcoal-800">{protocol.name} Protocol</p>
-                                                        <p className="text-xs text-charcoal-500">Click to view or download</p>
+                                                        <p className="text-xs text-charcoal-500">Click to view</p>
                                                     </div>
-                                                    <Download className="w-5 h-5 text-charcoal-400 group-hover:text-rose-500 transition-colors" />
+                                                    <Eye className="w-5 h-5 text-charcoal-400 group-hover:text-rose-500 transition-colors" />
                                                 </button>
                                             </div>
                                         )}
