@@ -1,8 +1,5 @@
-// Helpers for the protocol files an admin attaches to a protocol. Kept apart
-// from the viewer so the URL rules stay unit-testable.
-
-const IMAGEKIT_HOST = 'ik.imagekit.io';
-const ATTACHMENT_FLAG = 'ik-attachment=true';
+// URL rules for the files an admin attaches to a protocol or a lab report.
+// Kept apart from the viewers so they stay unit-testable.
 
 function extensionOf(url: string): string {
   const path = url.split('?')[0];
@@ -11,23 +8,11 @@ function extensionOf(url: string): string {
   return fileName.split('.').pop()?.toLowerCase() ?? '';
 }
 
-/** True when the URL points at a PDF, ignoring any query string after it. */
+/**
+ * True when the URL points at a PDF, ignoring any query string after it.
+ * PDFs are the only attachment the in-site viewer can rasterise; anything else
+ * gets an explanatory panel rather than a link out to the file host.
+ */
 export function isPdfFile(url?: string | null): boolean {
   return !!url && extensionOf(url) === 'pdf';
-}
-
-/** File types the in-site viewer can draw. Everything else gets a download. */
-export function isPreviewableFile(url: string): boolean {
-  return isPdfFile(url);
-}
-
-/**
- * Browsers ignore the `download` attribute across origins, so a plain link to
- * an ImageKit asset navigates away instead of saving. `ik-attachment=true`
- * makes ImageKit answer with `Content-Disposition: attachment`, which keeps the
- * customer on the page and still hands them the file.
- */
-export function toDownloadUrl(url: string): string {
-  if (!url.includes(IMAGEKIT_HOST) || url.includes(ATTACHMENT_FLAG)) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}${ATTACHMENT_FLAG}`;
 }
