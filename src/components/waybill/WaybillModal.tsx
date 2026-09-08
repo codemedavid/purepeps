@@ -27,6 +27,17 @@ export function WaybillModal({ waybills, onClose }: Props) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // Mark the document while the overlay is open. The overlay is portalled to
+  // <body>, making it a sibling of the #root app shell, so the print CSS needs
+  // this flag to drop the shell — and only the shell — from the print layout.
+  // Without it the sheets would have to be pulled out of normal flow to escape
+  // the shell's boxes, and out-of-flow content stops paginating: the browser
+  // prints page one and discards the remaining waybills.
+  useEffect(() => {
+    document.body.classList.add('wb-print-open');
+    return () => document.body.classList.remove('wb-print-open');
+  }, []);
+
   const count = waybills.length;
 
   const overlay = (
