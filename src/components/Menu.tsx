@@ -3,7 +3,7 @@ import MenuItemCard from './MenuItemCard';
 import ProductDetailModal from './ProductDetailModal';
 import type { Product, ProductVariation, CartItem, GroupBuyProgressItem } from '../types';
 import type { UniversalMinimumOrder } from '../utils/minimumOrder';
-import { Search, Lock, ShieldCheck } from 'lucide-react';
+import { Search, Lock, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { findProgressItem } from '../utils/groupBuy';
 import { groupProductsIntoSections } from '../utils/catalogSections';
 import { useCategories } from '../hooks/useCategories';
@@ -36,6 +36,7 @@ const Menu: React.FC<MenuProps> = ({
   cartItems,
   isVerified,
   canAccessCategory,
+  tierName,
   onGetAccess,
   groupBuyItems = [],
   isBatchOpen = true,
@@ -109,6 +110,31 @@ const Menu: React.FC<MenuProps> = ({
           id="storefront-catalog"
           className="max-w-[1180px] mx-auto px-6 pb-10 scroll-mt-28 md:scroll-mt-24"
         >
+          {/* Member tier — the counterpart to the access bar below. A member
+              who paid for a tier had no confirmation anywhere in the
+              storefront of which one they hold ("nawala po ata ung tier ko");
+              `tierName` had been reaching this component unused since tiered
+              access shipped. Held back until a name actually resolves, so the
+              chip never flashes empty while the grant is still loading. */}
+          {isVerified && tierName && (
+            <div
+              data-testid="member-tier-badge"
+              className="flex items-center gap-3 px-5 py-3.5 bg-white border border-sakura-primary/30 rounded-[18px] mb-8"
+            >
+              <span className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-full bg-sakura-blush text-sakura-deep shrink-0">
+                <BadgeCheck className="w-[17px] h-[17px]" />
+              </span>
+              <div className="min-w-0">
+                <div className="font-mono text-[11px] uppercase tracking-[0.1em] text-sakura-soft">
+                  Your tier
+                </div>
+                <div className="text-[15px] font-semibold tracking-[-0.01em] text-sakura-ink truncate">
+                  {tierName}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Access bar — shown until the member is verified */}
           {!isVerified && (
             <div className="flex items-center justify-between gap-6 px-6 py-[18px] bg-sakura-ink rounded-[18px] mb-8 flex-wrap">
