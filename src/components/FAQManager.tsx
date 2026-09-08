@@ -119,7 +119,7 @@ const FAQManager: React.FC<FAQManagerProps> = ({ onBack }) => {
                         resetForm();
                         setIsAdding(true);
                     }}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-navy-900 text-white px-4 py-2 rounded-lg hover:bg-navy-800 transition-colors shadow-sm"
+                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-sakura-dark text-white px-4 py-2 rounded-lg hover:bg-sakura-deep transition-colors shadow-sm"
                 >
                     <Plus className="w-4 h-4" />
                     Add FAQ
@@ -142,7 +142,7 @@ const FAQManager: React.FC<FAQManagerProps> = ({ onBack }) => {
                         <button
                             type="button"
                             onClick={saveFAQ}
-                            className="flex items-center gap-2 bg-navy-900 text-white px-3 py-1.5 rounded-lg hover:bg-navy-800 transition-colors text-sm shadow-sm"
+                            className="flex items-center gap-2 bg-sakura-dark text-white px-3 py-1.5 rounded-lg hover:bg-sakura-deep transition-colors text-sm shadow-sm"
                         >
                             <Save className="w-4 h-4" />
                             Save
@@ -220,7 +220,7 @@ const FAQManager: React.FC<FAQManagerProps> = ({ onBack }) => {
                         <div className="flex gap-3">
                             <button
                                 type="submit"
-                                className="flex items-center gap-2 bg-navy-900 text-white px-4 py-2 rounded-lg hover:bg-navy-800 transition-colors shadow-sm"
+                                className="flex items-center gap-2 bg-sakura-dark text-white px-4 py-2 rounded-lg hover:bg-sakura-deep transition-colors shadow-sm"
                             >
                                 <Save className="w-4 h-4" />
                                 {editingId ? 'Update FAQ' : 'Save FAQ'}

@@ -105,7 +105,7 @@ const TrackedOrderRecord: React.FC<Props> = ({
             <button
               type="submit"
               disabled={loading || !unlockEmail.trim()}
-              className="rounded-lg bg-navy-900 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-navy-800 disabled:opacity-50"
+              className="rounded-lg bg-sakura-dark px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-sakura-deep disabled:opacity-50"
             >
               {loading ? 'Checking…' : 'Show full order details'}
             </button>

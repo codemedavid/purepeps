@@ -459,7 +459,7 @@ const OrderTracking: React.FC = () => {
 
                         {/* Status Card */}
                         <div className="bg-white rounded-2xl shadow-xl border-2 border-navy-700/30 overflow-hidden">
-                            <div className="bg-navy-900 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
+                            <div className="bg-sakura-dark p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
                                 <div>
                                     <p className="text-white text-sm font-semibold uppercase tracking-wider mb-1">Order Status</p>
                                     <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
@@ -626,7 +626,7 @@ const OrderTracking: React.FC = () => {
                             tracking, each keeping its own payment method and status. */}
                         {hasRepeatOrders && (
                             <div className="bg-white rounded-2xl shadow-xl border-2 border-navy-700/30 overflow-hidden">
-                                <div className="bg-navy-900 p-6 flex items-center gap-3 text-white">
+                                <div className="bg-sakura-dark p-6 flex items-center gap-3 text-white">
                                     <Package className="w-6 h-6 text-gold-400" />
                                     <div>
                                         <h2 className="text-xl font-bold text-white">Your orders in this group buy</h2>
@@ -698,7 +698,7 @@ const OrderTracking: React.FC = () => {
                         {/* Add-ons in this group buy — claim/add-on orders linked to the root. */}
                         {claimRows.length > 0 && (
                             <div className="bg-white rounded-2xl shadow-xl border-2 border-navy-700/30 overflow-hidden">
-                                <div className="bg-navy-900 p-6 flex items-center gap-3 text-white">
+                                <div className="bg-sakura-dark p-6 flex items-center gap-3 text-white">
                                     <Gift className="w-6 h-6 text-gold-400" />
                                     <div>
                                         <h2 className="text-xl font-bold text-white">Add-ons in this group buy</h2>

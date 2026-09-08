@@ -83,7 +83,7 @@ const FAQ: React.FC = () => {
                             key={category}
                             onClick={() => setActiveCategory(category)}
                             className={`px-4 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all flex items-center gap-2 border shadow-sm ${activeCategory === category
-                                ? 'bg-navy-900 text-white border-navy-900 shadow-md transform scale-105'
+                                ? 'bg-sakura-dark text-white border-sakura-dark shadow-md transform scale-105'
                                 : 'bg-white text-black border-navy-900 hover:bg-navy-50 hover:text-black'
                                 }`}
                         >

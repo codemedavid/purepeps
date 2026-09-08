@@ -329,7 +329,7 @@ const PeptideInventoryManager: React.FC<PeptideInventoryManagerProps> = ({ onBac
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="bg-navy-900 hover:bg-navy-800 text-white px-3 py-1.5 md:py-2 rounded-md font-medium text-xs md:text-sm shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 border border-navy-900/20"
+              className="bg-sakura-dark hover:bg-sakura-deep text-white px-3 py-1.5 md:py-2 rounded-md font-medium text-xs md:text-sm shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 border border-sakura-dark/20"
             >
               <RefreshCw className={`w-3 h-3 md:w-4 md:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>

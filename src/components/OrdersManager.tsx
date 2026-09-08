@@ -666,7 +666,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="bg-navy-900 hover:bg-navy-800 text-white px-2 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl font-medium text-xs md:text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-1 md:gap-2 disabled:opacity-50 border border-navy-900/20"
+              className="bg-sakura-dark hover:bg-sakura-deep text-white px-2 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl font-medium text-xs md:text-sm shadow-md hover:shadow-lg transition-all flex items-center gap-1 md:gap-2 disabled:opacity-50 border border-sakura-dark/20"
             >
               <RefreshCw className={`w-3 h-3 md:w-4 md:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
@@ -778,7 +778,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                   ? 'No confirmed orders in this view to print.'
                   : 'Print a waybill for every printable order currently shown'
               }
-              className="bg-navy-900 hover:bg-navy-800 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed border border-navy-900/20 shrink-0"
+              className="bg-sakura-dark hover:bg-sakura-deep text-white px-3 md:px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed border border-sakura-dark/20 shrink-0"
             >
               <Printer className="w-4 h-4" />
               Print all waybills ({printableOrders.length})

@@ -208,7 +208,7 @@ export function LeftoverClaimPanel({ batchId, orderNumber, onClaimed }: Leftover
   // Claim form.
   return (
     <div className="bg-white rounded-2xl shadow-xl border-2 border-gold-500/40 overflow-hidden">
-      <div className="bg-navy-900 p-6 text-white flex items-center gap-3">
+      <div className="bg-sakura-dark p-6 text-white flex items-center gap-3">
         <Gift className="w-6 h-6 text-gold-400" />
         <div>
           <h3 className="text-xl font-bold">Claim leftover units</h3>

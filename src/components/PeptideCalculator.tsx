@@ -214,7 +214,7 @@ const PeptideCalculator: React.FC = () => {
                                                 type="button"
                                                 onClick={() => setSelectedUnit('mg')}
                                                 className={`px-4 py-3 border rounded-lg font-medium transition-all text-sm ${selectedUnit === 'mg'
-                                                    ? 'bg-navy-900 text-white border-navy-900'
+                                                    ? 'bg-sakura-dark text-white border-sakura-dark'
                                                     : 'bg-white text-gray-700 border-gray-200 hover:border-navy-900'
                                                     }`}
                                             >
@@ -224,7 +224,7 @@ const PeptideCalculator: React.FC = () => {
                                                 type="button"
                                                 onClick={() => setSelectedUnit('mcg')}
                                                 className={`px-4 py-3 border rounded-lg font-medium transition-all text-sm ${selectedUnit === 'mcg'
-                                                    ? 'bg-navy-900 text-white border-navy-900'
+                                                    ? 'bg-sakura-dark text-white border-sakura-dark'
                                                     : 'bg-white text-gray-700 border-gray-200 hover:border-navy-900'
                                                     }`}
                                             >
