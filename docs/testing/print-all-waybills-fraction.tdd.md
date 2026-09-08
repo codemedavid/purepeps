@@ -64,8 +64,18 @@ $ "Google Chrome" --headless --print-to-pdf=out-fixed.pdf fixture-fixed.html
   fixed CSS -> 8 page(s)
 ```
 
-The live cap is a fixed amount of content, not a fraction of the queue: 3 waybills also
-printed 3 pages, so a small batch looked fine and a real batch silently lost sheets.
+Sweeping the queue size shows the loss is a hard cap, not a proportion — the live CSS
+prints the same three pages no matter how many waybills are queued, while the fixed CSS
+tracks the queue exactly:
+
+| Waybills queued | live CSS | fixed CSS |
+|---|---|---|
+| 3 | 3 pages | 3 pages |
+| 8 | 3 pages | 8 pages |
+| 12 | **3 pages** | 12 pages |
+
+That is why the bug survived review: a small batch prints correctly and looks fine, and
+only a real drop loses sheets. The larger the batch, the more is silently dropped.
 
 ### 2. RED — pin the properties that decide pagination
 
@@ -112,7 +122,7 @@ $ npx vitest run src/utils/waybill.test.ts                       41 passed (41)
 | 8 | The mark is cleared when the overlay closes | `WaybillModal.test.tsx:clears the mark once the overlay closes` | component | PASS | same |
 | 9 | One printable page is rendered per queued waybill | `WaybillModal.test.tsx:renders one printable page per waybill` | component | PASS | same |
 | 10 | `new` and `cancelled` orders are skipped from a print run | `src/utils/waybill.test.ts:printableWaybillOrders` | unit | PASS | `npx vitest run src/utils/waybill.test.ts` |
-| 11 | 8 queued waybills produce 8 printed pages | Chrome `--print-to-pdf`, `/Type /Page` count | manual (real print output) | PASS | live 3 pages → fixed 8 pages |
+| 11 | N queued waybills produce N printed pages (3, 8, 12) | Chrome `--print-to-pdf`, `/Type /Page` count | manual (real print output) | PASS | live capped at 3 pages → fixed 3/8/12 |
 
 ## Coverage and known gaps
 
