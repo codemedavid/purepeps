@@ -17,7 +17,7 @@ import {
   resolveRefundStatus,
 } from '../constants/payment';
 import { toFacebookProfileUrl } from '../utils/facebookLink';
-import { buildWaybillData, canPrintWaybill } from '../utils/waybill';
+import { buildWaybillData, canPrintWaybill, printableWaybillOrders } from '../utils/waybill';
 import { WaybillModal } from './waybill/WaybillModal';
 
 interface OrderItem {
@@ -95,7 +95,9 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   const [batchFilter, setBatchFilter] = useState<string>(BATCH_FILTER_ALL);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [printOrder, setPrintOrder] = useState<Order | null>(null);
+  // Orders queued for the print preview: one for a single card's Waybill button,
+  // every printable order in the current view for "Print all waybills". Empty = closed.
+  const [printQueue, setPrintQueue] = useState<Order[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { refreshProducts } = useMenu();
@@ -549,6 +551,11 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     return filtered;
   }, [orders, statusFilter, batchFilter, searchQuery]);
 
+  // "Print all waybills" prints exactly what the admin is looking at, minus the
+  // orders that have no shipment yet ('new') or never will ('cancelled'). Narrow
+  // the status/batch filters or the search box to narrow the print run.
+  const printableOrders = useMemo(() => printableWaybillOrders(filteredOrders), [filteredOrders]);
+
   const statusCounts = useMemo(() => {
     return {
       all: orders.length,
@@ -591,23 +598,19 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
     }
   };
 
-  // Build the waybill for the order queued to print. Regular orders carry no
-  // per-batch admin fee, so adminFee is left off (shown as absent, not ₱0).
-  const printBatch = printOrder?.group_buy_batch_id
-    ? batchById.get(printOrder.group_buy_batch_id)
-    : undefined;
-  const waybillModal = printOrder ? (
+  // Build one waybill for an order. Regular orders carry no per-batch admin fee,
+  // so adminFee is left off (shown as absent, not ₱0).
+  const buildOrderWaybill = (order: Order) => {
+    const batch = order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined;
+    return buildWaybillData(order, {
+      batchLabel: order.group_buy_batch_id ? (batch ? batchLabel(batch) : 'Group Buy') : null,
+    });
+  };
+
+  const waybillModal = printQueue.length > 0 ? (
     <WaybillModal
-      waybills={[
-        buildWaybillData(printOrder, {
-          batchLabel: printOrder.group_buy_batch_id
-            ? printBatch
-              ? batchLabel(printBatch)
-              : 'Group Buy'
-            : null,
-        }),
-      ]}
-      onClose={() => setPrintOrder(null)}
+      waybills={printQueue.map(buildOrderWaybill)}
+      onClose={() => setPrintQueue([])}
     />
   ) : null;
 
@@ -634,7 +637,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
           onUpdateStatus={handleUpdateOrderStatus}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
           onSaveTracking={handleSaveTracking}
-          onPrintWaybill={() => setPrintOrder(selectedOrder)}
+          onPrintWaybill={() => setPrintQueue([selectedOrder])}
           isProcessing={isProcessing}
         />
       </>
@@ -767,7 +770,24 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 )}
               </select>
             </div>
+            <button
+              onClick={() => setPrintQueue(printableOrders)}
+              disabled={printableOrders.length === 0}
+              title={
+                printableOrders.length === 0
+                  ? 'No confirmed orders in this view to print.'
+                  : 'Print a waybill for every printable order currently shown'
+              }
+              className="bg-navy-900 hover:bg-navy-800 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed border border-navy-900/20 shrink-0"
+            >
+              <Printer className="w-4 h-4" />
+              Print all waybills ({printableOrders.length})
+            </button>
           </div>
+          <p className="text-[11px] md:text-xs text-gray-500 mt-2">
+            Prints every confirmed-or-later order currently shown — one waybill per page. Use the
+            status cards, batch filter, or search to narrow the run.
+          </p>
         </div>
 
         {/* Orders List */}
@@ -785,7 +805,7 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
                 order={order}
                 batch={order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined}
                 onView={() => setSelectedOrder(order)}
-                onPrintWaybill={() => setPrintOrder(order)}
+                onPrintWaybill={() => setPrintQueue([order])}
                 getStatusColor={getStatusColor}
                 getStatusIcon={getStatusIcon}
               />

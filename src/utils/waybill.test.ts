@@ -4,6 +4,7 @@ import {
   buildWaybillData,
   canPrintWaybill,
   formatBatchLabel,
+  printableWaybillOrders,
   type WaybillOrderInput,
 } from './waybill';
 
@@ -351,5 +352,52 @@ describe('waybill — COD figure stays clear of the printed total', () => {
     // One outstanding fee out of two orders on the sheet.
     expect(data.codAmountDue).toBeCloseTo(100, 2);
     expect(data.codAmountDue).toBeLessThan(data.grandTotal);
+  });
+});
+
+describe('printableWaybillOrders', () => {
+  it('keeps only orders whose status can print a waybill', () => {
+    const orders = [
+      order({ id: 'new-1', order_status: 'new' }),
+      order({ id: 'confirmed-1', order_status: 'confirmed' }),
+      order({ id: 'cancelled-1', order_status: 'cancelled' }),
+      order({ id: 'delivered-1', order_status: 'delivered' }),
+    ];
+
+    expect(printableWaybillOrders(orders).map((o) => o.id)).toEqual([
+      'confirmed-1',
+      'delivered-1',
+    ]);
+  });
+
+  it('preserves the order of the list it was given', () => {
+    const orders = [
+      order({ id: 'packing-1', order_status: 'packing' }),
+      order({ id: 'confirmed-1', order_status: 'confirmed' }),
+      order({ id: 'out-1', order_status: 'out_for_delivery' }),
+    ];
+
+    expect(printableWaybillOrders(orders).map((o) => o.id)).toEqual([
+      'packing-1',
+      'confirmed-1',
+      'out-1',
+    ]);
+  });
+
+  it('returns an empty list when nothing is printable', () => {
+    const orders = [
+      order({ id: 'new-1', order_status: 'new' }),
+      order({ id: 'cancelled-1', order_status: 'cancelled' }),
+    ];
+
+    expect(printableWaybillOrders(orders)).toEqual([]);
+  });
+
+  it('does not mutate the input list', () => {
+    const orders = [order({ id: 'new-1', order_status: 'new' }), order({ id: 'ok-1' })];
+
+    printableWaybillOrders(orders);
+
+    expect(orders.map((o) => o.id)).toEqual(['new-1', 'ok-1']);
   });
 });

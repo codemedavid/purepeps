@@ -42,6 +42,16 @@ export function canPrintWaybill(status: string | null | undefined): boolean {
   return status != null && WAYBILL_ELIGIBLE_STATUSES.has(status);
 }
 
+// The subset of a list that can actually be printed, in the same order it was
+// given. Backs the admin's "print every waybill in this view" action: orders
+// still 'new' or 'cancelled' are silently skipped rather than printing a sheet
+// for a shipment that does not exist. Returns a new array — never mutates.
+export function printableWaybillOrders<T extends { order_status?: string | null }>(
+  orders: readonly T[],
+): T[] {
+  return orders.filter((order) => canPrintWaybill(order.order_status));
+}
+
 // The subset of order fields the waybill reads. Both `Order` (OrdersManager) and
 // `BatchOrder` (types/index.ts) satisfy this structurally — they carry more.
 export interface WaybillOrderInput {
