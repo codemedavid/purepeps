@@ -9,6 +9,8 @@ import {
 import {
   normalizeEmail,
   normalizeOrderNumber,
+  REVIEWABLE_ORDER_STATUS,
+  reviewLookupMessage,
   validateReviewSubmission,
   type ReviewSubmissionErrors,
 } from '../utils/reviews';
@@ -30,24 +32,21 @@ export interface ReviewDraft {
   photoUrls: readonly string[];
 }
 
-/**
- * The single message shown whenever verification finds nothing.
- *
- * `get_reviewable_order` returns zero rows for a wrong email, a non-existent
- * order and an order that is not delivered — all three identical, so the form
- * cannot be used to discover whether an address has ever ordered here. Naming
- * which half was wrong would hand back exactly that oracle.
- */
-const NOT_FOUND =
-  'We could not find a delivered order with those details. Please check the ' +
-  'order number and the address used at checkout. Reviews open once an order ' +
-  'has been delivered.';
+/** One row of `get_order_review_status` — the status of a matched order. */
+interface OrderStatusRow {
+  order_status: string | null;
+}
 
 export interface ReviewSubmissionState {
   /** Products on the proven order. Empty until a successful lookup. */
   products: ReviewableProduct[];
   /** True once an order number + email pair has been accepted. */
   verified: boolean;
+  /**
+   * The matched order's status, or null when nothing matched. Lets the form
+   * say WHY a real order did not open — rather than implying it was not found.
+   */
+  orderStatus: string | null;
   /** True once a review has been accepted by the database. */
   submitted: boolean;
   looking: boolean;
@@ -61,6 +60,31 @@ export interface ReviewSubmissionState {
   lookup: (orderNumber: string, email: string) => Promise<void>;
   submit: (draft: ReviewDraft) => Promise<void>;
   reset: () => void;
+}
+
+/**
+ * The matched order's status, or null when nothing matched.
+ *
+ * A failure here must never be louder than the answer it was refining: the
+ * delivered lookup has already succeeded and returned nothing, so the worst
+ * this can do is fall back to the generic message.
+ */
+async function fetchOrderStatus(
+  orderNumber: string,
+  email: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_order_review_status', {
+      p_order_number: orderNumber,
+      p_email: email,
+    });
+    if (error) return null;
+
+    const rows = (data ?? []) as OrderStatusRow[];
+    return rows[0]?.order_status ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -78,6 +102,7 @@ export interface ReviewSubmissionState {
 export function useReviewSubmission(): ReviewSubmissionState {
   const [products, setProducts] = useState<ReviewableProduct[]>([]);
   const [proven, setProven] = useState<{ orderNumber: string; email: string } | null>(null);
+  const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [looking, setLooking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -123,6 +148,7 @@ export function useReviewSubmission(): ReviewSubmissionState {
 
     setError(null);
     setFieldErrors({});
+    setOrderStatus(null);
 
     if (!normalizedOrder || !normalizedEmail) {
       setError('Enter both the order number and the email address used at checkout.');
@@ -141,18 +167,29 @@ export function useReviewSubmission(): ReviewSubmissionState {
       if (rows.length === 0) {
         setProducts([]);
         setProven(null);
-        setError(NOT_FOUND);
+
+        // Zero rows covers three cases and only one of them is actionable: the
+        // order is real, the email matched, and it is simply not delivered yet.
+        // Ask the status-only RPC to separate that case out. It answers only
+        // when BOTH values match the same order, so the wrong-email and
+        // unknown-order cases still come back indistinguishable.
+        const status = await fetchOrderStatus(normalizedOrder, normalizedEmail);
+        setOrderStatus(status);
+        setError(reviewLookupMessage(status));
         return;
       }
 
       setProducts(rows);
       setProven({ orderNumber: normalizedOrder, email: normalizedEmail });
+      setOrderStatus(REVIEWABLE_ORDER_STATUS);
     } catch (err) {
-      // Distinct from NOT_FOUND on purpose: telling someone their order does
-      // not exist when the lookup merely failed sends them away for good.
+      // Distinct from the not-found message on purpose: telling someone their
+      // order does not exist when the lookup merely failed sends them away for
+      // good.
       setError(getActionErrorMessage(err, 'We could not check that order right now.'));
       setProducts([]);
       setProven(null);
+      setOrderStatus(null);
     } finally {
       setLooking(false);
     }
@@ -212,12 +249,14 @@ export function useReviewSubmission(): ReviewSubmissionState {
     setSubmitted(false);
     setError(null);
     setFieldErrors({});
+    setOrderStatus(null);
   }, []);
 
   return useMemo(
     () => ({
       products,
       verified: proven !== null,
+      orderStatus,
       submitted,
       looking,
       submitting,
@@ -232,6 +271,7 @@ export function useReviewSubmission(): ReviewSubmissionState {
     [
       products,
       proven,
+      orderStatus,
       submitted,
       looking,
       submitting,

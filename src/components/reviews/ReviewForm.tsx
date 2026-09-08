@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { CheckCircle2, ImagePlus, Loader2, X } from 'lucide-react';
 import { useReviewSubmission, type ReviewableProduct } from '../../hooks/useReviewSubmission';
 import { useImageUpload } from '../../hooks/useImageUpload';
+import { useCheckoutInfo } from '../../hooks/useCheckoutInfo';
+import { useOrderHistory } from '../../hooks/useOrderHistory';
 import {
   MAX_BODY_LENGTH,
   MAX_DISPLAY_NAME_LENGTH,
   MAX_REVIEW_PHOTOS,
+  rememberedReviewIdentity,
 } from '../../utils/reviews';
 import StarRating from './StarRating';
 
@@ -57,9 +60,23 @@ export default function ReviewForm() {
     reset,
   } = useReviewSubmission();
   const { uploadImage, uploading } = useImageUpload('review-photos');
+  const { orders: savedOrders } = useOrderHistory();
+  const { savedInfo } = useCheckoutInfo();
 
-  const [orderNumber, setOrderNumber] = useState('');
-  const [email, setEmail] = useState('');
+  /**
+   * Both values are already on this device — the recent-orders list holds the
+   * order number and checkout saved the email it was placed under. Asking the
+   * customer to retype them, in exactly the spelling the order carries, is
+   * where the reporting client got stuck.
+   *
+   * Read once as the initial state rather than synced: these are a starting
+   * point, and a field the customer has since corrected must not be reverted
+   * underneath them.
+   */
+  const remembered = rememberedReviewIdentity(savedOrders, savedInfo?.email);
+
+  const [orderNumber, setOrderNumber] = useState(remembered.orderNumber);
+  const [email, setEmail] = useState(remembered.email);
   const [productId, setProductId] = useState('');
   const [rating, setRating] = useState(0);
   const [displayName, setDisplayName] = useState('');

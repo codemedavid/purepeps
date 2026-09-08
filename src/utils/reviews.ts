@@ -14,6 +14,8 @@
  * so an admin-shaped row can never be rendered publicly by accident.
  */
 
+import { orderStatusLabel } from './orderTracking';
+
 /** Moderation states a review moves through. Every review is born 'pending'. */
 export const REVIEW_STATUSES = ['pending', 'approved', 'rejected', 'hidden'] as const;
 
@@ -127,6 +129,77 @@ export function normalizeEmail(email: string | null | undefined): string {
  */
 function looksLikeEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/** The only order state a review may be written against. */
+export const REVIEWABLE_ORDER_STATUS = 'delivered';
+
+/**
+ * Shown when verification finds nothing at all.
+ *
+ * `get_reviewable_order` returns zero rows for a wrong email AND for an order
+ * that does not exist, and this message must stay identical for both — naming
+ * which half was wrong would turn the form into an oracle for "has this address
+ * ever ordered here".
+ */
+export const REVIEW_ORDER_NOT_FOUND =
+  'We could not find a delivered order with those details. Please check the ' +
+  'order number and the address used at checkout. Reviews open once an order ' +
+  'has been delivered.';
+
+/**
+ * What to tell a customer whose review lookup did not open the form.
+ *
+ * The third case the generic message used to swallow is the one that actually
+ * matters: the order EXISTS, the email matches, and it simply has not been
+ * marked delivered yet. That is what the client hit twice on TBS-100740-4243 —
+ * told to "check the order number and the address" when both were correct.
+ *
+ * A status is only ever passed in when the server matched the order number and
+ * the email to the same row, so naming it reveals nothing to someone who does
+ * not already hold both. (`get_orders_by_email` already returns order status
+ * from the email alone, so this is strictly less than what is public today.)
+ */
+export function reviewLookupMessage(orderStatus: string | null | undefined): string {
+  if (!orderStatus || orderStatus === REVIEWABLE_ORDER_STATUS) return REVIEW_ORDER_NOT_FOUND;
+
+  const label = orderStatusLabel(orderStatus);
+
+  if (orderStatus === 'cancelled') {
+    return `We found that order, but it was cancelled (${label}), so it cannot be reviewed.`;
+  }
+
+  return (
+    `We found that order — it is currently "${label}". Reviews unlock once an ` +
+    'order is marked Delivered, so please try again after it arrives.'
+  );
+}
+
+/** An order number and email this device already knows, for prefilling. */
+export interface RememberedIdentity {
+  orderNumber: string;
+  email: string;
+}
+
+/**
+ * The identity the shopper has already given this device, so the review form
+ * does not make them retype what the site is holding two tabs away.
+ *
+ * The order number comes back UPPER-CASED for display — the server lower-cases
+ * both sides before comparing, so the casing shown is cosmetic — while the
+ * email is normalized exactly as the server will normalize it.
+ */
+export function rememberedReviewIdentity(
+  savedOrders: readonly { orderNumber: string }[],
+  checkoutEmail: string | null | undefined,
+): RememberedIdentity {
+  const mostRecent = savedOrders[0]?.orderNumber ?? '';
+  const email = normalizeEmail(checkoutEmail);
+
+  return {
+    orderNumber: normalizeOrderNumber(mostRecent).toUpperCase(),
+    email: looksLikeEmail(email) ? email : '',
+  };
 }
 
 export interface ReviewSubmissionInput {

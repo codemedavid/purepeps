@@ -11,6 +11,17 @@ vi.mock('../../hooks/useReviewSubmission', () => ({
   default: () => mockUseReviewSubmission(),
 }));
 
+const mockSavedOrders = vi.fn();
+const mockSavedInfo = vi.fn();
+
+vi.mock('../../hooks/useOrderHistory', () => ({
+  useOrderHistory: () => ({ orders: mockSavedOrders(), addOrder: vi.fn(), clearOrders: vi.fn() }),
+}));
+
+vi.mock('../../hooks/useCheckoutInfo', () => ({
+  useCheckoutInfo: () => ({ savedInfo: mockSavedInfo(), saveInfo: vi.fn(), clearInfo: vi.fn() }),
+}));
+
 vi.mock('../../hooks/useImageUpload', () => ({
   useImageUpload: () => ({
     uploadImage: vi.fn().mockResolvedValue('https://img.example/uploaded.jpg'),
@@ -54,6 +65,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   lookup.mockResolvedValue(undefined);
   submit.mockResolvedValue(undefined);
+  mockSavedOrders.mockReturnValue([]);
+  mockSavedInfo.mockReturnValue(null);
 });
 
 describe('ReviewForm — step 1, proving the order', () => {
@@ -222,5 +235,67 @@ describe('ReviewForm — after submitting', () => {
     await user.click(screen.getByRole('button', { name: /write another/i }));
 
     expect(reset).toHaveBeenCalled();
+  });
+});
+
+/**
+ * The site already knows both values. "YOUR RECENT ORDERS" lists the order
+ * number, and checkout saved the email the order was placed under. Making the
+ * customer retype them — in exactly the spelling the order carries — is the
+ * step the client got stuck on.
+ */
+describe('ReviewForm — reusing the identity this device already has', () => {
+  it('prefills the order number from the most recent saved order', () => {
+    mockSavedOrders.mockReturnValue([
+      { orderNumber: 'TBS-100740-4243', total: 0, itemSummary: '', placedAt: '' },
+    ]);
+    withState();
+
+    render(<ReviewForm />);
+
+    expect(screen.getByLabelText(/order number/i)).toHaveValue('TBS-100740-4243');
+  });
+
+  it('prefills the email saved at checkout', () => {
+    mockSavedInfo.mockReturnValue({ email: 'AdminPretty@Gmail.com' });
+    withState();
+
+    render(<ReviewForm />);
+
+    expect(screen.getByLabelText(/email address/i)).toHaveValue('adminpretty@gmail.com');
+  });
+
+  it('leaves both fields empty on a device with no history', () => {
+    withState();
+
+    render(<ReviewForm />);
+
+    expect(screen.getByLabelText(/order number/i)).toHaveValue('');
+    expect(screen.getByLabelText(/email address/i)).toHaveValue('');
+  });
+
+  it('lets the customer overwrite what was prefilled', async () => {
+    mockSavedOrders.mockReturnValue([
+      { orderNumber: 'TBS-100740-4243', total: 0, itemSummary: '', placedAt: '' },
+    ]);
+    withState();
+
+    render(<ReviewForm />);
+    const field = screen.getByLabelText(/order number/i);
+    await userEvent.clear(field);
+    await userEvent.type(field, 'TBS-999');
+
+    expect(field).toHaveValue('TBS-999');
+  });
+
+  it('shows the order status when a real order is not delivered yet', () => {
+    withState({
+      error: 'We found that order — it is currently "Packing".',
+      orderStatus: 'packing',
+    });
+
+    render(<ReviewForm />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/packing/i);
   });
 });
