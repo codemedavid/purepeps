@@ -59,3 +59,25 @@ describe('WaybillModal print structure', () => {
     expect(print).toHaveBeenCalledTimes(1);
   });
 });
+
+// The app shell and the overlay are siblings under <body> (the overlay is a
+// portal), so print CSS can only drop the shell from the print layout if it can
+// tell an overlay is open. Hiding the shell unconditionally would break every
+// other print; the modal therefore marks the document for exactly as long as it
+// is mounted. Without this flag the print CSS has to pull the sheets out of
+// normal flow to escape the shell's leftover boxes, and out-of-flow content
+// stops paginating — the "only a fraction of waybills printed" report.
+describe('WaybillModal print-layout flag', () => {
+  it('marks the document as printing a waybill while open', () => {
+    render(<WaybillModal waybills={[waybill('1')]} onClose={() => {}} />);
+
+    expect(document.body.classList.contains('wb-print-open')).toBe(true);
+  });
+
+  it('clears the mark once the overlay closes', () => {
+    const { unmount } = render(<WaybillModal waybills={[waybill('1')]} onClose={() => {}} />);
+    unmount();
+
+    expect(document.body.classList.contains('wb-print-open')).toBe(false);
+  });
+});
