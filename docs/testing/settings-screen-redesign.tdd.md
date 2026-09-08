@@ -190,3 +190,91 @@ If these checkpoints are squashed, preserve:
   eyebrow/heading duplication, widened the active band so the rail highlights at
   rest, re-verified in Chrome. Full suite `1864 passed`, both changed files
   typecheck clean.
+
+---
+
+# Follow-up: shared admin chrome (`AdminScreen`)
+
+Requested as *"copy the designs overall"*. `DesignSync` was retried once more and
+still refused (*"needs design-system authorization"*), so the design file remains
+unread and this continued to be the model's own design language. The user was
+asked how far to spread it and chose **"Shared admin chrome"**: one frame across
+all admin views, panels keeping their current internals.
+
+## What the codebase actually allowed
+
+`AdminDashboard` has 21 view branches in two shapes:
+
+- **Shape B** — the branch owns the chrome (its own `max-w-*`, padding and back
+  button) and renders a bare panel. **5 branches.** These take the shared frame
+  as a straight drop-in.
+- **Shape A** — the branch is just `<div className="min-h-screen bg-gray-50">`
+  around a manager that paints its **own** `min-h-screen`, its own gradient, and
+  its own sticky header containing an `<h1>` (e.g. `OrdersManager.tsx:648`,
+  `CategoryManager.tsx:121`, `TierManager.tsx:323`). **The rest.**
+
+Wrapping a Shape A view in `AdminScreen` would nest two full-screen containers
+and stack two titles. Giving those screens the shared frame therefore requires
+editing each manager to strip its internal chrome — which is the "full restyle of
+all panels" option that was **not** chosen. Shape A was left alone.
+
+Container widths found before this change: `max-w-4xl` ×3, `5xl` ×2, `6xl` ×5,
+`7xl` ×1, over `bg-gray-50` or one of two different gradients.
+
+## Task report
+
+RED — `npx vitest run src/components/AdminScreen.test.tsx` (compile-time)
+
+```
+Error: Failed to resolve import "./AdminScreen" from
+"src/components/AdminScreen.test.tsx". Does the file exist?
+Test Files  1 failed (1) | Tests  no tests
+```
+
+GREEN — same command
+
+```
+Tests  6 passed (6)
+```
+
+Converted to `<AdminScreen>`: `access-requests`, `promo-codes`, `reviews`,
+`features`, `settings`. `SiteSettingsManager` gave up its own header to the
+shared frame so the markup exists once rather than twice.
+
+**A test was deliberately deleted.** `SiteSettingsManager.test.tsx` asserted the
+screen rendered its own `h1`. That is no longer that component's job — the `h1`
+belongs to `AdminScreen` and is covered by `AdminScreen.test.tsx` tests 1–2. The
+assertion was removed rather than weakened, and a comment in its place records
+where the guarantee moved. Every other assertion in that file still passes
+unchanged.
+
+Browser-verified: rendering `Settings` and `Feature Visibility` side by side
+gives `h1s: ["Settings", "Feature Visibility"]`, `eyebrows: 2`,
+`backButtons: 2` — one of each per screen, no stacked headers.
+
+| # | What is guaranteed | Test file or command | Test type | Result | Evidence |
+|---|--------------------|----------------------|-----------|--------|----------|
+| 14 | Every admin screen renders exactly one h1 carrying its title | `AdminScreen.test.tsx:titles the screen with a single level-one heading` | unit | PASS | `npx vitest run src/components/AdminScreen.test.tsx` |
+| 15 | Every admin screen carries the same "Pure Peps Admin" eyebrow | `AdminScreen.test.tsx:brands every screen with the same eyebrow` | unit | PASS | same |
+| 16 | A description renders when supplied | `AdminScreen.test.tsx:renders the description when one is given` | unit | PASS | same |
+| 17 | The wrapped panel renders | `AdminScreen.test.tsx:renders the panel it wraps` | unit | PASS | same |
+| 18 | The back button fires `onBack` once | `AdminScreen.test.tsx:offers a way back when the caller can handle it` | unit | PASS | same |
+| 19 | No back button on a screen with nowhere to go | `AdminScreen.test.tsx:omits the back button on a screen that cannot go back` | unit | PASS | same |
+
+## State after this follow-up
+
+| Check | Result |
+|---|---|
+| `npx vitest run` | **1869 passed, 0 failed**; 144 files passed, same 2 orphan files |
+| `npx tsc --noEmit -p tsconfig.app.json` | no errors in `AdminScreen.tsx`, `SiteSettingsManager.tsx`; `AdminDashboard.tsx` keeps its 3 pre-existing errors (lines shifted 49→50, 347→348, 405→406 by one added import) |
+
+## Known gaps
+
+- **16 of 21 views still have their own frame.** Shape A managers were not
+  touched. Full parity needs each of them edited to drop its internal
+  `min-h-screen` + sticky header, one RED/GREEN cycle each.
+- **Some panels now repeat the shell title.** `FeatureVisibilityManager` renders
+  its own "Feature Visibility" card heading directly under the shell's
+  `<h1>Feature Visibility</h1>`. Fixing it means editing panel internals, which
+  the chosen scope excluded. Same pattern likely on other converted screens.
+- Coverage still unmeasured — no provider installed. See the section above.

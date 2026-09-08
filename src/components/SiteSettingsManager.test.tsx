@@ -81,11 +81,9 @@ describe('SiteSettingsManager', () => {
  * so the guarantees above about which panels exist still hold.
  */
 describe('SiteSettingsManager layout', () => {
-  it('titles the screen so the header is not just three anonymous cards', () => {
-    render(<SiteSettingsManager />);
-
-    expect(screen.getByRole('heading', { level: 1, name: /settings/i })).toBeInTheDocument();
-  });
+  // The screen's h1 and description moved to the shared AdminScreen frame when
+  // that frame was extracted for every admin view. They are covered by
+  // AdminScreen.test.tsx now, not here.
 
   it('lists every section in a labelled rail', () => {
     render(<SiteSettingsManager />);

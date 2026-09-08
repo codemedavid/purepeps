@@ -23,6 +23,7 @@ import OrdersManager from './OrdersManager';
 import FAQManager from './FAQManager';
 import ShippingManager from './ShippingManager';
 import SiteSettingsManager from './SiteSettingsManager';
+import AdminScreen from './AdminScreen';
 import PromoCodeManager from './PromoCodeManager';
 import CourierManager from './CourierManager';
 import StickerManager from './StickerManager';
@@ -1263,17 +1264,13 @@ const AdminDashboard: React.FC = () => {
   // Access Requests View
   if (currentView === 'access-requests') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-6 text-sm font-medium text-charcoal-600 hover:text-sakura-primary"
-          >
-            ‹ Back to dashboard
-          </button>
-          <AccessRequestsManager onChange={fetchAccessRequests} />
-        </div>
-      </div>
+      <AdminScreen
+        title="Access Requests"
+        description="Approve or decline the people asking for paid access."
+        onBack={() => setCurrentView('dashboard')}
+      >
+        <AccessRequestsManager onChange={fetchAccessRequests} />
+      </AdminScreen>
     );
   }
 
@@ -1334,18 +1331,13 @@ const AdminDashboard: React.FC = () => {
   // Promo Codes View
   if (currentView === 'promo-codes') {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <PromoCodeManager />
-        </div>
-      </div>
+      <AdminScreen
+        title="Promo Codes"
+        description="Discount codes customers can enter at checkout."
+        onBack={() => setCurrentView('dashboard')}
+      >
+        <PromoCodeManager />
+      </AdminScreen>
     );
   }
 
@@ -1357,39 +1349,25 @@ const AdminDashboard: React.FC = () => {
   // stay invisible until they are approved here.
   if (currentView === 'reviews') {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <h1 className="mb-1 text-2xl font-bold text-gray-900">Customer Reviews</h1>
-          <p className="mb-6 text-sm text-gray-500">
-            Verify the purchase behind each review, then approve, reject or hide it.
-          </p>
-          <ReviewsAdminManager />
-        </div>
-      </div>
+      <AdminScreen
+        title="Customer Reviews"
+        description="Verify the purchase behind each review, then approve, reject or hide it."
+        onBack={() => setCurrentView('dashboard')}
+      >
+        <ReviewsAdminManager />
+      </AdminScreen>
     );
   }
 
   if (currentView === 'features') {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <FeatureVisibilityManager />
-        </div>
-      </div>
+      <AdminScreen
+        title="Feature Visibility"
+        description="Turn storefront surfaces on and off without a deploy."
+        onBack={() => setCurrentView('dashboard')}
+      >
+        <FeatureVisibilityManager />
+      </AdminScreen>
     );
   }
 
@@ -1413,18 +1391,13 @@ const AdminDashboard: React.FC = () => {
     // OR simply assume I'll fix SiteSettingsManager later.
     // BETTER: Render it inside the dashboard layout or add a wrapper here.
     return (
-      <div className="min-h-screen bg-sakura-canvas p-4 md:p-8">
-        <div className="max-w-6xl mx-auto">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <SiteSettingsManager />
-        </div>
-      </div>
+      <AdminScreen
+        title="Settings"
+        description="Three areas decide what the storefront shows: who gets in, what the homepage says, and which notice interrupts it. Every change here is live the moment it saves."
+        onBack={() => setCurrentView('dashboard')}
+      >
+        <SiteSettingsManager />
+      </AdminScreen>
     );
   }
 
