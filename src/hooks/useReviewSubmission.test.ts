@@ -232,3 +232,135 @@ describe('useReviewSubmission — submitting', () => {
     expect(result.current.error).toBeNull();
   });
 });
+
+/**
+ * Reproduces the client's report end to end at the hook boundary.
+ *
+ * `get_reviewable_order` returns zero rows for THREE different situations —
+ * unknown order, wrong email, and an order that is simply not delivered yet.
+ * Only the third one has an answer the customer can act on, so the hook asks a
+ * second, status-only question before falling back to the generic message.
+ */
+describe('useReviewSubmission — an order that exists but is not delivered', () => {
+  /** Routes each RPC name to its own canned reply. */
+  function rpcRouter(replies: Record<string, { data: unknown; error: unknown }>) {
+    return (name: string) =>
+      Promise.resolve(replies[name] ?? { data: null, error: null });
+  }
+
+  it('asks for the order status when the delivered lookup finds nothing', async () => {
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: [{ order_status: 'packing' }], error: null },
+      }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.lookup(' TBS-100740-4243 ', ' AdminPretty@Gmail.com ');
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('get_order_review_status', {
+      p_order_number: 'tbs-100740-4243',
+      p_email: 'adminpretty@gmail.com',
+    });
+  });
+
+  it('tells the customer the real status instead of "we could not find it"', async () => {
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: [{ order_status: 'packing' }], error: null },
+      }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.lookup('TBS-100740-4243', 'adminpretty@gmail.com');
+    });
+
+    expect(result.current.error).toMatch(/packing/i);
+    expect(result.current.error).toMatch(/delivered/i);
+    expect(result.current.error).not.toMatch(/could not find/i);
+    expect(result.current.orderStatus).toBe('packing');
+    expect(result.current.verified).toBe(false);
+  });
+
+  it('keeps the generic message when the order truly does not match', async () => {
+    // A wrong email and an unknown order both land here, and must stay
+    // indistinguishable — the status RPC returns nothing for either.
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: [], error: null },
+      }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.lookup('TBS-0000-0000', 'nobody@example.com');
+    });
+
+    expect(result.current.error).toMatch(/could not find a delivered order/i);
+    expect(result.current.orderStatus).toBeNull();
+  });
+
+  it('falls back to the generic message when the status question itself fails', async () => {
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: null, error: { message: 'boom' } },
+      }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.lookup('TBS-100740-4243', 'adminpretty@gmail.com');
+    });
+
+    expect(result.current.error).toMatch(/could not find a delivered order/i);
+    expect(result.current.verified).toBe(false);
+  });
+
+  it('does not ask for a status when the order was reviewable all along', async () => {
+    mockRpc.mockImplementation(
+      rpcRouter({ get_reviewable_order: { data: ONE_PRODUCT, error: null } }),
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.lookup('TBS-100740-4243', 'adminpretty@gmail.com');
+    });
+
+    expect(result.current.verified).toBe(true);
+    expect(result.current.orderStatus).toBe('delivered');
+    expect(mockRpc).not.toHaveBeenCalledWith('get_order_review_status', expect.anything());
+  });
+
+  it('clears a carried-over status on the next lookup', async () => {
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: [{ order_status: 'packing' }], error: null },
+      }),
+    );
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.lookup('TBS-100740-4243', 'adminpretty@gmail.com');
+    });
+    expect(result.current.orderStatus).toBe('packing');
+
+    mockRpc.mockImplementation(
+      rpcRouter({
+        get_reviewable_order: { data: [], error: null },
+        get_order_review_status: { data: [], error: null },
+      }),
+    );
+    await act(async () => {
+      await result.current.lookup('TBS-0000-0000', 'nobody@example.com');
+    });
+
+    expect(result.current.orderStatus).toBeNull();
+  });
+});

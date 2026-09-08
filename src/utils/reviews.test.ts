@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REVIEW_ORDER_NOT_FOUND,
+  rememberedReviewIdentity,
+  reviewLookupMessage,
   MAX_BODY_LENGTH,
   MAX_RATING,
   MAX_REVIEW_PHOTOS,
@@ -289,5 +292,100 @@ describe('review statuses and disclaimer', () => {
     // a bare /idance\./ would also match the legitimate "guidance." ending.
     expect(REVIEW_DISCLAIMER).not.toMatch(/\bidance\./);
     expect(REVIEW_DISCLAIMER.trim()).toMatch(/\.$/);
+  });
+});
+
+/**
+ * The client's report: order TBS-100740-4243 with the right checkout email
+ * came back "We could not find a delivered order…" twice. The order existed
+ * and the email matched — it simply had not been marked delivered yet, and the
+ * one-size-fits-all message gave them no way to know that.
+ *
+ * The generic message still stands for a genuine miss: an order that does not
+ * exist and an order under someone else's email must stay indistinguishable.
+ */
+describe('reviewLookupMessage', () => {
+  it('stays generic when nothing matched at all', () => {
+    const message = reviewLookupMessage(null);
+
+    expect(message).toBe(REVIEW_ORDER_NOT_FOUND);
+    expect(message).toMatch(/could not find a delivered order/i);
+  });
+
+  it('treats an unknown status the same as no match', () => {
+    expect(reviewLookupMessage('')).toBe(REVIEW_ORDER_NOT_FOUND);
+    expect(reviewLookupMessage(undefined)).toBe(REVIEW_ORDER_NOT_FOUND);
+  });
+
+  it('names the order\'s real status when the order was found but is not delivered', () => {
+    const message = reviewLookupMessage('packing');
+
+    expect(message).toMatch(/packing/i);
+    expect(message).toMatch(/delivered/i);
+    expect(message).not.toMatch(/could not find/i);
+  });
+
+  it('uses the customer-facing label, not the raw database value', () => {
+    expect(reviewLookupMessage('out_for_delivery')).toMatch(/out for delivery/i);
+    expect(reviewLookupMessage('out_for_delivery')).not.toMatch(/out_for_delivery/);
+  });
+
+  it('labels the legacy statuses the shop still has on old orders', () => {
+    expect(reviewLookupMessage('processing')).toMatch(/processing/i);
+    expect(reviewLookupMessage('shipped')).toMatch(/shipped/i);
+  });
+
+  it('says a cancelled order can never be reviewed rather than "not yet"', () => {
+    const message = reviewLookupMessage('cancelled');
+
+    expect(message).toMatch(/cancelled/i);
+    expect(message).not.toMatch(/once (it|your order) (is|has been)/i);
+  });
+
+  it('never echoes an email address back to the reader', () => {
+    for (const status of [null, 'packing', 'cancelled', 'delivered']) {
+      expect(reviewLookupMessage(status)).not.toMatch(/@/);
+    }
+  });
+});
+
+/**
+ * The recent-orders widget already knows the customer's order number, and
+ * checkout already saved the email they used. Making them retype both — with
+ * the exact spelling the order carries — is the step the client got stuck on.
+ */
+describe('rememberedReviewIdentity', () => {
+  const orders = [
+    { orderNumber: 'TBS-100740-4243' },
+    { orderNumber: 'TBS-100600-1111' },
+  ];
+
+  it('offers the most recent order and the saved checkout email', () => {
+    expect(rememberedReviewIdentity(orders, 'AdminPretty@Gmail.com ')).toEqual({
+      orderNumber: 'TBS-100740-4243',
+      email: 'adminpretty@gmail.com',
+    });
+  });
+
+  it('normalizes a remembered order number the same way the server does', () => {
+    expect(rememberedReviewIdentity([{ orderNumber: '  tbs-100740-4243 ' }], null)).toEqual({
+      orderNumber: 'TBS-100740-4243',
+      email: '',
+    });
+  });
+
+  it('offers nothing when this device has no history', () => {
+    expect(rememberedReviewIdentity([], null)).toEqual({ orderNumber: '', email: '' });
+  });
+
+  it('still offers the email when only the order history is missing', () => {
+    expect(rememberedReviewIdentity([], 'maria@example.com')).toEqual({
+      orderNumber: '',
+      email: 'maria@example.com',
+    });
+  });
+
+  it('ignores a stored value that is not a usable email', () => {
+    expect(rememberedReviewIdentity(orders, '   ').email).toBe('');
   });
 });

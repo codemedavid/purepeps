@@ -222,26 +222,41 @@ describe('ProtocolGuide', () => {
 
   // --- Category Filter ---
 
+  /**
+   * The dropdown is built from CANONICAL slugs, not from the raw text an admin
+   * typed. The client created "Weight Loss" twice and got two options
+   * ("tigdadalawa lumabas"); these tests pin the collapse that prevents it.
+   */
   describe('category filtering', () => {
-    it('shows all categories in the filter dropdown', () => {
+    it('shows one option per canonical category', () => {
       renderGuide();
 
       const select = screen.getByRole('combobox');
       expect(select).toBeInTheDocument();
 
-      const options = screen.getAllByRole('option');
-      const optionTexts = options.map(o => o.textContent);
+      const optionTexts = screen.getAllByRole('option').map((o) => o.textContent);
 
-      expect(optionTexts).toContain('Weight Management');
-      expect(optionTexts).toContain('Skin & Anti-Aging');
-      expect(optionTexts).toContain('Recovery & Healing');
+      // "Weight Management" and "Skin & Anti-Aging" fold onto the names the
+      // client asked for.
+      expect(optionTexts.some((text) => text?.includes('Weight Loss'))).toBe(true);
+      expect(optionTexts.some((text) => text?.includes('Anti Aging'))).toBe(true);
+      expect(optionTexts.some((text) => text?.includes('Recovery Healing'))).toBe(true);
+    });
+
+    it('never repeats a category, however the admin spelled it', () => {
+      renderGuide();
+
+      const slugs = screen
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value);
+
+      expect(new Set(slugs).size).toBe(slugs.length);
     });
 
     it('filters protocols by category', async () => {
       renderGuide();
 
-      const select = screen.getByRole('combobox');
-      await userEvent.selectOptions(select, 'Weight Management');
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'weight-loss');
 
       expect(screen.getByText('Tirzepatide')).toBeInTheDocument();
       expect(screen.queryByText('GHK-Cu Protocol')).not.toBeInTheDocument();
@@ -253,11 +268,66 @@ describe('ProtocolGuide', () => {
       renderGuide();
 
       const select = screen.getByRole('combobox');
-      await userEvent.selectOptions(select, 'Weight Management');
+      await userEvent.selectOptions(select, 'weight-loss');
       expect(screen.getByText('1 protocol(s) found')).toBeInTheDocument();
 
       await userEvent.selectOptions(select, 'all');
       expect(screen.getByText('3 protocol(s) found')).toBeInTheDocument();
+    });
+  });
+
+  // --- Search ---
+
+  describe('search', () => {
+    it('offers a search box', () => {
+      renderGuide();
+
+      expect(screen.getByRole('searchbox', { name: /search protocols/i })).toBeInTheDocument();
+    });
+
+    it('narrows the list to protocols matching the query', async () => {
+      renderGuide();
+
+      await userEvent.type(
+        screen.getByRole('searchbox', { name: /search protocols/i }),
+        'ghk',
+      );
+
+      expect(screen.getByText('GHK-Cu Protocol')).toBeInTheDocument();
+      expect(screen.queryByText('Tirzepatide')).not.toBeInTheDocument();
+      expect(screen.getByText('1 protocol(s) found')).toBeInTheDocument();
+    });
+
+    it('restores the full list when the query is cleared', async () => {
+      renderGuide();
+
+      const box = screen.getByRole('searchbox', { name: /search protocols/i });
+      await userEvent.type(box, 'ghk');
+      expect(screen.getByText('1 protocol(s) found')).toBeInTheDocument();
+
+      await userEvent.clear(box);
+
+      expect(screen.getByText('3 protocol(s) found')).toBeInTheDocument();
+      expect(screen.getByText('Tirzepatide')).toBeInTheDocument();
+    });
+
+    it('combines the search box with the category dropdown', async () => {
+      renderGuide();
+
+      await userEvent.selectOptions(screen.getByRole('combobox'), 'weight-loss');
+      await userEvent.type(
+        screen.getByRole('searchbox', { name: /search protocols/i }),
+        'ghk',
+      );
+
+      expect(screen.getByText('0 protocol(s) found')).toBeInTheDocument();
+      expect(screen.getByText(/no protocols match/i)).toBeInTheDocument();
+    });
+
+    it('says the shop has no protocols yet only when it really has none', () => {
+      renderGuide();
+
+      expect(screen.queryByText(/no protocols/i)).not.toBeInTheDocument();
     });
   });
 
