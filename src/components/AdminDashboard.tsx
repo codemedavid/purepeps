@@ -1413,8 +1413,8 @@ const AdminDashboard: React.FC = () => {
     // OR simply assume I'll fix SiteSettingsManager later.
     // BETTER: Render it inside the dashboard layout or add a wrapper here.
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="min-h-screen bg-sakura-canvas p-4 md:p-8">
+        <div className="max-w-6xl mx-auto">
           <button
             onClick={() => setCurrentView('dashboard')}
             className="mb-4 text-gray-500 hover:text-gray-900 flex items-center gap-2 font-medium"
