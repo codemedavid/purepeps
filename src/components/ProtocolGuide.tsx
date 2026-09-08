@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, AlertTriangle, ChevronDown, ChevronUp, BookOpen, FileText, Eye } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, FlaskConical, Syringe, Thermometer, Clock, ChevronDown, ChevronUp, BookOpen, FileText, Eye, Search, X } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,12 @@ import {
     STOREFRONT_PATH,
     storefrontNavigationOptions,
 } from '../utils/storefrontNavigation';
+import {
+    ALL_CATEGORIES_SLUG,
+    filterProtocols,
+    isDisplayableProtocol,
+    protocolCategoryOptions,
+} from '../utils/protocolCategories';
 
 const ProtocolGuide: React.FC = () => {
     const { cartItems } = useCart();
@@ -19,7 +25,8 @@ const ProtocolGuide: React.FC = () => {
     const { flags } = useFeatureFlagsContext();
     const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null);
     const [viewingProtocol, setViewingProtocol] = useState<Protocol | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    const [selectedCategory, setSelectedCategory] = useState<string>(ALL_CATEGORIES_SLUG);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const toggleProtocol = (id: string) => {
         setExpandedProtocol(expandedProtocol === id ? null : id);
@@ -31,18 +38,29 @@ const ProtocolGuide: React.FC = () => {
         navigate(STOREFRONT_PATH, storefrontNavigationOptions('home'));
     };
 
-    // Filter only active protocols, and hide placeholder rows with no real dosing data
-    const activeProtocols = protocols.filter(
-        p => p.active && p.dosage !== 'Consult healthcare professional for dosing'
+    // Everything a reader could be shown: active, and carrying real content
+    // (a text protocol needs dosing, a file/image protocol needs its file).
+    const displayableProtocols = useMemo(
+        () => protocols.filter(isDisplayableProtocol),
+        [protocols],
     );
 
-    // Get unique categories
-    const categories = ['all', ...Array.from(new Set(activeProtocols.map(p => p.category)))];
+    // One option per category MEANING, not per distinct string an admin typed —
+    // which is what used to list "Weight Loss" twice.
+    const categoryOptions = useMemo(
+        () => protocolCategoryOptions(protocols),
+        [protocols],
+    );
 
-    // Filter by selected category
-    const filteredProtocols = selectedCategory === 'all'
-        ? activeProtocols
-        : activeProtocols.filter(p => p.category === selectedCategory);
+    const filteredProtocols = useMemo(
+        () => filterProtocols(protocols, { categorySlug: selectedCategory, query: searchQuery }),
+        [protocols, selectedCategory, searchQuery],
+    );
+
+    // Distinguishes "this shop has no protocols" from "your filter matched
+    // none". Only the second is the reader's to fix.
+    const isFiltering = selectedCategory !== ALL_CATEGORIES_SLUG || searchQuery.trim() !== '';
+    const hasAnyProtocols = displayableProtocols.length > 0;
 
     return (
         <div className={`min-h-screen bg-gradient-to-br from-[#FADADD] via-[#FDF5F7] to-white ${BOTTOM_NAV_CLEARANCE}`}>
@@ -128,22 +146,55 @@ const ProtocolGuide: React.FC = () => {
                     Peptide Protocols
                 </h2>
 
-                {/* Category Filter Dropdown */}
-                <div className="mb-6">
-                    <label className="block text-sm font-medium text-charcoal-600 mb-2">Filter by Category</label>
-                    <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full sm:w-64 px-4 py-3 rounded-xl bg-white border border-brand-200 text-charcoal-800 font-medium shadow-soft focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all cursor-pointer"
-                    >
-                        {categories.map((category) => (
-                            <option key={category} value={category}>
-                                {category === 'all' ? '📋 All Categories' : category}
-                            </option>
-                        ))}
-                    </select>
-                    <p className="text-xs text-charcoal-500 mt-1">{filteredProtocols.length} protocol(s) found</p>
+                {/* Search + category filter. Both narrow the same list, so a
+                    query inside a category is an AND, not a reset. */}
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
+                    <div className="flex-1">
+                        <label htmlFor="protocol-search" className="block text-sm font-medium text-charcoal-600 mb-2">
+                            Search protocols
+                        </label>
+                        <div className="relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-400 pointer-events-none" aria-hidden="true" />
+                            <input
+                                id="protocol-search"
+                                type="search"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Peptide name, category or note…"
+                                className="w-full pl-10 pr-10 py-3 rounded-xl bg-white border border-brand-200 text-charcoal-800 shadow-soft focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            />
+                            {searchQuery !== '' && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    aria-label="Clear search"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal-400 hover:text-rose-500 transition-colors"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="sm:w-64">
+                        <label htmlFor="protocol-category" className="block text-sm font-medium text-charcoal-600 mb-2">
+                            Filter by Category
+                        </label>
+                        <select
+                            id="protocol-category"
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl bg-white border border-brand-200 text-charcoal-800 font-medium shadow-soft focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all cursor-pointer"
+                        >
+                            {categoryOptions.map((option) => (
+                                <option key={option.slug} value={option.slug}>
+                                    {option.slug === ALL_CATEGORIES_SLUG ? `📋 ${option.name}` : option.name}
+                                    {` (${option.count})`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
+                <p className="text-xs text-charcoal-500 -mt-4 mb-6">{filteredProtocols.length} protocol(s) found</p>
 
                 {loading ? (
                     <div className="flex items-center justify-center py-12">
@@ -151,7 +202,25 @@ const ProtocolGuide: React.FC = () => {
                     </div>
                 ) : filteredProtocols.length === 0 ? (
                     <div className="bg-white rounded-2xl shadow-soft border border-brand-100 p-8 text-center">
-                        <p className="text-charcoal-500">No protocols found in this category.</p>
+                        {hasAnyProtocols || isFiltering ? (
+                            <>
+                                <p className="text-charcoal-500">No protocols match your search or category.</p>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSelectedCategory(ALL_CATEGORIES_SLUG);
+                                    }}
+                                    className="mt-3 text-sm font-semibold text-rose-500 hover:text-rose-600 transition-colors"
+                                >
+                                    Clear filters
+                                </button>
+                            </>
+                        ) : (
+                            <p className="text-charcoal-500">
+                                Protocol guides are being added. Please check back soon.
+                            </p>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4">

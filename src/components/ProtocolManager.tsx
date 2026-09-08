@@ -1,7 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Plus, Edit, Trash2, Save, X, Eye, EyeOff, Upload, FileText, Image } from 'lucide-react';
 import { useProtocols, Protocol } from '../hooks/useProtocols';
 import { useImageUpload } from '../hooks/useImageUpload';
+import {
+    CANONICAL_PROTOCOL_CATEGORIES,
+    categoryDisplayName,
+    parseProtocolCategories,
+    toCategorySlug,
+} from '../utils/protocolCategories';
 
 interface ProtocolManagerProps {
     onBack: () => void;
@@ -33,6 +39,42 @@ const ProtocolManager: React.FC<ProtocolManagerProps> = ({ onBack }) => {
     const [notesText, setNotesText] = useState('');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [filePreview, setFilePreview] = useState<string | null>(null);
+
+    /**
+     * The categories offered in the form: the canonical list, plus any category
+     * already in the data that is not canonical (so an older label stays
+     * editable rather than silently vanishing on the next save).
+     *
+     * Offering a fixed list instead of a free-text box is the whole point —
+     * typing "Weight Loss" a second time is how the client ended up with two of
+     * them in the public dropdown.
+     */
+    const categoryChoices = useMemo(() => {
+        const bySlug = new Map<string, string>(
+            CANONICAL_PROTOCOL_CATEGORIES.map((category) => [category.slug, category.name]),
+        );
+        for (const protocol of protocols) {
+            for (const slug of parseProtocolCategories(protocol.category)) {
+                if (!bySlug.has(slug)) bySlug.set(slug, categoryDisplayName(slug));
+            }
+        }
+        return [...bySlug.entries()].map(([slug, name]) => ({ slug, name }));
+    }, [protocols]);
+
+    const selectedCategorySlugs = parseProtocolCategories(formData.category);
+
+    /**
+     * Adds or removes one category from this protocol. The field is stored as a
+     * comma list of canonical DISPLAY NAMES, so a protocol can sit in several
+     * categories and every write goes back in the canonical spelling.
+     */
+    const toggleCategory = (slug: string) => {
+        const next = selectedCategorySlugs.includes(slug)
+            ? selectedCategorySlugs.filter((current) => current !== slug)
+            : [...selectedCategorySlugs, slug];
+
+        setFormData({ ...formData, category: next.map(categoryDisplayName).join(', ') });
+    };
 
     const handleEdit = (protocol: Protocol) => {
         setEditingId(protocol.id);
@@ -89,8 +131,8 @@ const ProtocolManager: React.FC<ProtocolManagerProps> = ({ onBack }) => {
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.category) {
-            alert('Please fill in name and category');
+        if (!formData.name || toCategorySlug(formData.category) === '') {
+            alert('Please fill in name and pick at least one category');
             return;
         }
 
@@ -106,7 +148,12 @@ const ProtocolManager: React.FC<ProtocolManagerProps> = ({ onBack }) => {
 
         setIsProcessing(true);
         const notes = notesText.split('\n').filter(note => note.trim() !== '');
-        const dataToSave = { ...formData, notes };
+        // Write the canonical spelling, so the same category never lands in the
+        // table under two different labels.
+        const category = parseProtocolCategories(formData.category)
+            .map(categoryDisplayName)
+            .join(', ');
+        const dataToSave = { ...formData, category, notes };
 
         try {
             // Upload file if selected
@@ -213,13 +260,29 @@ const ProtocolManager: React.FC<ProtocolManagerProps> = ({ onBack }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                                <input
-                                    type="text"
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                                    placeholder="e.g., Weight Management"
-                                />
+                                <div className="flex flex-wrap gap-2" role="group" aria-label="Protocol categories">
+                                    {categoryChoices.map((choice) => {
+                                        const isChosen = selectedCategorySlugs.includes(choice.slug);
+                                        return (
+                                            <button
+                                                key={choice.slug}
+                                                type="button"
+                                                aria-pressed={isChosen}
+                                                onClick={() => toggleCategory(choice.slug)}
+                                                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                                                    isChosen
+                                                        ? 'bg-gray-900 text-white border-gray-900'
+                                                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-900'
+                                                }`}
+                                            >
+                                                {choice.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Pick one or more. The public Guides filter shows each category once.
+                                </p>
                             </div>
                         </div>
 
