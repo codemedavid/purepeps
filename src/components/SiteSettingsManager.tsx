@@ -1,7 +1,8 @@
-import React from 'react';
+import type { ComponentType } from 'react';
 import AccessIntakeToggle from './AccessIntakeToggle';
 import StorefrontNoticeManager from './StorefrontNoticeManager';
 import GbLandingManager from './GbLandingManager';
+import { useActiveSection } from '../hooks/useActiveSection';
 
 /**
  * Admin → Settings.
@@ -43,7 +44,7 @@ interface SettingsSection {
   landmark: string;
   /** One line under the rail label, so the rail explains rather than just lists. */
   blurb: string;
-  Panel: React.ComponentType;
+  Panel: ComponentType;
 }
 
 const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -73,64 +74,85 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 /** "01", "02", "03" — the rail and the section eyebrows share one index. */
 const sectionIndex = (position: number) => String(position + 1).padStart(2, '0');
 
-const SiteSettingsManager: React.FC = () => (
-  <div className="pb-16">
-    <header className="border-b border-sakura-edge/70 pb-8">
-      <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-sakura-soft">
-        Pure Peps Admin
-      </p>
-      <h1 className="mt-2.5 font-heading text-4xl leading-[1.05] text-sakura-ink md:text-5xl">
-        Settings
-      </h1>
-      <p className="mt-3.5 max-w-lg text-sm leading-relaxed text-sakura-muted">
-        Three areas decide what the storefront shows: who gets in, what the homepage says, and
-        which notice interrupts it. Every change here is live the moment it saves.
-      </p>
-    </header>
+const SECTION_IDS = SETTINGS_SECTIONS.map((section) => section.id);
 
-    <div className="mt-10 grid gap-10 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-12">
-      <nav aria-label="Settings sections" className="md:sticky md:top-6 md:self-start">
-        <ol className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
-          {SETTINGS_SECTIONS.map((section, position) => (
-            <li key={section.id} className="shrink-0 md:shrink">
-              <a
-                href={`#${section.id}`}
-                className="group block rounded-xl border border-transparent px-3 py-2.5 transition-colors duration-150 hover:border-sakura-edge hover:bg-sakura-blush-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sakura-primary/40 active:bg-sakura-blush"
-              >
-                <span className="flex items-baseline gap-2 whitespace-nowrap">
-                  <span className="font-mono text-[10px] text-sakura-soft transition-colors group-hover:text-sakura-primary">
-                    {sectionIndex(position)}
+function SiteSettingsManager() {
+  const activeId = useActiveSection(SECTION_IDS);
+
+  return (
+    <div className="pb-16">
+      <header className="border-b border-sakura-edge/70 pb-8">
+        <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-sakura-soft">
+          Pure Peps Admin
+        </p>
+        <h1 className="mt-2.5 font-heading text-4xl leading-[1.05] text-sakura-ink md:text-5xl">
+          Settings
+        </h1>
+        <p className="mt-3.5 max-w-lg text-sm leading-relaxed text-sakura-muted">
+          Three areas decide what the storefront shows: who gets in, what the homepage says, and
+          which notice interrupts it. Every change here is live the moment it saves.
+        </p>
+      </header>
+
+      <div className="mt-10 grid gap-10 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-12">
+        <nav aria-label="Settings sections" className="md:sticky md:top-6 md:self-start">
+          <ol className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
+            {SETTINGS_SECTIONS.map((section, position) => (
+              <li key={section.id} className="shrink-0 md:shrink">
+                <a
+                  href={`#${section.id}`}
+                  aria-current={activeId === section.id ? 'true' : undefined}
+                  className={`group block rounded-xl border px-3 py-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sakura-primary/40 active:bg-sakura-blush ${
+                    activeId === section.id
+                      ? 'border-sakura-edge bg-sakura-blush-soft'
+                      : 'border-transparent hover:border-sakura-edge hover:bg-sakura-blush-soft'
+                  }`}
+                >
+                  <span className="flex items-baseline gap-2 whitespace-nowrap">
+                    <span
+                      className={`font-mono text-[10px] transition-colors group-hover:text-sakura-primary ${
+                        activeId === section.id ? 'text-sakura-primary' : 'text-sakura-soft'
+                      }`}
+                    >
+                      {sectionIndex(position)}
+                    </span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        activeId === section.id ? 'text-sakura-deep' : 'text-sakura-ink'
+                      }`}
+                    >
+                      {section.navLabel}
+                    </span>
                   </span>
-                  <span className="text-sm font-semibold text-sakura-ink">{section.navLabel}</span>
-                </span>
-                <span className="mt-0.5 hidden text-xs leading-snug text-sakura-faint md:block">
-                  {section.blurb}
-                </span>
-              </a>
-            </li>
-          ))}
-        </ol>
-      </nav>
+                  <span className="mt-0.5 hidden text-xs leading-snug text-sakura-faint md:block">
+                    {section.blurb}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
 
-      <div className="min-w-0 space-y-14">
-        {SETTINGS_SECTIONS.map((section, position) => (
-          <section
-            key={section.id}
-            id={section.id}
-            aria-label={section.landmark}
-            className="scroll-mt-6"
-          >
-            <p className="mb-3.5 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-sakura-soft">
-              <span className="text-sakura-primary">{sectionIndex(position)}</span>
-              <span aria-hidden="true" className="h-px w-6 bg-sakura-edge" />
-              {section.landmark}
-            </p>
-            <section.Panel />
-          </section>
-        ))}
+        <div className="min-w-0 space-y-14">
+          {SETTINGS_SECTIONS.map((section, position) => (
+            <section
+              key={section.id}
+              id={section.id}
+              aria-label={section.landmark}
+              className="scroll-mt-6"
+            >
+              <p className="mb-3.5 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-sakura-soft">
+                <span className="text-sakura-primary">{sectionIndex(position)}</span>
+                <span aria-hidden="true" className="h-px w-6 bg-sakura-edge" />
+                {section.navLabel}
+              </p>
+              <section.Panel />
+            </section>
+          ))}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+}
 
 export default SiteSettingsManager;
