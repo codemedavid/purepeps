@@ -18,6 +18,11 @@ import {
 } from '../constants/payment';
 import { toFacebookProfileUrl } from '../utils/facebookLink';
 import { buildWaybillData, canPrintWaybill, printableWaybillOrders } from '../utils/waybill';
+import {
+  groupOrdersIntoBatchSections,
+  batchLabel,
+  type BatchSummary,
+} from '../utils/orderBatchSections';
 import { WaybillModal } from './waybill/WaybillModal';
 
 interface OrderItem {
@@ -67,17 +72,6 @@ interface Order {
   order_number: string | null;
   group_buy_batch_id?: string | null;
 }
-
-// Minimal shape of a group-buy batch, used to label and filter batch orders.
-interface BatchSummary {
-  id: string;
-  batch_number: number;
-  name: string | null;
-  status: string;
-}
-
-const batchLabel = (batch: BatchSummary): string =>
-  `Batch #${batch.batch_number}${batch.name ? ` · ${batch.name}` : ''}`;
 
 // Sentinel filter values that sit alongside the per-batch ids.
 const BATCH_FILTER_ALL = 'all';
@@ -556,6 +550,14 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
   // the status/batch filters or the search box to narrow the print run.
   const printableOrders = useMemo(() => printableWaybillOrders(filteredOrders), [filteredOrders]);
 
+  // Each batch in view becomes its own section with its own print run. Built
+  // from filteredOrders, so status/batch/search narrowing still decides what is
+  // on screen — grouping only partitions what those filters left.
+  const orderSections = useMemo(
+    () => groupOrdersIntoBatchSections(filteredOrders, batches),
+    [filteredOrders, batches],
+  );
+
   const statusCounts = useMemo(() => {
     return {
       all: orders.length,
@@ -799,16 +801,52 @@ const OrdersManager: React.FC<OrdersManagerProps> = ({ onBack }) => {
               <p className="text-gray-500 text-sm mt-2">Try adjusting your filters</p>
             </div>
           ) : (
-            filteredOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                batch={order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined}
-                onView={() => setSelectedOrder(order)}
-                onPrintWaybill={() => setPrintQueue([order])}
-                getStatusColor={getStatusColor}
-                getStatusIcon={getStatusIcon}
-              />
+            orderSections.map((section) => (
+              <section
+                key={section.id}
+                aria-labelledby={`section-${section.id}`}
+                className="rounded-lg md:rounded-xl border border-sakura-edge bg-sakura-blush-soft/60 p-2 md:p-3"
+              >
+                <header className="flex flex-wrap items-center justify-between gap-2 md:gap-3 px-1 md:px-2 py-1.5 md:py-2">
+                  <div className="min-w-0">
+                    <h3
+                      id={`section-${section.id}`}
+                      className="font-heading text-base md:text-lg text-sakura-ink truncate"
+                    >
+                      {section.headline}
+                    </h3>
+                    <p className="font-mono text-[10px] md:text-[11px] uppercase tracking-wider text-sakura-soft mt-0.5">
+                      {section.orders.length} {section.orders.length === 1 ? 'order' : 'orders'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setPrintQueue(section.printableOrders)}
+                    disabled={section.printableOrders.length === 0}
+                    title={
+                      section.printableOrders.length === 0
+                        ? `No confirmed orders in ${section.headline} to print.`
+                        : `Print a waybill for every printable order in ${section.headline}`
+                    }
+                    className="bg-sakura-dark hover:bg-sakura-deep text-white px-2.5 md:px-3 py-1.5 rounded-lg font-medium text-xs md:text-sm shadow-sm hover:shadow transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print all waybills ({section.printableOrders.length})
+                  </button>
+                </header>
+                <div className="space-y-3 md:space-y-4">
+                  {section.orders.map((order) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      batch={order.group_buy_batch_id ? batchById.get(order.group_buy_batch_id) : undefined}
+                      onView={() => setSelectedOrder(order)}
+                      onPrintWaybill={() => setPrintQueue([order])}
+                      getStatusColor={getStatusColor}
+                      getStatusIcon={getStatusIcon}
+                    />
+                  ))}
+                </div>
+              </section>
             ))
           )}
         </div>

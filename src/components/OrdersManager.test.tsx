@@ -176,6 +176,19 @@ describe('Orders screen — per-batch waybill printing', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps search narrowing the sections', async () => {
+    seed();
+    render(<OrdersManager onBack={vi.fn()} />);
+    await screen.findByRole('region', { name: 'Batch #2' });
+
+    await userEvent.type(screen.getByPlaceholderText(/Search by customer name/), 'Dino');
+
+    expect(screen.queryByRole('region', { name: 'Batch #3 · Recovery drop' })).not.toBeInTheDocument();
+    expect(
+      within(section('Batch #2')).getByRole('button', { name: 'Print all waybills (1)' }),
+    ).toBeInTheDocument();
+  });
+
   it('narrows the sections to the batch filter', async () => {
     seed();
     render(<OrdersManager onBack={vi.fn()} />);
