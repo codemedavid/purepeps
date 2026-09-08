@@ -195,7 +195,7 @@ describe('ProtocolManager', () => {
       await userEvent.click(screen.getByText('Add Protocol'));
 
       await userEvent.type(screen.getByPlaceholderText('e.g., Tirzepatide'), 'Test Protocol');
-      await userEvent.type(screen.getByPlaceholderText('e.g., Weight Management'), 'Test Category');
+      await userEvent.click(screen.getByRole('button', { name: 'Weight Loss' }));
       await userEvent.type(screen.getByPlaceholderText('e.g., 2.5mg - 15mg'), '5mg');
 
       await userEvent.click(screen.getByText('Save Protocol'));
@@ -204,7 +204,7 @@ describe('ProtocolManager', () => {
         expect(mockAddProtocol).toHaveBeenCalledWith(
           expect.objectContaining({
             name: 'Test Protocol',
-            category: 'Test Category',
+            category: 'Weight Loss',
             dosage: '5mg',
             content_type: 'text',
             file_url: null,
@@ -221,7 +221,9 @@ describe('ProtocolManager', () => {
       await userEvent.click(screen.getByText('Add Protocol'));
       await userEvent.click(screen.getByText('Save Protocol'));
 
-      expect(alertSpy).toHaveBeenCalledWith('Please fill in name and category');
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Please fill in name and pick at least one category',
+      );
       expect(mockAddProtocol).not.toHaveBeenCalled();
 
       alertSpy.mockRestore();
@@ -235,7 +237,7 @@ describe('ProtocolManager', () => {
       await userEvent.click(screen.getByText('Add Protocol'));
 
       await userEvent.type(screen.getByPlaceholderText('e.g., Tirzepatide'), 'Test');
-      await userEvent.type(screen.getByPlaceholderText('e.g., Weight Management'), 'Cat');
+      await userEvent.click(screen.getByRole('button', { name: 'Weight Loss' }));
 
       await userEvent.click(screen.getByText('Save Protocol'));
 
@@ -253,7 +255,7 @@ describe('ProtocolManager', () => {
       await userEvent.click(screen.getByText('Add Protocol'));
 
       await userEvent.type(screen.getByPlaceholderText('e.g., Tirzepatide'), 'Test');
-      await userEvent.type(screen.getByPlaceholderText('e.g., Weight Management'), 'Cat');
+      await userEvent.click(screen.getByRole('button', { name: 'Weight Loss' }));
 
       const fileButtons = screen.getAllByText('File');
       const fileTypeButton = fileButtons.find(el => el.closest('button')?.className.includes('border-2'));
@@ -275,7 +277,7 @@ describe('ProtocolManager', () => {
       await userEvent.click(screen.getByText('Add Protocol'));
 
       await userEvent.type(screen.getByPlaceholderText('e.g., Tirzepatide'), 'Test');
-      await userEvent.type(screen.getByPlaceholderText('e.g., Weight Management'), 'Cat');
+      await userEvent.click(screen.getByRole('button', { name: 'Weight Loss' }));
 
       const imageButtons = screen.getAllByText('Image');
       const imageTypeButton = imageButtons.find(el => el.closest('button')?.className.includes('border-2'));
@@ -300,8 +302,14 @@ describe('ProtocolManager', () => {
       await userEvent.click(editButtons[0]); // Edit Tirzepatide (text)
 
       expect(screen.getByDisplayValue('Tirzepatide')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Weight Management')).toBeInTheDocument();
       expect(screen.getByDisplayValue('2.5mg - 15mg')).toBeInTheDocument();
+      // "Weight Management" is a legacy label; the picker resolves it onto the
+      // canonical Weight Loss chip and shows THAT as selected, which is how the
+      // duplicate option stops being recreated on the next save.
+      expect(screen.getByRole('button', { name: 'Weight Loss' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
 
     it('populates form with image content type when editing an image protocol', async () => {
