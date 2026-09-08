@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import SiteSettingsManager from './SiteSettingsManager';
 
 /**
@@ -69,5 +69,79 @@ describe('SiteSettingsManager', () => {
     render(<SiteSettingsManager />);
 
     expect(screen.queryByText(/loading settings/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The redesign turns a flat `space-y-8` stack of three look-alike cards into a
+ * navigable settings screen: a titled header, a section rail, and one labelled
+ * landmark per panel.
+ *
+ * The panels stay mounted (the rail scroll-anchors rather than tab-switching),
+ * so the guarantees above about which panels exist still hold.
+ */
+describe('SiteSettingsManager layout', () => {
+  it('titles the screen so the header is not just three anonymous cards', () => {
+    render(<SiteSettingsManager />);
+
+    expect(screen.getByRole('heading', { level: 1, name: /settings/i })).toBeInTheDocument();
+  });
+
+  it('lists every section in a labelled rail', () => {
+    render(<SiteSettingsManager />);
+
+    const rail = screen.getByRole('navigation', { name: /settings sections/i });
+
+    expect(within(rail).getAllByRole('link')).toHaveLength(3);
+  });
+
+  it('points each rail link at the section it names', () => {
+    render(<SiteSettingsManager />);
+
+    const rail = screen.getByRole('navigation', { name: /settings sections/i });
+
+    expect(within(rail).getByRole('link', { name: /access/i })).toHaveAttribute(
+      'href',
+      '#settings-access',
+    );
+    expect(within(rail).getByRole('link', { name: /homepage/i })).toHaveAttribute(
+      'href',
+      '#settings-homepage',
+    );
+    expect(within(rail).getByRole('link', { name: /notices/i })).toHaveAttribute(
+      'href',
+      '#settings-notices',
+    );
+  });
+
+  it('wraps each panel in a landmark named after the panel', () => {
+    render(<SiteSettingsManager />);
+
+    expect(screen.getByRole('region', { name: /new access requests/i })).toContainElement(
+      screen.getByTestId('access-intake-toggle'),
+    );
+    expect(screen.getByRole('region', { name: /group buy landing/i })).toContainElement(
+      screen.getByTestId('gb-landing-manager'),
+    );
+    expect(screen.getByRole('region', { name: /notice manager/i })).toContainElement(
+      screen.getByTestId('storefront-notice-manager'),
+    );
+  });
+
+  it('gives each landmark the id its rail link targets', () => {
+    render(<SiteSettingsManager />);
+
+    expect(screen.getByRole('region', { name: /new access requests/i })).toHaveAttribute(
+      'id',
+      'settings-access',
+    );
+    expect(screen.getByRole('region', { name: /group buy landing/i })).toHaveAttribute(
+      'id',
+      'settings-homepage',
+    );
+    expect(screen.getByRole('region', { name: /notice manager/i })).toHaveAttribute(
+      'id',
+      'settings-notices',
+    );
   });
 });
